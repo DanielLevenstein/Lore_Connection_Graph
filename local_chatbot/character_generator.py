@@ -3,8 +3,8 @@ import random
 import re
 from dataclasses import dataclass
 
+from model_harness import ModelConfig
 from .client import chat_completion
-from .models import ModelConfig
 from .paths import CHARACTERS_DIR
 from .storage import Character, CharacterProfile, create_character, sanitize_name
 
@@ -85,6 +85,9 @@ class RandomCharacterGenerator:
                 f"torn between a need to {motivations[0]} and a need to {motivations[1]}."
             ),
             motivations=motivations,
+            drives=motivations,
+            alliances=[],
+            enemies=[],
             origin=origin,
             gender=gender,
         )
@@ -111,6 +114,9 @@ class RandomCharacterGenerator:
             backstory=profile.backstory.replace(profile.name, name),
             summary=profile.summary.replace(profile.name, name).replace(self.first_name(profile.name), self.first_name(name)),
             motivations=profile.motivations,
+            drives=profile.drives,
+            alliances=profile.alliances,
+            enemies=profile.enemies,
             origin=profile.origin,
             gender=profile.gender,
         )
@@ -184,6 +190,9 @@ class RandomCharacterGenerator:
             backstory=backstory,
             summary=summary,
             motivations=profile.motivations,
+            drives=profile.drives,
+            alliances=profile.alliances,
+            enemies=profile.enemies,
             origin=profile.origin,
             gender=profile.gender,
         )

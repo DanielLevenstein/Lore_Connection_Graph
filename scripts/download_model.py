@@ -10,10 +10,6 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from language_model_harness import configure_language_model_harness
-
-configure_language_model_harness()
-
 from model_harness.downloads import default_download_option, download_option, option_by_filename
 from model_harness.models import _read_config
 

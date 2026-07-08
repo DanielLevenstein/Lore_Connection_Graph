@@ -1,6 +1,6 @@
 import requests
 
-from .models import ModelConfig
+from model_harness.models import ModelConfig
 
 
 class LocalModelError(RuntimeError):

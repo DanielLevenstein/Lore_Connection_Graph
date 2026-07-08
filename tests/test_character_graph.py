@@ -1,0 +1,319 @@
+import json
+
+from character_graph.extraction import extract_character_graph
+from character_graph.graph_view import attribute_rows, evidence_rows, relationship_dot, relationship_rows
+from character_graph.ingest import load_backstory
+from character_graph.prompt_context import build_prompt_context
+from character_graph.retrieval import retrieve_relevant_context
+from character_graph.storage import load_graph, save_graph
+from character_graph.validation import validate_graph
+
+
+BACKSTORY = """# Arlen Voss
+
+## Character Stats
+
+| Name | Level | Race | Class | Pronouns | Drives | Alliances | Enemies |
+|------|-------|------|-------|----------|--------|-----------|---------|
+| Arlen | 3 | Elf | Wizard | he/him | restore his family name; avoid becoming like his father | old household retainers | Silver Court; Torvak |
+
+## Character Backstory
+
+Mirelle trained Arlen before betraying him to the Silver Court.
+Torvak is a rival mercenary who knows Arlen's old routes.
+Arlen wants to restore his family name and avoid becoming like his father.
+
+## Character Summary
+
+Arlen is guarded, strategic, and loyal once trust is earned.
+"""
+
+MINIMAL_BACKSTORY = """# Arlen Voss
+
+## Character Stats
+
+| Name | Race | Class |
+|------|------|-------|
+| Arlen | Elf | Wizard |
+
+## Character Backstory
+
+Arlen keeps his plans quiet.
+"""
+
+
+def test_load_backstory_computes_source_hash(tmp_path):
+    source = tmp_path / "arlen.md"
+    source.write_text(BACKSTORY, encoding="utf-8")
+
+    document = load_backstory(source, character_id="arlen_voss")
+
+    assert document.character_id == "arlen_voss"
+    assert document.source_file == str(source)
+    assert document.raw_text == BACKSTORY
+    assert len(document.source_hash) == 64
+
+
+def test_extract_character_graph_creates_stats_and_known_prose_relationships(tmp_path):
+    source = tmp_path / "arlen.md"
+    source.write_text(BACKSTORY, encoding="utf-8")
+    document = load_backstory(source, character_id="arlen_voss")
+
+    graph = extract_character_graph(document)
+
+    assert graph.primary_character.name == "Arlen Voss"
+    assert "arlen_voss" in graph.characters
+    assert {"arlen_voss", "mirelle", "old_household_retainers", "silver_court", "torvak", "voss"} <= set(graph.characters)
+    assert {
+        "family_voss",
+        "race_elf",
+        "class_wizard",
+    } <= set(graph.attributes)
+    assert "enemy_torvak" not in graph.attributes
+    assert {
+        edge.relationship_type for edge in graph.relationships
+    } == {
+        "family",
+        "race",
+        "class",
+        "drive",
+        "ally",
+        "enemy",
+        "betrayer",
+        "rival",
+    }
+    assert all(edge.relationship_type != "unknown" for edge in graph.relationships)
+    assert all(edge.relationship_label.lower() != "unknown" for edge in graph.relationships)
+    assert all(attribute.attribute_type.lower() != "unknown" for attribute in graph.attributes.values())
+    race_edge = next(edge for edge in graph.relationships if edge.relationship_type == "race")
+    assert graph.attributes[race_edge.target].value == "Elf"
+    assert "Character Stats table" in race_edge.evidence[0]
+    assert graph.embeddings[race_edge.target].vector
+    enemy_edges = [edge for edge in graph.relationships if edge.relationship_type == "enemy"]
+    assert {edge.target for edge in enemy_edges} == {"silver_court", "torvak"}
+    assert any(edge.relationship_type == "family" and edge.target == "voss" for edge in graph.relationships)
+    assert any(edge.relationship_type == "betrayer" and edge.target == "mirelle" for edge in graph.relationships)
+    assert any(edge.relationship_type == "rival" and edge.target == "torvak" for edge in graph.relationships)
+
+
+def test_extract_character_graph_accepts_minimal_character_stats_table(tmp_path):
+    source = tmp_path / "arlen.md"
+    source.write_text(MINIMAL_BACKSTORY, encoding="utf-8")
+
+    graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
+
+    assert set(graph.characters) == {"arlen_voss", "voss"}
+    assert {"family_voss", "race_elf", "class_wizard"} <= set(graph.attributes)
+    assert {edge.relationship_type for edge in graph.relationships} == {"family", "race", "class"}
+
+
+def test_extract_character_graph_skips_unknown_prose_relationships(tmp_path):
+    source = tmp_path / "arlen.md"
+    source.write_text(
+        """# Arlen Voss
+
+## Character Stats
+
+| Name | Race | Class |
+|------|------|-------|
+| Arlen | Elf | Wizard |
+
+## Character Backstory
+
+Mara passed through town once.
+Joren owned a blue cloak.
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
+
+    assert set(graph.characters) == {"arlen_voss", "voss"}
+    assert all(edge.relationship_type != "unknown" for edge in graph.relationships)
+
+
+def test_extract_character_graph_filters_sentence_starters_and_unknown_attributes(tmp_path):
+    source = tmp_path / "jory.md"
+    source.write_text(
+        """# Jory Ravenmark
+
+## Character Stats
+
+| Name | Race | Class | Pronouns |
+|------|------|-------|----------|
+| Jory | Human | Barbarian | Unknown |
+
+## Character Backstory
+
+Haunted by the loss of her family and the inexplicable mercy shown by a monster, Jory took to the sea.
+Her mother died at sea and her father was consumed by loneliness.
+When she was still but a child a monster attacked the watchtower.
+That night Jory decided to dedicate her life to tracking down the beast.
+She learned to read the open sea as her father once had before her.
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="jory_ravenmark"))
+
+    assert "haunted" not in graph.characters
+    assert "her" not in graph.characters
+    assert "when" not in graph.characters
+    assert "that" not in graph.characters
+    assert "she" not in graph.characters
+    assert "pronouns_unknown" not in graph.attributes
+    assert graph.attributes["family_ravenmark"].value == "Ravenmark"
+    assert graph.characters["ravenmark"].name == "Ravenmark"
+    assert any(edge.relationship_type == "family" and edge.target == "ravenmark" for edge in graph.relationships)
+    assert graph.characters["mother"].name == "Mother"
+    assert graph.characters["father"].name == "Father"
+    assert any(edge.relationship_type == "family" and edge.target == "mother" for edge in graph.relationships)
+    assert any(edge.relationship_type == "family" and edge.target == "father" for edge in graph.relationships)
+
+
+def test_extract_character_graph_does_not_create_self_family_edge_for_underscored_heading(tmp_path):
+    source = tmp_path / "jory.md"
+    source.write_text(
+        """# Jory_Ravenmark
+
+## Character Stats
+
+| Name | Race | Class |
+|------|------|-------|
+| Jory | Human | Barbarian |
+
+## Character Backstory
+
+Haunted by the loss of her family and the inexplicable mercy shown by a monster, Jory took to the sea.
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="jory_ravenmark"))
+
+    assert "jory" not in graph.characters
+    assert not any(edge.relationship_type == "family" and edge.target == "jory" for edge in graph.relationships)
+    assert any(edge.relationship_type == "family" and edge.target == "ravenmark" for edge in graph.relationships)
+
+
+def test_graph_storage_round_trips_json(tmp_path):
+    source = tmp_path / "arlen.md"
+    graph_path = tmp_path / "arlen.graph.json"
+    source.write_text(BACKSTORY, encoding="utf-8")
+    graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
+
+    save_graph(graph, graph_path)
+    loaded = load_graph(graph_path)
+
+    assert loaded is not None
+    assert loaded.to_dict() == json.loads(graph_path.read_text(encoding="utf-8"))
+    assert loaded.attributes["race_elf"].value == "Elf"
+
+
+def test_graph_storage_migrates_legacy_attribute_nodes(tmp_path):
+    graph_path = tmp_path / "legacy.graph.json"
+    graph_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "primary_character": {
+                    "id": "arlen_voss",
+                    "name": "Arlen Voss",
+                    "source_file": "characters/arlen.md",
+                },
+                "characters": {
+                    "arlen_voss": {
+                        "name": "Arlen Voss",
+                        "aliases": [],
+                        "role": "primary character",
+                        "summary": "Arlen is guarded.",
+                        "motivations": [],
+                        "traits": [],
+                        "alignment": {},
+                        "source_spans": [],
+                    },
+                    "pronouns_he_him": {
+                        "name": "he/him",
+                        "aliases": [],
+                        "role": "Pronouns",
+                        "summary": "Arlen Voss's pronouns are he/him.",
+                        "motivations": [],
+                        "traits": [],
+                        "alignment": {},
+                        "source_spans": ["Pronouns are listed as he/him in the Character Stats table."],
+                    },
+                },
+                "relationships": [
+                    {
+                        "source": "arlen_voss",
+                        "target": "pronouns_he_him",
+                        "relationship_type": "pronouns",
+                        "relationship_label": "Pronouns",
+                        "sentiment": "metadata",
+                        "trust_level": 1.0,
+                        "conflict_level": 0.0,
+                        "emotional_weight": 0.3,
+                        "evidence": ["Pronouns are listed as he/him in the Character Stats table."],
+                    }
+                ],
+                "metadata": {
+                    "created_at": "2026-07-08T00:00:00",
+                    "updated_at": "2026-07-08T00:00:00",
+                    "source_hash": "hash",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = load_graph(graph_path)
+
+    assert loaded is not None
+    assert set(loaded.characters) == {"arlen_voss"}
+    assert loaded.attributes["pronouns_he_him"].value == "he/him"
+    assert loaded.attributes["pronouns_he_him"].attribute_type == "Pronouns"
+
+
+def test_retrieval_formats_related_character_context(tmp_path):
+    source = tmp_path / "arlen.md"
+    source.write_text(BACKSTORY, encoding="utf-8")
+    graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
+
+    retrieved = retrieve_relevant_context(graph, "What does being an Elf Wizard mean for me?")
+    context = build_prompt_context(retrieved)
+
+    assert retrieved[0].display_name in {"Elf", "Wizard"}
+    assert "Relevant character attribute context:" in context
+    assert "Relationship metadata:" in context
+
+
+def test_validation_warns_on_missing_relationship_target(tmp_path):
+    source = tmp_path / "arlen.md"
+    source.write_text(BACKSTORY, encoding="utf-8")
+    graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
+    graph.relationships[0].target = "missing"
+
+    warnings = validate_graph(graph)
+
+    assert "Relationship target `missing` is missing from graph nodes." in warnings
+
+
+def test_graph_view_helpers_format_relationships_and_dot(tmp_path):
+    source = tmp_path / "arlen.md"
+    source.write_text(BACKSTORY, encoding="utf-8")
+    graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
+
+    relationships = relationship_rows(graph)
+    attributes = attribute_rows(graph)
+    evidence = evidence_rows(graph)
+    dot = relationship_dot(graph)
+
+    assert all("Evidence" not in row for row in relationships)
+    assert all(row["Relationship"] not in {"Race", "Class", "Pronouns", "Drive"} for row in relationships)
+    assert any(row["Value"] == "Elf" and row["Attribute"] == "Race" for row in attributes)
+    assert any(row["Table"] == "Relationships" and row["Item"] == "Rival" for row in evidence)
+    assert any(row["Table"] == "Attributes" and row["Item"] == "Race" for row in evidence)
+    assert not any(row["Item"] == "Pronouns" for row in evidence)
+    assert "digraph CharacterRelationships" in dot
+    assert '"arlen_voss" -> "race_elf"' in dot
+    assert 'shape="ellipse"' in dot

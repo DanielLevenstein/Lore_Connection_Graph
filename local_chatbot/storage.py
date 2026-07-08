@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from .paths import CHARACTERS_DIR, ensure_base_dirs
+from .paths import CHARACTER_GRAPHS_DIR, CHARACTERS_DIR, ensure_base_dirs
 
 
 SAFE_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_. -]+")
@@ -32,6 +32,10 @@ class Character:
     def profile_path(self) -> Path:
         return self.path / "PROFILE.json"
 
+    @property
+    def graph_path(self) -> Path:
+        return CHARACTER_GRAPHS_DIR / f"{self.name}.graph.json"
+
 
 @dataclass(frozen=True)
 class CharacterProfile:
@@ -45,6 +49,9 @@ class CharacterProfile:
     motivations: list[str] | None = None
     origin: str = ""
     gender: str = ""
+    drives: list[str] | None = None
+    alliances: list[str] | None = None
+    enemies: list[str] | None = None
 
 
 def sanitize_name(name: str) -> str:
@@ -67,12 +74,16 @@ def list_characters() -> list[Character]:
 def render_backstory(profile: CharacterProfile) -> str:
     first_name = character_first_name(profile.name)
     summary = profile.summary.strip() or default_summary(profile)
+    drives = "; ".join(profile.drives or profile.motivations or [])
+    allies = "; ".join(profile.alliances or [])
+    enemies = "; ".join(profile.enemies or [])
     return (
         f"# {profile.name}\n\n"
         "## Character Stats\n\n"
-        "| Name | Level | Race | Class | Pronouns |\n"
-        "|------|-------|------|-------|----------|\n"
-        f"| {first_name} | {profile.level} | {profile.race} | {profile.character_class} | {profile.pronouns} |\n\n"
+        "| Name | Level | Race | Class | Pronouns | Drives | Home | Allies | Enemies |\n"
+        "|------|-------|------|-------|----------|--------|------|--------|---------|\n"
+        f"| {first_name} | {profile.level} | {profile.race} | {profile.character_class} | "
+        f"{profile.pronouns} | {drives} | {profile.origin} | {allies} | {enemies} |\n\n"
         "## Character Backstory\n\n"
         f"{profile.backstory.strip()}\n\n"
         "## Character Summary\n\n"
@@ -132,6 +143,9 @@ def read_character_profile(character: Character) -> CharacterProfile:
             motivations=payload.get("motivations", []),
             origin=payload.get("origin", ""),
             gender=payload.get("gender", ""),
+            drives=payload.get("drives"),
+            alliances=payload.get("alliances", []),
+            enemies=payload.get("enemies", []),
         )
     return CharacterProfile(
         name=character.name,
@@ -142,12 +156,26 @@ def read_character_profile(character: Character) -> CharacterProfile:
         backstory=read_text(character.backstory_path),
         summary="",
         motivations=[],
+        drives=[],
+        alliances=[],
+        enemies=[],
     )
 
 
 def write_character_profile(character: Character, profile: CharacterProfile) -> None:
     character.profile_path.write_text(json.dumps(asdict(profile), indent=2) + "\n", encoding="utf-8")
     character.backstory_path.write_text(render_backstory(profile), encoding="utf-8")
+    regenerate_character_graph(character)
+
+
+def regenerate_character_graph(character: Character) -> None:
+    from character_graph.extraction import extract_character_graph
+    from character_graph.ingest import load_backstory
+    from character_graph.storage import save_graph
+
+    document = load_backstory(character.backstory_path, character_id=sanitize_name(character.name))
+    graph = extract_character_graph(document, primary_name=character.name)
+    save_graph(graph, character.graph_path)
 
 
 def read_text(path: Path) -> str:

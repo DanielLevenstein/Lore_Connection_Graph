@@ -22,10 +22,23 @@ def default_download_option(config: ModelConfig) -> dict | None:
     if not config.download_options:
         return None
     wanted = config.download_size.split(" ", 1)[0]
-    for option in config.download_options:
+    runnable_options = [option for option in config.download_options if is_runnable_model_option(option)]
+    options = runnable_options or config.download_options
+    for preferred_quant in ("Q4_K_M", "Q4_K", "Q5_K_M", "Q5_K"):
+        for option in options:
+            if option.get("quant") == preferred_quant:
+                return option
+    for option in options:
         if option.get("quant") == wanted:
             return option
-    return config.download_options[0]
+    return options[0]
+
+
+def is_runnable_model_option(option: dict) -> bool:
+    filename = str(option.get("filename", "")).lower()
+    if not filename.endswith(".gguf"):
+        return False
+    return not filename.startswith("mmproj")
 
 
 def option_by_filename(config: ModelConfig, filename: str) -> dict | None:
@@ -67,7 +80,7 @@ def downloaded_options(config: ModelConfig) -> list[dict]:
     return [
         option
         for option in config.download_options
-        if local_model_path(config, option).exists()
+        if is_runnable_model_option(option) and local_model_path(config, option).exists()
     ]
 
 

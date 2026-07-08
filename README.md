@@ -95,10 +95,14 @@ The app creates and reads:
 
 ```text
 config/model_name.json
+config/character_graph.json
 data/model_name
 data/characters/name/BACKSTORY.md
 data/characters/name/MEMORY.md
 data/characters/name/chatlogs/DATETIME_CHAT.log
+data/character_graph/name.graph.json
 ```
 
 Everything under `data/` is ignored by git.
+
+See [Character Association Graph Design](docs/character_association_graph.md) for the derived relationship graph used during chat prompt retrieval.

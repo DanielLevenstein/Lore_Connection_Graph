@@ -1,0 +1,595 @@
+from __future__ import annotations
+
+import re
+from datetime import datetime
+
+from .embeddings import build_embedding_record
+from .ingest import BackstoryDocument
+from .schema import (
+    SCHEMA_VERSION,
+    Alignment,
+    AttributeNode,
+    CharacterGraph,
+    CharacterNode,
+    GraphMetadata,
+    PrimaryCharacterRef,
+    RelationshipEdge,
+)
+
+
+NAME_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:[ \t]+(?:the[ \t]+)?[A-Z][a-z]+){0,3})\b")
+HEADING_PATTERN = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
+SENTENCE_PATTERN = re.compile(r"[^.!?\n]+[.!?]?")
+UNKNOWN_VALUES = {"", "unknown", "none", "n/a", "na", "unspecified", "not specified", "tbd"}
+NON_NAME_WORDS = {
+    "A",
+    "An",
+    "And",
+    "As",
+    "At",
+    "But",
+    "By",
+    "For",
+    "From",
+    "Haunted",
+    "He",
+    "Her",
+    "His",
+    "I",
+    "In",
+    "It",
+    "Its",
+    "No",
+    "On",
+    "Or",
+    "She",
+    "That",
+    "The",
+    "Their",
+    "They",
+    "This",
+    "Those",
+    "When",
+    "Where",
+    "While",
+    "With",
+}
+MOTIVATION_PATTERNS = [
+    re.compile(r"\b(?:wants|seeks|hopes|needs|tries|trying|adventures)\s+to\s+([^.!?;]+)", re.IGNORECASE),
+    re.compile(r"\b(?:goal|motivation)\s+(?:is|was)\s+to\s+([^.!?;]+)", re.IGNORECASE),
+]
+RELATIONSHIP_RULES = [
+    ("betrayer", "Betrayer", "hostile", ("betray", "betrayed", "betraying")),
+    ("former_mentor", "Former mentor", "complicated", ("former mentor", "trained", "teacher", "mentor")),
+    ("family", "Family", "positive", ("sister", "brother", "mother", "father", "parent", "child", "family")),
+    ("rival", "Rival", "hostile", ("rival", "competitor")),
+    ("enemy", "Enemy", "hostile", ("enemy", "foe", "hates", "opposes", "against")),
+    ("ally", "Ally", "positive", ("ally", "companion", "friend", "trusted")),
+    ("lover", "Lover", "positive", ("lover", "beloved", "romance", "romantic")),
+]
+
+TRAIT_WORDS = {
+    "careful",
+    "guarded",
+    "strategic",
+    "resentful",
+    "loyal",
+    "wary",
+    "practical",
+    "ambitious",
+    "patient",
+    "reckless",
+    "kind",
+    "cruel",
+    "brave",
+    "fearful",
+    "cautious",
+    "curious",
+}
+
+
+def extract_character_graph(
+    document: BackstoryDocument,
+    primary_name: str | None = None,
+) -> CharacterGraph:
+    stats = extract_character_stats(document.raw_text)
+    primary_name = primary_name or infer_primary_name(document.raw_text, document.character_id, stats)
+    primary_id = slugify(primary_name)
+    now = datetime.now().isoformat(timespec="seconds")
+    sentences = split_sentences(document.raw_text)
+    mentioned_names = find_mentioned_names(document.raw_text, primary_name, stats)
+
+    characters: dict[str, CharacterNode] = {
+        primary_id: CharacterNode(
+            name=primary_name,
+            aliases=[],
+            role="primary character",
+            summary=extract_primary_summary(document.raw_text, primary_name),
+            motivations=extract_motivations(document.raw_text),
+            traits=extract_traits(document.raw_text),
+            alignment=extract_alignment(document.raw_text),
+            source_spans=[span for span in sentences if primary_name.split()[0] in span][:5],
+        )
+    }
+    relationships: list[RelationshipEdge] = []
+    attributes: dict[str, AttributeNode] = {}
+
+    for attribute_type, label, value, evidence in attribute_connections(primary_name, stats, document.raw_text):
+        node_id = unique_node_id(attributes, slugify(f"{attribute_type}_{value}"))
+        attributes[node_id] = AttributeNode(
+            value=value,
+            attribute_type=label,
+            aliases=[],
+            summary=build_metadata_summary(primary_name, label, value, evidence),
+            source_spans=[evidence],
+        )
+        relationships.append(
+            RelationshipEdge(
+                source=primary_id,
+                target=node_id,
+                relationship_type=attribute_type,
+                relationship_label=label,
+                sentiment="metadata",
+                trust_level=1.0,
+                conflict_level=0.0,
+                emotional_weight=0.3,
+                evidence=[evidence],
+            )
+        )
+    for relationship_type, label, value, evidence in character_relationships(primary_name, stats, document.raw_text):
+        node_id = unique_character_id(characters, slugify(value))
+        if node_id == primary_id:
+            continue
+        characters[node_id] = CharacterNode(
+            name=value,
+            aliases=[],
+            role=label.lower(),
+            summary=f"{value} is connected to {primary_name} as {label.lower()}. Evidence: {evidence}",
+            source_spans=[evidence],
+        )
+        relationships.append(
+            RelationshipEdge(
+                source=primary_id,
+                target=node_id,
+                relationship_type=relationship_type,
+                relationship_label=label,
+                sentiment=relationship_type,
+                trust_level=0.8,
+                conflict_level=0.7 if relationship_type == "enemy" else 0.0,
+                emotional_weight=0.7,
+                evidence=[evidence],
+            )
+        )
+    for name in mentioned_names:
+        character_id = slugify(name)
+        if character_id == primary_id:
+            continue
+        evidence = evidence_for_name(sentences, name)
+        relationship = infer_relationship(primary_id, character_id, name, evidence)
+        if relationship is None:
+            continue
+        characters.setdefault(
+            character_id,
+            CharacterNode(
+                name=name,
+                aliases=[],
+                role=relationship.relationship_label.lower(),
+                summary=build_related_summary(name, primary_name, relationship, evidence),
+                motivations=[],
+                traits=extract_traits(" ".join(evidence)),
+                alignment=Alignment(),
+                source_spans=evidence,
+            ),
+        )
+        relationships.append(relationship)
+
+    graph = CharacterGraph(
+        schema_version=SCHEMA_VERSION,
+        primary_character=PrimaryCharacterRef(
+            id=primary_id,
+            name=primary_name,
+            source_file=document.source_file,
+        ),
+        characters=characters,
+        attributes=attributes,
+        relationships=relationships,
+        metadata=GraphMetadata(
+            created_at=now,
+            updated_at=now,
+            source_hash=document.source_hash,
+        ),
+    )
+    for character_id, node in graph.characters.items():
+        embedding_text = " ".join(
+            part for part in [node.name, " ".join(node.aliases), node.role, node.summary, " ".join(node.source_spans)] if part
+        )
+        graph.embeddings[character_id] = build_embedding_record(character_id, embedding_text)
+    for attribute_id, node in graph.attributes.items():
+        embedding_text = " ".join(
+            part
+            for part in [node.value, " ".join(node.aliases), node.attribute_type, node.summary, " ".join(node.source_spans)]
+            if part
+        )
+        graph.embeddings[attribute_id] = build_embedding_record(attribute_id, embedding_text)
+    return graph
+
+
+def extract_character_stats(text: str) -> dict[str, str]:
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        headers = parse_table_row(line)
+        normalized_headers = [normalize_stat_key(header) for header in headers]
+        if not required_stats_present(normalized_headers):
+            continue
+        for row in lines[index + 1 :]:
+            values = parse_table_row(row)
+            if not values:
+                continue
+            if all(set(value) <= {"-"} for value in values if value):
+                continue
+            padded_values = values + [""] * max(0, len(headers) - len(values))
+            return {
+                normalize_stat_key(header): clean_table_cell(value)
+                for header, value in zip(headers, padded_values)
+            }
+    return {}
+
+
+def required_stats_present(headers: list[str]) -> bool:
+    return all(header in headers for header in ["name", "race", "class"])
+
+
+def parse_table_row(line: str) -> list[str]:
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|"):
+        return []
+    return [clean_table_cell(cell) for cell in stripped.strip("|").split("|")]
+
+
+def normalize_stat_key(value: str) -> str:
+    return value.strip().lower().replace(" ", "_")
+
+
+def clean_table_cell(value: str) -> str:
+    return value.strip().strip("-").strip()
+
+
+def split_stat_values(value: str) -> list[str]:
+    values = []
+    for item in re.split(r"[;\n,]+", value):
+        cleaned = item.strip()
+        if cleaned and cleaned not in values:
+            values.append(cleaned)
+    return values
+
+
+def attribute_connections(
+    primary_name: str,
+    stats: dict[str, str],
+    text: str,
+) -> list[tuple[str, str, str, str]]:
+    relationships: list[tuple[str, str, str, str]] = []
+    family_name = primary_name.strip().split()[-1] if len(primary_name.strip().split()) > 1 else ""
+    if family_name:
+        relationships.append(
+            (
+                "family",
+                "Family",
+                family_name,
+                f"{family_name} is inferred as the family name from the full character name {primary_name}.",
+            )
+        )
+    for relationship_type, label, stat_key in [
+        ("race", "Race", "race"),
+        ("class", "Class", "class"),
+        ("home", "Home", "home"),
+    ]:
+        raw_value = stats.get(stat_key, "")
+        if stat_key in stats:
+            value = clean_attribute_value(raw_value)
+            relationships.append(
+                (
+                    relationship_type,
+                    label,
+                    value,
+                    build_stat_evidence(label, value),
+                )
+            )
+    for drive in split_stat_values(stats.get("drives", "") or stats.get("drive", "")):
+        value = clean_attribute_value(drive)
+        relationships.append(
+            (
+                "drive",
+                "Drive",
+                value,
+                build_stat_evidence("Drive", value),
+            )
+        )
+    return relationships
+
+
+def character_relationships(
+    primary_name: str,
+    stats: dict[str, str],
+    text: str,
+) -> list[tuple[str, str, str, str]]:
+    relationships: list[tuple[str, str, str, str]] = []
+    last_name = character_last_name(primary_name)
+    if last_name:
+        relationships.append(
+            (
+                "family",
+                "Family",
+                last_name,
+                f"{last_name} is inferred as the family relationship value from the full character name {primary_name}.",
+            )
+        )
+    relationship_columns = [
+        ("ally", "Ally", ["allies", "alliances", "ally"]),
+        ("enemy", "Enemy", ["enemies", "enemy"]),
+        ("lover", "Lover", ["lovers", "lover"]),
+    ]
+    for relationship_type, label, stat_keys in relationship_columns:
+        raw_value = next((stats.get(key, "") for key in stat_keys if key in stats and stats.get(key, "").strip()), "")
+        for value in split_stat_values(raw_value):
+            cleaned_value = clean_attribute_value(value) or "Unknown"
+            relationships.append(
+                (
+                    relationship_type,
+                    label,
+                    cleaned_value,
+                    build_stat_evidence(label, cleaned_value),
+                )
+            )
+    relationships.extend(infer_unnamed_character_relationships(text))
+    return relationships
+
+
+def infer_primary_name(text: str, fallback: str, stats: dict[str, str] | None = None) -> str:
+    heading = HEADING_PATTERN.search(text)
+    if heading:
+        title = heading.group(1).strip()
+        if title:
+            return title
+    stat_name = (stats or {}).get("name", "").strip()
+    if stat_name:
+        return stat_name
+    names = NAME_PATTERN.findall(text)
+    return names[0] if names else fallback.replace("_", " ").title()
+
+
+def character_last_name(primary_name: str) -> str:
+    parts = [part for part in re.split(r"[\s_]+", primary_name.strip()) if part]
+    return parts[-1] if len(parts) > 1 else ""
+
+
+def find_mentioned_names(text: str, primary_name: str, stats: dict[str, str] | None = None) -> list[str]:
+    blocked = {
+        "Character Stats",
+        "Character Backstory",
+        "Character Summary",
+        "Name Level Race Class Pronouns",
+        "BACKSTORY",
+        "SUMMARY",
+    }
+    primary_aliases = primary_name_aliases(primary_name, stats)
+    names: list[str] = []
+    for candidate in NAME_PATTERN.findall(text):
+        cleaned = candidate.strip()
+        if cleaned in blocked or normalize_name_ref(cleaned) in primary_aliases:
+            continue
+        if not is_probable_name(cleaned):
+            continue
+        if cleaned not in names:
+            names.append(cleaned)
+    return names
+
+
+def primary_name_aliases(primary_name: str, stats: dict[str, str] | None = None) -> set[str]:
+    aliases = {normalize_name_ref(primary_name)}
+    for part in re.split(r"[\s_]+", primary_name):
+        if part:
+            aliases.add(normalize_name_ref(part))
+    stat_name = (stats or {}).get("name", "")
+    if stat_name:
+        aliases.add(normalize_name_ref(stat_name))
+        for part in re.split(r"[\s_]+", stat_name):
+            if part:
+                aliases.add(normalize_name_ref(part))
+    return aliases
+
+
+def normalize_name_ref(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def split_sentences(text: str) -> list[str]:
+    sentences = []
+    for match in SENTENCE_PATTERN.findall(text.replace("\r\n", "\n")):
+        sentence = " ".join(match.strip().split())
+        if sentence and not sentence.startswith("|") and not sentence.startswith("#"):
+            sentences.append(sentence)
+    return sentences
+
+
+def evidence_for_name(sentences: list[str], name: str) -> list[str]:
+    first_name = name.split()[0]
+    evidence = [sentence for sentence in sentences if name in sentence or first_name in sentence]
+    return evidence[:5]
+
+
+def infer_relationship(
+    source_id: str,
+    target_id: str,
+    target_name: str,
+    evidence: list[str],
+) -> RelationshipEdge | None:
+    evidence_text = " ".join(evidence).lower()
+    target_pattern = re.escape(target_name)
+    for relationship_type, relationship_label, sentiment, keywords in RELATIONSHIP_RULES:
+        if relationship_type == "betrayer" and not re.search(
+            rf"\b{target_pattern}\b[^.!?]*\bbetray",
+            " ".join(evidence),
+            re.IGNORECASE,
+        ):
+            continue
+        if relationship_type == "former_mentor" and not re.search(
+            rf"\b{target_pattern}\b[^.!?]*\b(?:trained|teacher|mentor)",
+            " ".join(evidence),
+            re.IGNORECASE,
+        ):
+            continue
+        if relationship_type == "rival" and not re.search(
+            rf"\b{target_pattern}\b[^.!?]*\brival",
+            " ".join(evidence),
+            re.IGNORECASE,
+        ):
+            continue
+        if any(keyword in evidence_text for keyword in keywords):
+            conflict_level = 0.7 if sentiment == "hostile" else 0.3 if sentiment == "complicated" else 0.0
+            trust_level = 0.25 if sentiment == "hostile" else 0.45 if sentiment == "complicated" else 0.75
+            return RelationshipEdge(
+                source=source_id,
+                target=target_id,
+                relationship_type=relationship_type,
+                relationship_label=relationship_label,
+                sentiment=sentiment,
+                trust_level=trust_level,
+                conflict_level=conflict_level,
+                emotional_weight=0.8,
+                evidence=evidence,
+            )
+    return None
+
+
+def build_related_summary(name: str, primary_name: str, relationship: RelationshipEdge, evidence: list[str]) -> str:
+    evidence_text = " ".join(evidence[:2])
+    return (
+        f"{name} is connected to {primary_name} as {relationship.relationship_label.lower()}. "
+        f"Source evidence says: {evidence_text}"
+    )
+
+
+def build_metadata_summary(primary_name: str, label: str, value: str, evidence: str) -> str:
+    if not value:
+        return f"{primary_name}'s {label.lower()} is not specified. Evidence: {evidence}"
+    return f"{primary_name}'s {label.lower()} is {value}. Evidence: {evidence}"
+
+
+def clean_attribute_value(value: str) -> str:
+    cleaned = value.strip()
+    if cleaned.lower() in UNKNOWN_VALUES:
+        return ""
+    return cleaned
+
+
+def infer_unnamed_character_relationships(text: str) -> list[tuple[str, str, str, str]]:
+    relationships: list[tuple[str, str, str, str]] = []
+    family_patterns = [
+        ("mother", "Mother", r"\b(?:her|his|their|the)\s+mother\b"),
+        ("father", "Father", r"\b(?:her|his|their|the)\s+father\b"),
+        ("parent", "Parent", r"\b(?:her|his|their|the)\s+parent\b"),
+    ]
+    lowered_text = text.lower()
+    for family_role, value, pattern in family_patterns:
+        if not re.search(pattern, lowered_text, re.IGNORECASE):
+            continue
+        evidence = evidence_for_pattern(text, pattern)
+        relationships.append(
+            (
+                "family",
+                "Family",
+                value,
+                evidence or f"An unnamed {family_role} is mentioned in the backstory.",
+            )
+        )
+    return relationships
+
+
+def build_stat_evidence(label: str, value: str) -> str:
+    if value:
+        return f"{label} is listed as {value} in the Character Stats table."
+    return f"{label} is present in the Character Stats table but has no known value."
+
+
+def evidence_for_pattern(text: str, pattern: str) -> str:
+    for sentence in split_sentences(text):
+        if re.search(pattern, sentence, re.IGNORECASE):
+            return sentence
+    return ""
+
+
+def is_probable_name(value: str) -> bool:
+    parts = value.split()
+    if not parts:
+        return False
+    if parts[0] in NON_NAME_WORDS:
+        return False
+    if any(part.lower() in UNKNOWN_VALUES for part in parts):
+        return False
+    if any(part in {"Character", "Stats", "Backstory", "Summary"} for part in parts):
+        return False
+    return True
+
+
+def unique_node_id(existing: dict[str, AttributeNode], base_id: str) -> str:
+    if base_id not in existing:
+        return base_id
+    index = 2
+    while f"{base_id}_{index}" in existing:
+        index += 1
+    return f"{base_id}_{index}"
+
+
+def unique_character_id(existing: dict[str, CharacterNode], base_id: str) -> str:
+    if base_id not in existing:
+        return base_id
+    index = 2
+    while f"{base_id}_{index}" in existing:
+        index += 1
+    return f"{base_id}_{index}"
+
+
+def extract_primary_summary(text: str, primary_name: str) -> str:
+    summary_match = re.search(r"## Character Summary\s+(?P<summary>.+)$", text, re.IGNORECASE | re.DOTALL)
+    if summary_match:
+        summary = " ".join(summary_match.group("summary").strip().split())
+        if summary:
+            return summary
+    sentences = split_sentences(text)
+    for sentence in sentences:
+        if primary_name.split()[0] in sentence:
+            return sentence
+    return f"{primary_name} is the primary character. No concise summary was found in the source backstory."
+
+
+def extract_motivations(text: str) -> list[str]:
+    motivations: list[str] = []
+    for pattern in MOTIVATION_PATTERNS:
+        for match in pattern.finditer(text):
+            motivation = match.group(1).strip(" .")
+            if motivation and motivation not in motivations:
+                motivations.append(motivation)
+    return motivations[:5]
+
+
+def extract_traits(text: str) -> list[str]:
+    lowered = text.lower()
+    traits = [trait for trait in sorted(TRAIT_WORDS) if trait in lowered]
+    return traits[:8]
+
+
+def extract_alignment(text: str) -> Alignment:
+    faction_alignment = sorted(set(re.findall(r"\b(?:anti-[A-Z][A-Za-z ]+|exiled [a-z ]+|Silver Court)\b", text)))
+    opposition_targets = [target for target in faction_alignment if target.lower().startswith("anti-")]
+    return Alignment(
+        moral_alignment="unknown",
+        faction_alignment=faction_alignment,
+        loyalty_targets=[],
+        opposition_targets=opposition_targets,
+    )
+
+
+def slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+    return slug or "unknown"

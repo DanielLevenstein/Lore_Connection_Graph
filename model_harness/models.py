@@ -26,8 +26,16 @@ class ModelConfig:
     @property
     def is_downloaded(self) -> bool:
         if self.download_options:
-            return any((self.local_dir / option["filename"]).exists() for option in self.download_options)
+            return any(
+                is_runnable_model_filename(option["filename"]) and (self.local_dir / option["filename"]).exists()
+                for option in self.download_options
+            )
         return self.local_dir.exists()
+
+
+def is_runnable_model_filename(filename: str) -> bool:
+    normalized = filename.lower()
+    return normalized.endswith(".gguf") and not normalized.startswith("mmproj")
 
 
 def _read_config(path: Path) -> ModelConfig:

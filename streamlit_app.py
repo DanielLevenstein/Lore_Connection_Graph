@@ -1,6 +1,12 @@
 import requests
 import streamlit as st
 
+from character_graph.graph_view import (
+    evidence_rows,
+)
+from character_graph.prompt_context import build_prompt_context
+from character_graph.retrieval import retrieve_relevant_context
+from character_graph.storage import load_graph
 from language_model_harness import configure_language_model_harness
 from model_sidebar import render_sidebar
 
@@ -17,6 +23,7 @@ from local_chatbot.storage import (
     list_characters,
     read_character_profile,
     read_text,
+    regenerate_character_graph,
     start_chatlog,
     write_character_profile,
 )
@@ -63,26 +70,108 @@ def get_active_character() -> Character | None:
     return next((character for character in list_characters() if character.name == name), None)
 
 
-def build_character_messages(backstory: str, memory: str, history: list[dict[str, str]], user_text: str) -> list[dict[str, str]]:
+def build_character_messages(
+    character_name: str,
+    backstory: str,
+    memory: str,
+    history: list[dict[str, str]],
+    user_text: str,
+) -> list[dict[str, str]]:
+    graph_context = st.session_state.get("graph_context", "").strip()
+    graph_section = f"\n\nRELATED CHARACTER CONTEXT:\n{graph_context}" if graph_context else ""
     system_prompt = (
-        "You are roleplaying as the user's custom character. Stay in character, "
+        f"You are roleplaying as {character_name}, the user's custom character. Stay in character, "
         "use the backstory and memory as ground truth, and keep replies conversational.\n\n"
+        f"CHARACTER NAME:\n{character_name}\n\n"
         f"BACKSTORY:\n{backstory.strip()}\n\n"
         f"MEMORY:\n{memory.strip()}"
+        f"{graph_section}"
     )
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history[-20:])
     messages.append({"role": "user", "content": user_text})
     return messages
 
+
+def generate_fallback_reply(character: Character, backstory: str, memory: str, prompt: str) -> str:
+    summary = first_meaningful_sentence(backstory) or f"I am {character.name}."
+    memory_hint = first_meaningful_sentence(memory)
+    reply_parts = [
+        f"I hear you. {summary}",
+        f"About that: {prompt.strip()}",
+    ]
+    if memory_hint:
+        reply_parts.append(f"I keep this in mind: {memory_hint}")
+    reply_parts.append("The local model is not ready, so I am answering from the character sheet for now.")
+    return " ".join(reply_parts)
+
+
+def first_meaningful_sentence(text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("|"):
+            continue
+        return stripped
+    return ""
+
+
+def graph_context_for_prompt(character: Character, prompt: str) -> str:
+    try:
+        graph = load_graph(character.graph_path)
+    except (OSError, ValueError):
+        return ""
+    if not graph:
+        return ""
+    retrieved = retrieve_relevant_context(graph, prompt)
+    return build_prompt_context(retrieved)
+
+
+def parse_list_field(value: str) -> list[str]:
+    return [item.strip() for item in value.replace("\n", ",").replace(";", ",").split(",") if item.strip()]
+
+
+def render_list_field(values: list[str] | None) -> str:
+    return "\n".join(values or [])
+
+
+def render_relationship_graph(character: Character) -> None:
+    with st.expander("Character attribute graph", expanded=False):
+        graph = None
+        try:
+            graph = load_graph(character.graph_path)
+        except (OSError, ValueError) as exc:
+            st.warning(f"Could not load relationship graph: {exc}")
+
+        toolbar_cols = st.columns([1, 3])
+        if toolbar_cols[0].button("Regenerate", icon=":material/sync:", key=f"regen_graph_{character.name}"):
+            try:
+                regenerate_character_graph(character)
+            except (OSError, ValueError) as exc:
+                st.error(f"Could not regenerate graph: {exc}")
+            else:
+                st.success("Relationship graph regenerated.")
+                st.rerun()
+
+        if graph is None:
+            toolbar_cols[1].caption("No graph JSON found yet. Regenerate it from the current backstory.")
+            return
+
+        evidence = evidence_rows(graph)
+
+        if not evidence:
+            st.info("No character graph attributes were extracted from this backstory.")
+            return
+
+        attributes_tab = st.tabs(["Attributes"])[0]
+        with attributes_tab:
+            st.dataframe(evidence, hide_index=True, width="stretch")
+
 def render_character_creator(key_prefix: str = "new_character") -> None:
     with st.form(key_prefix, clear_on_submit=True):
         name = st.text_input("Name", placeholder="Mara Voss", key=f"{key_prefix}_name")
-        pronouns = st.text_input("Pronouns", placeholder="she/her, he/him, they/them", key=f"{key_prefix}_pronouns")
-        stat_cols = st.columns(3)
-        level = stat_cols[0].text_input("Level", placeholder="3", key=f"{key_prefix}_level")
-        race = stat_cols[1].text_input("Race", placeholder="Elf", key=f"{key_prefix}_race")
-        character_class = stat_cols[2].text_input("Class", placeholder="Wizard", key=f"{key_prefix}_class")
+        stat_cols = st.columns(2)
+        race = stat_cols[0].text_input("Race", placeholder="Elf", key=f"{key_prefix}_race")
+        character_class = stat_cols[1].text_input("Class", placeholder="Wizard", key=f"{key_prefix}_class")
         backstory = st.text_area(
             "Backstory",
             placeholder="A terse archivist from a vanished city who tests every lock twice...",
@@ -95,10 +184,37 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
             height=96,
             key=f"{key_prefix}_summary",
         )
+        with st.expander("Optional metadata", expanded=False):
+            optional_cols = st.columns(2)
+            level = optional_cols[0].text_input("Level", placeholder="3", key=f"{key_prefix}_level")
+            pronouns = optional_cols[1].text_input(
+                "Pronouns",
+                placeholder="she/her, he/him, they/them",
+                key=f"{key_prefix}_pronouns",
+            )
+            detail_cols = st.columns(3)
+            drives = detail_cols[0].text_area(
+                "Drives",
+                placeholder="Restore family name\nProtect old friends",
+                height=96,
+                key=f"{key_prefix}_drives",
+            )
+            alliances = detail_cols[1].text_area(
+                "Alliances",
+                placeholder="Silver Cartographers\nMara Voss",
+                height=96,
+                key=f"{key_prefix}_alliances",
+            )
+            enemies = detail_cols[2].text_area(
+                "Enemies",
+                placeholder="The Ash Court\nTorvak",
+                height=96,
+                key=f"{key_prefix}_enemies",
+            )
         submitted = st.form_submit_button("Create character", icon=":material/person_add:")
         if submitted:
-            if not all([name.strip(), pronouns.strip(), level.strip(), race.strip(), character_class.strip(), backstory.strip()]):
-                st.error("Complete all character fields.")
+            if not all([name.strip(), race.strip(), character_class.strip(), backstory.strip()]):
+                st.error("Complete name, race, class, and backstory.")
                 return
             try:
                 profile = CharacterProfile(
@@ -110,6 +226,9 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
                     backstory=backstory.strip(),
                     summary=summary.strip(),
                     motivations=[],
+                    drives=parse_list_field(drives),
+                    alliances=parse_list_field(alliances),
+                    enemies=parse_list_field(enemies),
                 )
                 character = create_character(profile)
             except FileExistsError:
@@ -152,13 +271,19 @@ def render_character_editor(character: Character) -> None:
     with st.expander("Edit character", expanded=False):
         with st.form(f"edit_character_{character.name}"):
             st.text_input("Name", value=profile.name, disabled=True)
-            pronouns = st.text_input("Pronouns", value=profile.pronouns)
-            stat_cols = st.columns(3)
-            level = stat_cols[0].text_input("Level", value=profile.level)
-            race = stat_cols[1].text_input("Race", value=profile.race)
-            character_class = stat_cols[2].text_input("Class", value=profile.character_class)
+            stat_cols = st.columns(2)
+            race = stat_cols[0].text_input("Race", value=profile.race)
+            character_class = stat_cols[1].text_input("Class", value=profile.character_class)
             backstory = st.text_area("Backstory", value=profile.backstory, height=180)
             summary = st.text_area("Summary", value=profile.summary, height=96)
+            with st.expander("Optional metadata", expanded=False):
+                optional_cols = st.columns(2)
+                level = optional_cols[0].text_input("Level", value=profile.level)
+                pronouns = optional_cols[1].text_input("Pronouns", value=profile.pronouns)
+                detail_cols = st.columns(3)
+                drives = detail_cols[0].text_area("Drives", value=render_list_field(profile.drives), height=96)
+                alliances = detail_cols[1].text_area("Alliances", value=render_list_field(profile.alliances), height=96)
+                enemies = detail_cols[2].text_area("Enemies", value=render_list_field(profile.enemies), height=96)
             if st.form_submit_button("Save character", icon=":material/save:"):
                 updated = CharacterProfile(
                     name=profile.name,
@@ -169,6 +294,9 @@ def render_character_editor(character: Character) -> None:
                     backstory=backstory.strip(),
                     summary=summary.strip(),
                     motivations=profile.motivations,
+                    drives=parse_list_field(drives),
+                    alliances=parse_list_field(alliances),
+                    enemies=parse_list_field(enemies),
                     origin=profile.origin,
                     gender=profile.gender,
                 )
@@ -185,7 +313,7 @@ def render_memory_tools(character: Character) -> None:
         st.markdown(read_text(character.memory_path))
 
 
-def render_chat(character: Character, model_config) -> None:
+def render_chat(character: Character, model_config=None) -> None:
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "chatlog_path" not in st.session_state:
@@ -193,18 +321,17 @@ def render_chat(character: Character, model_config) -> None:
 
     st.subheader(character.name)
     render_character_editor(character)
+    render_relationship_graph(character)
     # render_memory_tools(character)
-    model_status = status(model_config)
-    if model_status.healthy:
+    model_status = status(model_config) if model_config else None
+    if model_config and model_status and model_status.healthy:
         st.success(f"Model server ready at {model_config.api_base_url}")
-    elif model_status.running:
-        st.info(f"Model server process is running. Waiting for {model_config.api_base_url}.")
-        st.chat_input(f"Message {character.name}", disabled=True)
-        return
+    elif model_config and model_status and model_status.running:
+        st.info(f"Model server process is running. Waiting for {model_config.api_base_url}. Using character-sheet fallback.")
+    elif model_config:
+        st.warning("Model server is not running. Using character-sheet fallback.")
     else:
-        st.warning("Model server is not running. Start the selected model from the sidebar before chatting.")
-        st.chat_input(f"Message {character.name}", disabled=True)
-        return
+        st.info("Select or start a model for generated replies. Using character-sheet fallback.")
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -223,16 +350,21 @@ def render_chat(character: Character, model_config) -> None:
     backstory = read_text(character.backstory_path)
     memory = read_text(character.memory_path)
     history = st.session_state.messages[:-1]
-    messages = build_character_messages(backstory, memory, history, prompt)
+    st.session_state.graph_context = graph_context_for_prompt(character, prompt)
+    messages = build_character_messages(character.name, backstory, memory, history, prompt)
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking locally..."):
-            try:
-                reply = chat_completion(model_config, messages, model_status)
-            except (requests.RequestException, ValueError) as exc:
-                reply = f"Local model error: {exc}"
-                st.error(reply)
+            if model_config and model_status and model_status.healthy:
+                try:
+                    reply = chat_completion(model_config, messages, model_status)
+                except (requests.RequestException, ValueError) as exc:
+                    reply = f"Local model error: {exc}"
+                    st.error(reply)
+                else:
+                    st.markdown(reply)
             else:
+                reply = generate_fallback_reply(character, backstory, memory, prompt)
                 st.markdown(reply)
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
@@ -252,10 +384,6 @@ if not active_character:
     st.subheader("Chat")
     st.info("Create or open a character above to start chatting.")
 elif not active_model:
-    st.subheader(active_character.name)
-    render_character_editor(active_character)
-    # render_memory_tools(active_character)
-    st.info("Download or select a model in the sidebar to enable chat replies.")
-    st.chat_input(f"Message {active_character.name}", disabled=True)
+    render_chat(active_character)
 else:
     render_chat(active_character, active_model)

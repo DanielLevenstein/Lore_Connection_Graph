@@ -17,14 +17,18 @@ def test_render_backstory_matches_character_template_shape():
         summary="Mara is a careful archivist trying to make courage feel practical.",
         origin="a vanished city",
         gender="female",
+        drives=["protect the vanished city's records"],
+        alliances=["The Silver Index"],
+        enemies=["map thieves"],
     )
 
     assert render_backstory(profile) == (
         "# Mara Voss\n\n"
         "## Character Stats\n\n"
-        "| Name | Level | Race | Class | Pronouns |\n"
-        "|------|-------|------|-------|----------|\n"
-        "| Mara | 3 | Elf | Wizard | she/her |\n\n"
+        "| Name | Level | Race | Class | Pronouns | Drives | Home | Allies | Enemies |\n"
+        "|------|-------|------|-------|----------|--------|------|--------|---------|\n"
+        "| Mara | 3 | Elf | Wizard | she/her | protect the vanished city's records | "
+        "a vanished city | The Silver Index | map thieves |\n\n"
         "## Character Backstory\n\n"
         "Mara keeps a silver key from a city no map remembers.\n\n"
         "Mara trusts paper records more than promises.\n\n"
@@ -46,7 +50,7 @@ def test_random_generator_produces_template_ready_profile():
     assert profile.motivations[0] != profile.motivations[1]
     assert f"# {profile.name}" in markdown
     assert profile.name not in markdown.replace(f"# {profile.name}", "")
-    assert "| Name | Level | Race | Class | Pronouns |" in markdown
+    assert "| Name | Level | Race | Class | Pronouns | Drives | Home | Allies | Enemies |" in markdown
     assert (
         f"| {profile.name.split()[0]} | {profile.level} | {profile.race} | "
         f"{profile.character_class} | {profile.pronouns} |"
