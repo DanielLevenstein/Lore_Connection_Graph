@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.DS_Store
+.streamlit/secrets.toml
+
+# All app-generated characters, memory, chat logs, and model folders stay local.
+data/
