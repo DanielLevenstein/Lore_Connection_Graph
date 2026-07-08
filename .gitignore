@@ -8,3 +8,5 @@ venv/
 
 # All app-generated characters, memory, chat logs, and model folders stay local.
 data/
+/.idea/
+/config/

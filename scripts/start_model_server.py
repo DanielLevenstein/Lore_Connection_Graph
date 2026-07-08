@@ -10,8 +10,12 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from local_chatbot.models import _read_config
-from local_chatbot.server import start_server, status
+from language_model_harness import configure_language_model_harness
+
+configure_language_model_harness()
+
+from model_harness.models import _read_config
+from model_harness.server import start_server, status
 
 
 def parse_args() -> argparse.Namespace:

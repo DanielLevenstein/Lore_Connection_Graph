@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .paths import CONFIG_DIR, DATA_DIR, ensure_base_dirs
+from .environment import config_dir, data_dir, ensure_base_dirs
 
 
 @dataclass(frozen=True)
@@ -21,7 +21,7 @@ class ModelConfig:
 
     @property
     def local_dir(self) -> Path:
-        return DATA_DIR / self.name
+        return data_dir() / self.name
 
     @property
     def is_downloaded(self) -> bool:
@@ -48,7 +48,7 @@ def _read_config(path: Path) -> ModelConfig:
 
 def list_model_configs(downloaded_only: bool = False) -> list[ModelConfig]:
     ensure_base_dirs()
-    configs = [_read_config(path) for path in sorted(CONFIG_DIR.glob("*.json"))]
+    configs = [_read_config(path) for path in sorted(config_dir().glob("*.json"))]
     if downloaded_only:
         configs = [config for config in configs if config.is_downloaded]
     return configs
