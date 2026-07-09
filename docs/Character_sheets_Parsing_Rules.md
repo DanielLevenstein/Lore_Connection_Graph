@@ -10,8 +10,4 @@
 - Add dedicated fields for the first name and family name in the JSON doc for each character. 
 - Create a section of the character specs JSON which stores the fields present in the character stats table in a normalized format. 
 
-## App Improvements
-
-- Support generation of backstory and summary text from the knowledge graph but only when the user specifically requests it.
-- Update the knowledge graph UI so that each tab shows the graph for a different character, avoiding the need to manually load character files for the graph to populate.
-- Show all places and relationships in a combined graph even if they do not have full character sheets associated with them.
+Example character sheets have been added to the root level characters directory.
