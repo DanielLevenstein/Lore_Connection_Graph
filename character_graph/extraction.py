@@ -12,6 +12,7 @@ from .schema import (
     CharacterGraph,
     CharacterNode,
     GraphMetadata,
+    PlaceNode,
     PrimaryCharacterRef,
     RelationshipEdge,
 )
@@ -39,6 +40,7 @@ NON_NAME_WORDS = {
     "In",
     "It",
     "Its",
+    "Most",
     "No",
     "On",
     "Or",
@@ -53,6 +55,35 @@ NON_NAME_WORDS = {
     "Where",
     "While",
     "With",
+}
+PLACE_SUFFIXES = {
+    "Academy",
+    "Bastion",
+    "Cavern",
+    "City",
+    "College",
+    "Coast",
+    "Court",
+    "Fortress",
+    "Forest",
+    "Guild",
+    "Hall",
+    "Halls",
+    "Harbor",
+    "Keep",
+    "Kingdom",
+    "Library",
+    "Mage College",
+    "Monastery",
+    "Order",
+    "School",
+    "Sea",
+    "Shore",
+    "Shores",
+    "Temple",
+    "Tower",
+    "University",
+    "Village",
 }
 MOTIVATION_PATTERNS = [
     re.compile(r"\b(?:wants|seeks|hopes|needs|tries|trying|adventures)\s+to\s+([^.!?;]+)", re.IGNORECASE),
@@ -93,10 +124,12 @@ def extract_character_graph(
     primary_name: str | None = None,
 ) -> CharacterGraph:
     stats = extract_character_stats(document.raw_text)
+    stats = {**extract_character_details(document.raw_text), **stats}
     primary_name = primary_name or infer_primary_name(document.raw_text, document.character_id, stats)
     primary_id = slugify(primary_name)
     now = datetime.now().isoformat(timespec="seconds")
     sentences = split_sentences(document.raw_text)
+    place_mentions = find_place_mentions(document.raw_text)
     mentioned_names = find_mentioned_names(document.raw_text, primary_name, stats)
 
     characters: dict[str, CharacterNode] = {
@@ -113,6 +146,7 @@ def extract_character_graph(
     }
     relationships: list[RelationshipEdge] = []
     attributes: dict[str, AttributeNode] = {}
+    places: dict[str, PlaceNode] = {}
 
     for attribute_type, label, value, evidence in attribute_connections(primary_name, stats, document.raw_text):
         node_id = unique_node_id(attributes, slugify(f"{attribute_type}_{value}"))
@@ -134,6 +168,28 @@ def extract_character_graph(
                 conflict_level=0.0,
                 emotional_weight=0.3,
                 evidence=[evidence],
+            )
+        )
+    for place_name, aliases, evidence in place_mentions:
+        place_id = unique_place_id(places, slugify(place_name))
+        places[place_id] = PlaceNode(
+            name=place_name,
+            place_type=infer_place_type(place_name),
+            aliases=aliases,
+            summary=build_place_summary(primary_name, place_name, evidence),
+            source_spans=evidence,
+        )
+        relationships.append(
+            RelationshipEdge(
+                source=primary_id,
+                target=place_id,
+                relationship_type="place",
+                relationship_label="Place",
+                sentiment="setting",
+                trust_level=0.8,
+                conflict_level=0.0,
+                emotional_weight=0.4,
+                evidence=evidence,
             )
         )
     for relationship_type, label, value, evidence in character_relationships(primary_name, stats, document.raw_text):
@@ -161,6 +217,8 @@ def extract_character_graph(
             )
         )
     for name in mentioned_names:
+        if is_known_place_reference(name, places):
+            continue
         character_id = slugify(name)
         if character_id == primary_id:
             continue
@@ -192,7 +250,8 @@ def extract_character_graph(
         ),
         characters=characters,
         attributes=attributes,
-        relationships=relationships,
+        places=places,
+        relationships=dedupe_relationships(relationships),
         metadata=GraphMetadata(
             created_at=now,
             updated_at=now,
@@ -211,6 +270,11 @@ def extract_character_graph(
             if part
         )
         graph.embeddings[attribute_id] = build_embedding_record(attribute_id, embedding_text)
+    for place_id, node in graph.places.items():
+        embedding_text = " ".join(
+            part for part in [node.name, " ".join(node.aliases), node.place_type, node.summary, " ".join(node.source_spans)] if part
+        )
+        graph.embeddings[place_id] = build_embedding_record(place_id, embedding_text)
     return graph
 
 
@@ -235,8 +299,100 @@ def extract_character_stats(text: str) -> dict[str, str]:
     return {}
 
 
+def extract_character_details(text: str) -> dict[str, str]:
+    details = character_details_section(text)
+    if not details:
+        return {}
+    values: dict[str, list[str]] = {}
+    values.update(parse_details_table(details))
+    current_key = ""
+    current_values: list[str] = []
+    for line in details.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("|"):
+            continue
+        if stripped.startswith("-") and current_key:
+            current_values.append(stripped.lstrip("-").strip())
+            continue
+        if current_key:
+            values[current_key] = current_values
+            current_key = ""
+            current_values = []
+        if ":" not in stripped:
+            continue
+        label, value = stripped.split(":", 1)
+        key = normalize_detail_key(label)
+        if not key:
+            continue
+        if value.strip():
+            values[key] = [value.strip()]
+        else:
+            current_key = key
+            current_values = []
+    if current_key:
+        values[current_key] = current_values
+    return {key: "; ".join(items) for key, items in values.items() if items}
+
+
+def character_details_section(text: str) -> str:
+    match = re.search(r"^###\s+Character Details\s*$", text, re.IGNORECASE | re.MULTILINE)
+    if not match:
+        return ""
+    next_heading = re.search(r"^#{1,3}\s+", text[match.end() :], re.MULTILINE)
+    end = match.end() + next_heading.start() if next_heading else len(text)
+    return text[match.end() : end].strip()
+
+
+def parse_details_table(details: str) -> dict[str, list[str]]:
+    rows = [parse_table_row(line) for line in details.splitlines()]
+    rows = [row for row in rows if row]
+    if len(rows) < 3:
+        return {}
+    headers = [compact_key(header) for header in rows[0]]
+    if "field" not in headers or "description" not in headers:
+        return {}
+    field_index = headers.index("field")
+    description_index = headers.index("description")
+    values: dict[str, list[str]] = {}
+    for row in rows[1:]:
+        if len(row) <= max(field_index, description_index):
+            continue
+        if all(set(cell) <= {"-"} for cell in row):
+            continue
+        key = normalize_detail_key(row[field_index])
+        description = row[description_index].strip()
+        if key and description:
+            values.setdefault(key, []).append(description)
+    return values
+
+
+def normalize_detail_key(value: str) -> str:
+    key = compact_key(value)
+    aliases = {
+        "ally": "alliances",
+        "alliance": "alliances",
+        "alliances": "alliances",
+        "allies": "alliances",
+        "drive": "drives",
+        "drives": "drives",
+        "enemy": "enemies",
+        "enemies": "enemies",
+        "foe": "enemies",
+        "foes": "enemies",
+        "home": "home",
+        "origin": "home",
+    }
+    return aliases.get(key, key)
+
+
+def compact_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
 def required_stats_present(headers: list[str]) -> bool:
-    return all(header in headers for header in ["name", "race", "class"])
+    return any(header in headers for header in ["name", "level", "race", "class"])
 
 
 def parse_table_row(line: str) -> list[str]:
@@ -385,6 +541,93 @@ def find_mentioned_names(text: str, primary_name: str, stats: dict[str, str] | N
     return names
 
 
+def find_place_mentions(text: str) -> list[tuple[str, list[str], list[str]]]:
+    sentences = split_sentences(text)
+    candidates: list[str] = []
+    for candidate in NAME_PATTERN.findall(text):
+        cleaned = candidate.strip()
+        if is_probable_place(cleaned) and cleaned not in candidates:
+            candidates.append(cleaned)
+
+    canonical_places: list[str] = []
+    aliases_by_place: dict[str, list[str]] = {}
+    for candidate in sorted(candidates, key=lambda value: (-len(value), value.lower())):
+        existing = next(
+            (
+                place
+                for place in canonical_places
+                if is_place_alias(candidate, place) or is_place_alias(place, candidate)
+            ),
+            "",
+        )
+        if existing:
+            if candidate != existing and candidate not in aliases_by_place[existing]:
+                aliases_by_place[existing].append(candidate)
+            continue
+        canonical_places.append(candidate)
+        aliases_by_place[candidate] = []
+
+    for place in canonical_places:
+        first_word = place.split()[0]
+        if first_word != place and re.search(rf"\b{re.escape(first_word)}\b", text) and first_word not in aliases_by_place[place]:
+            aliases_by_place[place].append(first_word)
+
+    return [
+        (place, sorted(aliases_by_place[place]), evidence_for_place(sentences, place, aliases_by_place[place]))
+        for place in canonical_places
+    ]
+
+
+def is_probable_place(value: str) -> bool:
+    if not is_probable_name(value):
+        return False
+    lowered = value.lower()
+    if any(lowered.endswith(suffix.lower()) for suffix in PLACE_SUFFIXES):
+        return True
+    return bool(re.search(r"\b(?:academy|college|coast|halls?|sea|shores?|tower|village)\b", lowered))
+
+
+def is_place_alias(candidate: str, canonical: str) -> bool:
+    candidate_norm = normalize_name_ref(candidate)
+    canonical_norm = normalize_name_ref(canonical)
+    if not candidate_norm or not canonical_norm or candidate_norm == canonical_norm:
+        return True
+    return canonical_norm.startswith(candidate_norm) or candidate_norm.startswith(canonical_norm)
+
+
+def evidence_for_place(sentences: list[str], place: str, aliases: list[str]) -> list[str]:
+    refs = [place, *aliases]
+    evidence = [
+        sentence
+        for sentence in sentences
+        if any(ref in sentence or ref.lower() in sentence.lower() for ref in refs)
+    ]
+    return evidence[:5]
+
+
+def infer_place_type(place_name: str) -> str:
+    lowered = place_name.lower()
+    if "college" in lowered or "academy" in lowered:
+        return "school"
+    if "coast" in lowered or "sea" in lowered or "shore" in lowered:
+        return "region"
+    return "place"
+
+
+def build_place_summary(primary_name: str, place_name: str, evidence: list[str]) -> str:
+    evidence_text = " ".join(evidence[:2])
+    return f"{place_name} is a place connected to {primary_name}. Evidence: {evidence_text}"
+
+
+def is_known_place_reference(name: str, places: dict[str, PlaceNode]) -> bool:
+    normalized = normalize_name_ref(name)
+    for place in places.values():
+        refs = [place.name, *place.aliases]
+        if any(normalized == normalize_name_ref(ref) for ref in refs):
+            return True
+    return False
+
+
 def primary_name_aliases(primary_name: str, stats: dict[str, str] | None = None) -> set[str]:
     aliases = {normalize_name_ref(primary_name)}
     for part in re.split(r"[\s_]+", primary_name):
@@ -460,6 +703,22 @@ def infer_relationship(
                 evidence=evidence,
             )
     return None
+
+
+def dedupe_relationships(relationships: list[RelationshipEdge]) -> list[RelationshipEdge]:
+    deduped: list[RelationshipEdge] = []
+    by_key: dict[tuple[str, str, str], RelationshipEdge] = {}
+    for relationship in relationships:
+        key = (relationship.source, relationship.target, relationship.relationship_type)
+        existing = by_key.get(key)
+        if existing is None:
+            by_key[key] = relationship
+            deduped.append(relationship)
+            continue
+        for evidence in relationship.evidence:
+            if evidence not in existing.evidence:
+                existing.evidence.append(evidence)
+    return deduped
 
 
 def build_related_summary(name: str, primary_name: str, relationship: RelationshipEdge, evidence: list[str]) -> str:
@@ -542,6 +801,15 @@ def unique_node_id(existing: dict[str, AttributeNode], base_id: str) -> str:
 
 
 def unique_character_id(existing: dict[str, CharacterNode], base_id: str) -> str:
+    if base_id not in existing:
+        return base_id
+    index = 2
+    while f"{base_id}_{index}" in existing:
+        index += 1
+    return f"{base_id}_{index}"
+
+
+def unique_place_id(existing: dict[str, PlaceNode], base_id: str) -> str:
     if base_id not in existing:
         return base_id
     index = 2

@@ -6,15 +6,14 @@ from .schema import CharacterGraph
 def relationship_rows(graph: CharacterGraph) -> list[dict[str, str | float]]:
     rows: list[dict[str, str | float]] = []
     for relationship in graph.relationships:
-        if relationship.target in graph.attributes:
+        if relationship.target in graph.attributes or relationship.target in graph.places:
             continue
         source = graph.characters.get(relationship.source)
-        target = graph.characters.get(relationship.target)
         rows.append(
             {
                 "Character": source.name if source else node_label(graph, relationship.source),
                 "Relationship": relationship.relationship_label,
-                "Value": node_label(graph, relationship.target) if target else relationship.target,
+                "Value": node_label(graph, relationship.target),
             }
         )
     return rows
@@ -38,10 +37,24 @@ def attribute_rows(graph: CharacterGraph) -> list[dict[str, str]]:
     return rows
 
 
+def place_rows(graph: CharacterGraph) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for place in graph.places.values():
+        rows.append(
+            {
+                "Value": place.name,
+                "Attribute": place.place_type.title(),
+                "Aliases": ", ".join(place.aliases),
+                "Summary": place.summary,
+            }
+        )
+    return rows
+
+
 def evidence_rows(graph: CharacterGraph) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for relationship in graph.relationships:
-        if relationship.target in graph.attributes:
+        if relationship.target in graph.attributes or relationship.target in graph.places:
             continue
         rows.append(
             {
@@ -58,6 +71,15 @@ def evidence_rows(graph: CharacterGraph) -> list[dict[str, str]]:
                 "Item": attribute.attribute_type,
                 "Value": attribute.value,
                 "Evidence": " ".join(attribute.source_spans),
+            }
+        )
+    for place in graph.places.values():
+        rows.append(
+            {
+                "Table": "Places",
+                "Item": place.place_type.title(),
+                "Value": place.name,
+                "Evidence": " ".join(place.source_spans),
             }
         )
     return rows
@@ -80,6 +102,11 @@ def relationship_dot(graph: CharacterGraph) -> str:
             f'  "{escape_dot(attribute_id)}" [label="{escape_dot(attribute.value)}", '
             'fillcolor="#f8fafc", shape="ellipse", style="filled"];'
         )
+    for place_id, place in graph.places.items():
+        lines.append(
+            f'  "{escape_dot(place_id)}" [label="{escape_dot(place.name)}", '
+            'fillcolor="#dcfce7", shape="component", style="filled"];'
+        )
     for relationship in graph.relationships:
         label = relationship.relationship_label
         lines.append(
@@ -99,4 +126,6 @@ def node_label(graph: CharacterGraph, node_id: str) -> str:
         return graph.characters[node_id].name
     if node_id in graph.attributes:
         return graph.attributes[node_id].value
+    if node_id in graph.places:
+        return graph.places[node_id].name
     return node_id

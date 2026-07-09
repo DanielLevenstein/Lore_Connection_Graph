@@ -15,10 +15,13 @@ def validate_graph(graph: CharacterGraph, expected_source_hash: str | None = Non
     for attribute_id, attribute in graph.attributes.items():
         if not attribute.summary.strip():
             warnings.append(f"Attribute `{attribute_id}` has no summary.")
+    for place_id, place in graph.places.items():
+        if not place.summary.strip():
+            warnings.append(f"Place `{place_id}` has no summary.")
     for relationship in graph.relationships:
-        if relationship.source not in graph.characters and relationship.source not in graph.attributes:
+        if relationship.source not in graph.characters and relationship.source not in graph.attributes and relationship.source not in graph.places:
             warnings.append(f"Relationship source `{relationship.source}` is missing from graph nodes.")
-        if relationship.target not in graph.characters and relationship.target not in graph.attributes:
+        if relationship.target not in graph.characters and relationship.target not in graph.attributes and relationship.target not in graph.places:
             warnings.append(f"Relationship target `{relationship.target}` is missing from graph nodes.")
         if not relationship.evidence:
             warnings.append(f"Relationship `{relationship.source}` -> `{relationship.target}` has no evidence.")

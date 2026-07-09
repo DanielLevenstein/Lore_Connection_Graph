@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
-SCHEMA_VERSION = "0.2.0"
+SCHEMA_VERSION = "0.3.0"
 
 
 @dataclass
@@ -44,6 +44,15 @@ class AttributeNode:
 
 
 @dataclass
+class PlaceNode:
+    name: str
+    place_type: str = "place"
+    aliases: list[str] = field(default_factory=list)
+    summary: str = ""
+    source_spans: list[str] = field(default_factory=list)
+
+
+@dataclass
 class RelationshipEdge:
     source: str
     target: str
@@ -77,6 +86,7 @@ class CharacterGraph:
     primary_character: PrimaryCharacterRef
     characters: dict[str, CharacterNode] = field(default_factory=dict)
     attributes: dict[str, AttributeNode] = field(default_factory=dict)
+    places: dict[str, PlaceNode] = field(default_factory=dict)
     relationships: list[RelationshipEdge] = field(default_factory=list)
     embeddings: dict[str, EmbeddingRecord] = field(default_factory=dict)
     metadata: GraphMetadata | None = None
@@ -95,6 +105,10 @@ class CharacterGraph:
             attribute_id: _attribute_node_from_dict(node)
             for attribute_id, node in payload.get("attributes", {}).items()
         }
+        places = {
+            place_id: _place_node_from_dict(node)
+            for place_id, node in payload.get("places", {}).items()
+        }
         payload_schema_version = payload.get("schema_version", SCHEMA_VERSION)
         if not attributes and payload_schema_version == "0.1.0":
             characters, attributes = _migrate_legacy_attribute_nodes(primary.id, characters)
@@ -110,6 +124,7 @@ class CharacterGraph:
             primary_character=primary,
             characters=characters,
             attributes=attributes,
+            places=places,
             relationships=relationships,
             embeddings=embeddings,
             metadata=metadata,
@@ -135,6 +150,16 @@ def _attribute_node_from_dict(payload: dict[str, Any]) -> AttributeNode:
     return AttributeNode(
         value=payload.get("value", payload.get("name", "")),
         attribute_type=payload.get("attribute_type", payload.get("role", "unknown")),
+        aliases=list(payload.get("aliases", [])),
+        summary=payload.get("summary", ""),
+        source_spans=list(payload.get("source_spans", [])),
+    )
+
+
+def _place_node_from_dict(payload: dict[str, Any]) -> PlaceNode:
+    return PlaceNode(
+        name=payload.get("name", payload.get("value", "")),
+        place_type=payload.get("place_type", payload.get("role", "place")),
         aliases=list(payload.get("aliases", [])),
         summary=payload.get("summary", ""),
         source_spans=list(payload.get("source_spans", [])),

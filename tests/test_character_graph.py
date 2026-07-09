@@ -1,7 +1,7 @@
 import json
 
 from character_graph.extraction import extract_character_graph
-from character_graph.graph_view import attribute_rows, evidence_rows, relationship_dot, relationship_rows
+from character_graph.graph_view import attribute_rows, evidence_rows, place_rows, relationship_dot, relationship_rows
 from character_graph.ingest import load_backstory
 from character_graph.prompt_context import build_prompt_context
 from character_graph.retrieval import retrieve_relevant_context
@@ -70,6 +70,7 @@ def test_extract_character_graph_creates_stats_and_known_prose_relationships(tmp
         "class_wizard",
     } <= set(graph.attributes)
     assert "enemy_torvak" not in graph.attributes
+    assert "silver_court" in graph.places
     assert {
         edge.relationship_type for edge in graph.relationships
     } == {
@@ -79,6 +80,7 @@ def test_extract_character_graph_creates_stats_and_known_prose_relationships(tmp
         "drive",
         "ally",
         "enemy",
+        "place",
         "betrayer",
         "rival",
     }
@@ -105,6 +107,51 @@ def test_extract_character_graph_accepts_minimal_character_stats_table(tmp_path)
     assert set(graph.characters) == {"arlen_voss", "voss"}
     assert {"family_voss", "race_elf", "class_wizard"} <= set(graph.attributes)
     assert {edge.relationship_type for edge in graph.relationships} == {"family", "race", "class"}
+
+
+def test_extract_character_graph_reads_drives_alliances_and_enemies_from_details(tmp_path):
+    source = tmp_path / "neal.md"
+    source.write_text(
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Neal | Elf | Bard |
+
+## Character Backstory
+
+Neal performs at the Royal Tittles.
+
+## Character Summary
+
+Neal is a bard with complicated regulars.
+
+### Character Details
+
+| Field | Description |
+| ----- | ----------- |
+| Drive | Entertaining sailors on shore leave. |
+| Alliances | Jory Ravenmark is their favorite client. |
+| Enemies | Mrs Nighbloom was not happy. |
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="neal_lovington"))
+
+    assert "drive_entertaining_sailors_on_shore_leave" in graph.attributes
+    assert graph.attributes["drive_entertaining_sailors_on_shore_leave"].value == "Entertaining sailors on shore leave."
+    assert any(edge.relationship_type == "drive" for edge in graph.relationships)
+    assert any(
+        edge.relationship_type == "ally" and graph.characters[edge.target].name == "Jory Ravenmark is their favorite client."
+        for edge in graph.relationships
+    )
+    assert any(
+        edge.relationship_type == "enemy" and graph.characters[edge.target].name == "Mrs Nighbloom was not happy."
+        for edge in graph.relationships
+    )
 
 
 def test_extract_character_graph_skips_unknown_prose_relationships(tmp_path):
@@ -305,15 +352,50 @@ def test_graph_view_helpers_format_relationships_and_dot(tmp_path):
 
     relationships = relationship_rows(graph)
     attributes = attribute_rows(graph)
+    places = place_rows(graph)
     evidence = evidence_rows(graph)
     dot = relationship_dot(graph)
 
     assert all("Evidence" not in row for row in relationships)
     assert all(row["Relationship"] not in {"Race", "Class", "Pronouns", "Drive"} for row in relationships)
     assert any(row["Value"] == "Elf" and row["Attribute"] == "Race" for row in attributes)
+    assert any(row["Value"] == "Silver Court" and row["Attribute"] == "Place" for row in places)
     assert any(row["Table"] == "Relationships" and row["Item"] == "Rival" for row in evidence)
     assert any(row["Table"] == "Attributes" and row["Item"] == "Race" for row in evidence)
+    assert any(row["Table"] == "Places" and row["Value"] == "Silver Court" for row in evidence)
     assert not any(row["Item"] == "Pronouns" for row in evidence)
     assert "digraph CharacterRelationships" in dot
     assert '"arlen_voss" -> "race_elf"' in dot
     assert 'shape="ellipse"' in dot
+
+
+def test_extract_character_graph_routes_place_evidence_away_from_family_relationships(tmp_path):
+    source = tmp_path / "orin.md"
+    source.write_text(
+        """# Orin Stonehand
+
+## Character Stats
+
+| Name | Race | Class |
+|------|------|-------|
+| Orin | Half-orc | Wizard |
+
+## Character Backstory
+
+Orin was born with a weight the world seldom places on a child, the weight of a half-orc heritage clashing with the refined air of the Sunstone Mage College nestled on the frosted coast of his life.
+The Sunstone mages, haunted by the specter of his mother's fate, urged him to abandon his search, to leave the cursed echoes at his blood-burdened doorstep.
+He carries the weight of the Sunstone mage college, a living monument to the pain their whispers could not heal, and a beacon for the path that could.
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="orin_stonehand"))
+    evidence = evidence_rows(graph)
+
+    assert graph.places["sunstone_mage_college"].name == "Sunstone Mage College"
+    assert graph.places["sunstone_mage_college"].aliases == ["Sunstone"]
+    assert any(row["Table"] == "Places" and row["Value"] == "Sunstone Mage College" for row in evidence)
+    assert not any(
+        row["Table"] == "Relationships" and row["Item"] == "Family" and "Sunstone" in row["Value"]
+        for row in evidence
+    )

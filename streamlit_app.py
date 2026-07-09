@@ -8,18 +8,16 @@ from character_graph.prompt_context import build_prompt_context
 from character_graph.retrieval import retrieve_relevant_context
 from character_graph.storage import load_graph
 from language_model_harness import configure_language_model_harness
-from model_sidebar import render_sidebar
 
 configure_language_model_harness()
 
-from model_harness.chat import chat_completion
 from model_harness.environment import ensure_base_dirs
-from model_harness.server import status
 from local_chatbot.storage import (
     Character,
     CharacterProfile,
     append_chatlog,
     create_character,
+    default_details,
     list_characters,
     read_character_profile,
     read_text,
@@ -29,7 +27,7 @@ from local_chatbot.storage import (
 )
 
 
-st.set_page_config(page_title="Local Roleplay Chatbot", page_icon=":material/forum:", layout="wide")
+st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
 ensure_base_dirs()
 
 st.markdown(
@@ -135,7 +133,7 @@ def render_list_field(values: list[str] | None) -> str:
 
 
 def render_relationship_graph(character: Character) -> None:
-    with st.expander("Character attribute graph", expanded=False):
+    with st.expander("Character Attribute Graph", expanded=False):
         graph = None
         try:
             graph = load_graph(character.graph_path)
@@ -164,14 +162,17 @@ def render_relationship_graph(character: Character) -> None:
 
         attributes_tab = st.tabs(["Attributes"])[0]
         with attributes_tab:
-            st.dataframe(evidence, hide_index=True, width="stretch")
+            st.table(evidence, hide_index=True, width="stretch")
 
 def render_character_creator(key_prefix: str = "new_character") -> None:
     with st.form(key_prefix, clear_on_submit=True):
         name = st.text_input("Name", placeholder="Mara Voss", key=f"{key_prefix}_name")
-        stat_cols = st.columns(2)
-        race = stat_cols[0].text_input("Race", placeholder="Elf", key=f"{key_prefix}_race")
-        character_class = stat_cols[1].text_input("Class", placeholder="Wizard", key=f"{key_prefix}_class")
+        stat_cols = st.columns(4)
+        level = stat_cols[0].text_input("Level", placeholder="3", key=f"{key_prefix}_level")
+        race = stat_cols[1].text_input("Race", placeholder="Elf", key=f"{key_prefix}_race")
+        character_class = stat_cols[2].text_input("Class", placeholder="Wizard", key=f"{key_prefix}_class")
+        pronouns = stat_cols[3].text_input("Pronouns", placeholder="she/her", key=f"{key_prefix}_pronouns")
+
         backstory = st.text_area(
             "Backstory",
             placeholder="A terse archivist from a vanished city who tests every lock twice...",
@@ -185,13 +186,6 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
             key=f"{key_prefix}_summary",
         )
         with st.expander("Optional metadata", expanded=False):
-            optional_cols = st.columns(2)
-            level = optional_cols[0].text_input("Level", placeholder="3", key=f"{key_prefix}_level")
-            pronouns = optional_cols[1].text_input(
-                "Pronouns",
-                placeholder="she/her, he/him, they/them",
-                key=f"{key_prefix}_pronouns",
-            )
             detail_cols = st.columns(3)
             drives = detail_cols[0].text_area(
                 "Drives",
@@ -211,6 +205,13 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
                 height=96,
                 key=f"{key_prefix}_enemies",
             )
+            details = st.text_area(
+                "Character details",
+                placeholder="Add any freeform character sheet fields here.",
+                height=120,
+                key=f"{key_prefix}_details",
+            )
+
         submitted = st.form_submit_button("Create character", icon=":material/person_add:")
         if submitted:
             if not all([name.strip(), race.strip(), character_class.strip(), backstory.strip()]):
@@ -229,6 +230,7 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
                     drives=parse_list_field(drives),
                     alliances=parse_list_field(alliances),
                     enemies=parse_list_field(enemies),
+                    details=details.strip(),
                 )
                 character = create_character(profile)
             except FileExistsError:
@@ -248,7 +250,7 @@ def render_character_panel() -> None:
         names = [character.name for character in characters]
         current = st.session_state.get("active_character", names[0])
         selected_character_name = st.selectbox(
-            "Existing characters",
+            "Existing Characters",
             names,
             index=names.index(current) if current in names else 0,
             key="main_existing_character",
@@ -268,7 +270,7 @@ def render_character_panel() -> None:
 
 def render_character_editor(character: Character) -> None:
     profile = read_character_profile(character)
-    with st.expander("Edit character", expanded=False):
+    with st.expander("Edit Character", expanded=False):
         with st.form(f"edit_character_{character.name}"):
             st.text_input("Name", value=profile.name, disabled=True)
             stat_cols = st.columns(2)
@@ -284,6 +286,8 @@ def render_character_editor(character: Character) -> None:
                 drives = detail_cols[0].text_area("Drives", value=render_list_field(profile.drives), height=96)
                 alliances = detail_cols[1].text_area("Alliances", value=render_list_field(profile.alliances), height=96)
                 enemies = detail_cols[2].text_area("Enemies", value=render_list_field(profile.enemies), height=96)
+                details_value = profile.details or default_details(profile)
+                details = st.text_area("Character details", value=details_value, height=120)
             if st.form_submit_button("Save character", icon=":material/save:"):
                 updated = CharacterProfile(
                     name=profile.name,
@@ -299,6 +303,7 @@ def render_character_editor(character: Character) -> None:
                     enemies=parse_list_field(enemies),
                     origin=profile.origin,
                     gender=profile.gender,
+                    details=details.strip(),
                 )
                 write_character_profile(character, updated)
                 st.success("Character saved.")
@@ -313,7 +318,7 @@ def render_memory_tools(character: Character) -> None:
         st.markdown(read_text(character.memory_path))
 
 
-def render_chat(character: Character, model_config=None) -> None:
+def render_character_info(character: Character, model_config=None) -> None:
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "chatlog_path" not in st.session_state:
@@ -322,68 +327,15 @@ def render_chat(character: Character, model_config=None) -> None:
     st.subheader(character.name)
     render_character_editor(character)
     render_relationship_graph(character)
-    # render_memory_tools(character)
-    model_status = status(model_config) if model_config else None
-    if model_config and model_status and model_status.healthy:
-        st.success(f"Model server ready at {model_config.api_base_url}")
-    elif model_config and model_status and model_status.running:
-        st.info(f"Model server process is running. Waiting for {model_config.api_base_url}. Using character-sheet fallback.")
-    elif model_config:
-        st.warning("Model server is not running. Using character-sheet fallback.")
-    else:
-        st.info("Select or start a model for generated replies. Using character-sheet fallback.")
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    prompt = st.chat_input(f"Message {character.name}")
-    if not prompt:
-        return
-
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    append_chatlog(st.session_state.chatlog_path, "User", prompt)
-
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    backstory = read_text(character.backstory_path)
-    memory = read_text(character.memory_path)
-    history = st.session_state.messages[:-1]
-    st.session_state.graph_context = graph_context_for_prompt(character, prompt)
-    messages = build_character_messages(character.name, backstory, memory, history, prompt)
-
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking locally..."):
-            if model_config and model_status and model_status.healthy:
-                try:
-                    reply = chat_completion(model_config, messages, model_status)
-                except (requests.RequestException, ValueError) as exc:
-                    reply = f"Local model error: {exc}"
-                    st.error(reply)
-                else:
-                    st.markdown(reply)
-            else:
-                reply = generate_fallback_reply(character, backstory, memory, prompt)
-                st.markdown(reply)
-
-    st.session_state.messages.append({"role": "assistant", "content": reply})
-    append_chatlog(st.session_state.chatlog_path, character.name, reply)
-
-
-active_model = render_sidebar()
+# active_model = render_sidebar()
 
 st.title("Local Huggingface Chatbot")
 st.caption("Chat with local characters, backed by Markdown memory and raw text logs.")
 
 render_character_panel()
-st.divider()
-
 active_character = get_active_character()
-if not active_character:
-    st.subheader("Chat")
-    st.info("Create or open a character above to start chatting.")
-elif not active_model:
-    render_chat(active_character)
+if active_character is None:
+    st.info("Create or open a character to edit its sheet.")
 else:
-    render_chat(active_character, active_model)
+    render_character_info(active_character)

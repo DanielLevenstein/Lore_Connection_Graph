@@ -4,13 +4,13 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 from .embeddings import HashingEmbedder, cosine_similarity
-from .schema import AttributeNode, CharacterGraph, CharacterNode, RelationshipEdge
+from .schema import AttributeNode, CharacterGraph, CharacterNode, PlaceNode, RelationshipEdge
 
 
 @dataclass(frozen=True)
 class RetrievedCharacterContext:
     node_id: str
-    node: CharacterNode | AttributeNode
+    node: CharacterNode | AttributeNode | PlaceNode
     display_name: str
     relationships: list[RelationshipEdge]
     score: float
@@ -58,13 +58,27 @@ def retrieve_relevant_context(
         if result:
             results.append(result)
 
+    for place_id, place in graph.places.items():
+        result = score_node(
+            graph=graph,
+            node_id=place_id,
+            node=place,
+            labels=[place.name, place.place_type, *place.aliases],
+            display_name=place.name,
+            message_lower=message_lower,
+            message_vector=message_vector,
+            min_score=min_score,
+        )
+        if result:
+            results.append(result)
+
     return sorted(results, key=lambda result: result.score, reverse=True)[:limit]
 
 
 def score_node(
     graph: CharacterGraph,
     node_id: str,
-    node: CharacterNode | AttributeNode,
+    node: CharacterNode | AttributeNode | PlaceNode,
     labels: list[str],
     display_name: str,
     message_lower: str,
