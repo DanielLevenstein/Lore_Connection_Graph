@@ -175,12 +175,15 @@ def story_place_names(graph: CharacterGraph) -> list[str]:
 
 def story_relationship_names(graph: CharacterGraph) -> list[str]:
     names = []
+    primary_last_name = graph.primary_character.name.split()[-1].lower() if graph.primary_character.name.split() else ""
     for edge in graph.relationships:
         if edge.target not in graph.characters or edge.target == graph.primary_character.id:
             continue
         character = graph.characters[edge.target]
         name = character.name
         if not character.source_spans:
+            continue
+        if primary_last_name and name.lower() == primary_last_name:
             continue
         if name.lower() in {"mother", "father", "parent", "half", "orc", "bard"}:
             continue

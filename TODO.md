@@ -36,6 +36,7 @@
 - Added Delete Character, Delete Place, and Delete Session Note actions with file cleanup and UI status messages.
 - Fixed create validation so failed character, place, and session note saves preserve entered fields.
 - Added unit and end-to-end coverage for delete actions and failed-create draft preservation.
+- Hid the Attribute Graph override editor behind `LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE=1`.
 
 ## Session Notes Attribute Graph
 

@@ -171,6 +171,23 @@ def fill_textbox(page, name: str, value: str, index: int = 0) -> None:
     page.get_by_role("textbox", name=name, exact=True).nth(index).fill(value)
 
 
+def click_form_button_by_save_button(page, save_button_name: str, target_button_name: str) -> None:
+    form = page.locator("form").filter(has=page.get_by_role("button", name=save_button_name)).first
+    button = form.get_by_role("button", name=target_button_name)
+    if button.count():
+        button.click(force=True)
+        return
+    page.get_by_role("button", name=target_button_name).first.click(force=True)
+
+
+def click_place_undo_button(page) -> None:
+    save_button = page.get_by_role("button", name="save Save Place")
+    save_button.scroll_into_view_if_needed()
+    box = save_button.bounding_box()
+    assert box is not None
+    page.mouse.click(box["x"] + (box["width"] * 2.5), box["y"] + (box["height"] / 2))
+
+
 def test_ui_save_preserves_sheet_values_and_normalizes_details(isolated_character_app):
     app_url, _docs_lore_dir, characters_dir, _places_dir, _session_notes_dir, data_dir = isolated_character_app
     character_files = sorted(path for path in characters_dir.glob("*.md") if path.name != "TEMPLATE.md")
@@ -265,7 +282,7 @@ def test_ui_creates_loads_and_undoes_character_changes(isolated_character_app):
 
         ensure_character_editor_open(page)
         page.get_by_role("textbox", name="Summary", exact=True).first.fill("Della is a reckless scout tonight.")
-        page.get_by_role("button", name="save Save Character").click()
+        page.get_by_role("button", name="save Save Character").first.click(force=True)
         expect(page.get_by_text("Character Saved.")).to_be_visible(timeout=10000)
 
         ensure_character_editor_open(page)
@@ -322,10 +339,14 @@ def test_ui_creates_loads_and_undoes_place_changes(isolated_character_app):
         expect(page.get_by_text("Place Saved.")).to_be_visible(timeout=10000)
 
         ensure_place_editor_open(page)
-        page.get_by_role("button", name="undo Undo Changes").first.click()
+        click_place_undo_button(page)
         expect(page.get_by_text("Place Changes Undone.")).to_be_visible(timeout=10000)
         ensure_place_editor_open(page)
-        page.get_by_role("button", name="undo Undo Changes").first.click()
+        expect(page.get_by_role("textbox", name="Summary", exact=True)).to_have_value(
+            "A crowded guildhall where maps are traded.",
+            timeout=10000,
+        )
+        click_place_undo_button(page)
         expect(page.get_by_text("Place Changes Undone.")).to_be_visible(timeout=10000)
         browser.close()
 

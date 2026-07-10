@@ -627,6 +627,42 @@ Arlen trains in the Silver_Court archives.
     assert not any("_" in row["Value"] for row in evidence)
 
 
+def test_character_connections_rows_coexist_with_inferred_graph_context(tmp_path):
+    source = tmp_path / "orin.md"
+    source.write_text(
+        """# Orin Nightbloom
+
+## Character Stats
+
+| Name | Race | Class |
+|------|------|-------|
+| Orin Nightbloom | Half-Orc | Bard |
+
+## Character Backstory
+
+Orin trained at the Sunstone Mage College and mourns his mother.
+
+## Character Connections
+
+| Source | Relationship | Name | Evidence |
+| ------ | ------------ | ---- | -------- |
+| Attributes | Drive | break the family curse | Manual override. |
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="orin_nightbloom"))
+
+    assert any(attribute.value == "break the family curse" for attribute in graph.attributes.values())
+    assert any(attribute.value == "Half-Orc" for attribute in graph.attributes.values())
+    assert any(place.name == "Sunstone Mage College" for place in graph.places.values())
+    assert any(
+        character.name == "Orin Nightbloom's Mother"
+        for character_id, character in graph.characters.items()
+        if character_id != graph.primary_character.id
+    )
+
+
 def test_extract_character_graph_routes_place_evidence_away_from_family_relationships(tmp_path):
     source = tmp_path / "orin.md"
     source.write_text(

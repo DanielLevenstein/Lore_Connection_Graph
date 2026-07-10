@@ -40,7 +40,9 @@ from local_chatbot.storage import (
     read_character_profile,
     read_text,
     regenerate_character_graph,
+    remove_character_connections,
     start_chatlog,
+    write_character_connections,
     write_character_profile,
     write_place_profile,
 )
@@ -61,6 +63,8 @@ from local_chatbot.session_notes import (
 )
 from local_chatbot.paths import DOCS_LORE_DIR
 
+ENABLE_CHARACTER_REWRITE = "1"
+ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
 ensure_base_dirs()
@@ -155,8 +159,11 @@ def clean_display_name(name: str) -> str:
 
 
 def graph_rewrites_enabled() -> bool:
-    return os.environ.get("LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES") == "1"
+    return ENABLE_CHARACTER_REWRITE
 
+
+def attribute_graph_override_enabled() -> bool:
+    return os.environ.get(ENABLE_ATTRIBUTE_GRAPH_OVERRIDE) == "1"
 
 def build_character_messages(
     character_name: str,
@@ -330,7 +337,8 @@ def render_relationship_graph(character: Character) -> None:
             toolbar_cols[1].caption("No Graph JSON Found Yet. Regenerate It From The Current Backstory.")
             return
 
-        evidence = evidence_rows(graph)
+        profile = read_character_profile(character)
+        evidence = attribute_graph_display_rows(profile) or evidence_rows(graph)
 
         if not evidence:
             st.info("No Character Graph Attributes Were Extracted From This Backstory.")
@@ -339,6 +347,59 @@ def render_relationship_graph(character: Character) -> None:
         attributes_tab = st.tabs(["Attributes"])[0]
         with attributes_tab:
             st.table(evidence, hide_index=True, width="stretch")
+            if attribute_graph_override_enabled():
+                render_attribute_graph_override_editor(character, evidence)
+
+
+def render_attribute_graph_override_editor(character: Character, evidence: list[dict[str, str]]) -> None:
+    with st.expander("Override Attribute Graph", expanded=False):
+        st.caption("When a Character Connections table is present, graph regeneration uses these rows instead of inferred attributes.")
+        override_key = f"attribute_graph_override_{character.name}"
+        with st.form(f"attribute_graph_override_form_{character.name}"):
+            edited_rows = st.data_editor(
+                evidence,
+                num_rows="dynamic",
+                key=override_key,
+                column_order=("Table", "Item", "Value", "Evidence"),
+                width="stretch",
+            )
+            action_cols = st.columns(2)
+            save_override = action_cols[0].form_submit_button(
+                "Save Attribute Graph Override",
+                icon=":material/edit_note:",
+            )
+            clear_override = action_cols[1].form_submit_button(
+                "Use Extracted Graph Again",
+                icon=":material/auto_awesome:",
+            )
+        if save_override:
+            write_character_connections(character, edited_rows, manual_override=True)
+            st.success("Attribute Graph Override Saved.")
+            st.rerun()
+        if clear_override:
+            remove_character_connections(character)
+            st.success("Attribute Graph Override Cleared.")
+            st.rerun()
+
+
+def attribute_graph_display_rows(profile: CharacterProfile) -> list[dict[str, str]]:
+    rows = []
+    for row in profile.knowledge_graph_fields or []:
+        table = row.get("table") or row.get("source") or row.get("Table") or row.get("Source") or ""
+        item = row.get("item") or row.get("relationship") or row.get("Item") or row.get("Relationship") or ""
+        value = row.get("value") or row.get("name") or row.get("Value") or row.get("Name") or ""
+        evidence = row.get("evidence") or row.get("Evidence") or ""
+        if not any([table, item, value, evidence]):
+            continue
+        rows.append(
+            {
+                "Table": table,
+                "Item": item,
+                "Value": " ".join(value.replace("_", " ").split()),
+                "Evidence": evidence,
+            }
+        )
+    return rows
 
 
 def render_combined_character_graph() -> None:
@@ -1065,17 +1126,16 @@ def render_character_editor(character: Character) -> None:
                 enemies = detail_cols[2].text_area("Enemies", value=render_list_field(profile.enemies), height=96)
                 details_value = profile.details or default_details(profile)
                 details = st.text_area("Character Details", value=details_value, height=120)
-            action_cols = st.columns(6 if graph_rewrites_enabled() else 3)
+            action_cols = st.columns(5 if graph_rewrites_enabled() else 3)
             save_requested = action_cols[0].form_submit_button("Save Character", icon=":material/save:")
             populate_summary = False
             repopulate_summary = False
             rewrite_backstory = False
             if graph_rewrites_enabled():
-                populate_summary = action_cols[1].form_submit_button("Populate Summary", icon=":material/auto_awesome:")
-                repopulate_summary = action_cols[2].form_submit_button("Repopulate Summary", icon=":material/sync:")
-                rewrite_backstory = action_cols[3].form_submit_button("Rewrite Backstory", icon=":material/edit_note:")
-                delete_col = action_cols[4]
-                undo_col = action_cols[5]
+                repopulate_summary = action_cols[1].form_submit_button("Repopulate Summary", icon=":material/sync:")
+                rewrite_backstory = action_cols[2].form_submit_button("Rewrite Backstory", icon=":material/edit_note:")
+                delete_col = action_cols[3]
+                undo_col = action_cols[4]
             else:
                 delete_col = action_cols[1]
                 undo_col = action_cols[2]

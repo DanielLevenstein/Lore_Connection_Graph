@@ -134,6 +134,7 @@ def extract_character_graph(
     primary_id = slugify(primary_name)
     now = datetime.now().isoformat(timespec="seconds")
     sentences = split_sentences(document.raw_text)
+    connection_rows = character_connection_rows(document.raw_text)
     place_mentions = find_place_mentions(document.raw_text)
     mentioned_names = find_mentioned_names(document.raw_text, primary_name, stats)
 
@@ -221,11 +222,13 @@ def extract_character_graph(
                 evidence=[evidence],
             )
         )
-    for connection in character_connection_rows(document.raw_text):
-        connection_kind = connection.get("table", "").lower()
+    for connection in connection_rows:
+        connection_kind = (connection.get("table") or connection.get("source") or "").lower()
         relationship_label = connection.get("relationship") or connection.get("item") or "Referenced"
         relationship_type = slugify(relationship_label) or "reference"
         value = connection.get("name") or connection.get("value") or connection.get("connection") or ""
+        if relationship_type == "family" and value.lower() in {"mother", "father", "parent"}:
+            value = f"{primary_name}'s {value}"
         evidence = limit_generated_evidence(
             connection.get("evidence") or f"{value} is listed in the Character Connections table."
         )
@@ -454,7 +457,6 @@ def character_connection_rows(text: str) -> list[dict[str, str]]:
         if item:
             values.append(item)
     return values
-
 
 def markdown_section(text: str, heading: str) -> str:
     pattern = re.compile(rf"^#{{2,3}}\s+{re.escape(heading)}\s*$", re.IGNORECASE | re.MULTILINE)

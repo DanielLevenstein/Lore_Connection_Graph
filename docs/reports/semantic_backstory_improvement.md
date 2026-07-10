@@ -21,15 +21,15 @@ Orin was born with a weight the world seldom places on a child, the weight of a 
 
 ## Required Concepts
 
-Orin Nightbloom, Half-Orc, Bard, stop a younger relative from repeating their worst choice, break a curse that only worsens when ignored, Sunstone Mage College, Orin Nightbloom's Mother, Nightbloom
+Orin Nightbloom, Half-Orc, Bard, stop a younger relative from repeating their worst choice, break a curse that only worsens when ignored, Sunstone Mage College, Orin Nightbloom's Mother
 
 ## Scores
 
 | Candidate | Overall | Semantic Similarity | Concept Coverage | Concision |
 | --- | ---: | ---: | ---: | ---: |
-| Post-transform story | 0.8052 | 0.6578 | 0.8750 | 0.9062 |
-| Pre-transform backstory | 0.4761 | 0.8781 | 0.3750 | 0.0000 |
+| Post-transform story | 0.7972 | 0.6578 | 0.8571 | 0.9062 |
+| Pre-transform backstory | 0.5002 | 0.8781 | 0.4286 | 0.0000 |
 
 ## Result
 
-The post-transform story improves the semantic quality score by `0.3291`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
+The post-transform story improves the semantic quality score by `0.2970`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
