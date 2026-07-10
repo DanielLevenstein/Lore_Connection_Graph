@@ -5,11 +5,13 @@ Build a local Python app for creating roleplaying character sheets, maintaining 
 ## Storage
 
 - Authored lore is stored in `docs/lore`.
+- Authored lore in `docs/lore` is ignored by git so users can populate it with private campaign data.
 - Available character sheets are sourced from `docs/lore/character_sheets`.
 - Available places are sourced from `docs/lore/places`.
 - Generated character drafts are stored in `data/lore/character_sheets` until the player manually promotes them into `docs/lore/character_sheets`.
 - Runtime metadata, memory files, chat logs, and generated graph JSON are stored under `data/`.
 - No files in `data/` should be committed.
+- No files in `docs/lore/` should be committed.
 
 ## Character Sheets
 

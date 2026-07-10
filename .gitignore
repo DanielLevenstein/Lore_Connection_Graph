@@ -8,6 +8,9 @@ venv/
 
 # All app-generated characters, memory, chat logs, and model folders stay local.
 data/
+
+# Player-authored lore is local campaign data. Templates and specs live in docs/.
+docs/lore/
 /.idea/
 /config/*
 !/character_graph/character_graph.json

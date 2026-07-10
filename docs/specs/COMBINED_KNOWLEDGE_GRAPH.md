@@ -8,6 +8,7 @@ The combined knowledge graph is a campaign-level view built from authored lore i
 
 - `docs/lore/character_sheets` is the source for available character sheets.
 - `docs/lore/places` is the source for available places.
+- `docs/lore` is ignored by git and should contain user-local campaign data.
 - `data/character_graph` stores derived per-character graph JSON and can be rebuilt.
 - `data/lore/character_sheets` stores generated draft characters and is not considered available campaign lore until the player moves a file into `docs/lore/character_sheets`.
 

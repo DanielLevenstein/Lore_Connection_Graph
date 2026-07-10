@@ -35,5 +35,5 @@ Freeform details.
 - `Place Summary` is the short description used by graph generation.
 - `Place Details` is freeform prose or tables.
 - `Place Connections` is a bullet list of character, place, faction, or object references.
-- Files in `docs/lore/places` are authored source files and may be committed.
+- Files in `docs/lore/places` are player-authored source files and should stay local because `docs/lore/` is ignored by git.
 - Generated or derived graph JSON remains under `data/` and can be rebuilt.

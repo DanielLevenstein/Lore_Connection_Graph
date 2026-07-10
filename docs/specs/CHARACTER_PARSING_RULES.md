@@ -1,6 +1,7 @@
 # Character Parsing Rules
 
 Character sheets are authored markdown files stored in `docs/lore/character_sheets`.
+This directory is ignored by git so each user can keep their own campaign lore local.
 
 ## Supported Paths
 

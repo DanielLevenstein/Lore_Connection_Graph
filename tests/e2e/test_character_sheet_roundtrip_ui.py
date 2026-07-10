@@ -13,6 +13,7 @@ from local_chatbot.storage import Character, read_character_profile
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 APP_URL = "http://127.0.0.1:8512"
+FIXTURE_CHARACTER_SHEETS_DIR = ROOT_DIR / "tests" / "fixtures" / "character_sheets"
 
 
 def streamlit_executable() -> Path:
@@ -51,7 +52,7 @@ def markdown_title(path: Path) -> str:
 def isolated_character_app(tmp_path):
     characters_dir = tmp_path / "docs" / "lore" / "character_sheets"
     data_dir = tmp_path / "data"
-    shutil.copytree(ROOT_DIR / "docs" / "lore" / "character_sheets", characters_dir)
+    shutil.copytree(FIXTURE_CHARACTER_SHEETS_DIR, characters_dir)
     data_dir.mkdir()
 
     env = os.environ.copy()
@@ -86,10 +87,8 @@ def isolated_character_app(tmp_path):
 
 
 def select_character(page, character_label: str, index: int) -> None:
-    if index > 0:
-        page.get_by_role("combobox", name="Existing Characters").click()
-        page.keyboard.press("ArrowDown")
-        page.keyboard.press("Enter")
+    page.get_by_role("combobox", name="Existing Characters").click()
+    page.get_by_role("option", name=character_label, exact=True).click()
     page.get_by_role("button", name="Open Character").click()
     expect(page.get_by_role("heading", name=character_label, exact=True)).to_be_visible(timeout=10000)
 

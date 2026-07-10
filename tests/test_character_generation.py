@@ -17,6 +17,9 @@ from local_chatbot.storage import (
 )
 
 
+FIXTURE_CHARACTER_SHEETS_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "character_sheets"
+
+
 def test_render_backstory_matches_character_template_shape():
     profile = CharacterProfile(
         name="Mara Voss",
@@ -327,7 +330,7 @@ Manual summary text.
 def test_existing_character_sheets_save_without_losing_stat_values(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
     monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
-    source_dir = Path(__file__).resolve().parents[1] / "docs" / "lore" / "character_sheets"
+    source_dir = FIXTURE_CHARACTER_SHEETS_DIR
 
     for source_file in source_dir.glob("*.md"):
         character_path = tmp_path / source_file.name
@@ -347,7 +350,7 @@ def test_character_sheet_file_path_save_adds_missing_default_stats(tmp_path, mon
     monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Orin_Nightbloom.md"
     shutil.copyfile(
-        Path(__file__).resolve().parents[1] / "docs" / "lore" / "character_sheets" / character_path.name,
+        FIXTURE_CHARACTER_SHEETS_DIR / character_path.name,
         character_path,
     )
     character = Character(name=character_path.stem, path=character_path)
@@ -363,7 +366,7 @@ def test_character_file_path_metadata_is_saved_under_data_lore_character_sheets(
     monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Orin_Nightbloom.md"
     shutil.copyfile(
-        Path(__file__).resolve().parents[1] / "docs" / "lore" / "character_sheets" / character_path.name,
+        FIXTURE_CHARACTER_SHEETS_DIR / character_path.name,
         character_path,
     )
     character = Character(name=character_path.stem, path=character_path)
@@ -718,7 +721,7 @@ def test_present_pronouns_stat_updates_in_stats_table(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Jory_Ravenmark.md"
     shutil.copyfile(
-        Path(__file__).resolve().parents[1] / "docs" / "lore" / "character_sheets" / character_path.name,
+        FIXTURE_CHARACTER_SHEETS_DIR / character_path.name,
         character_path,
     )
     character = Character(name=character_path.stem, path=character_path)
@@ -746,18 +749,16 @@ def test_present_pronouns_stat_updates_in_stats_table(tmp_path, monkeypatch):
     assert "| Ravenmark | 4 | Human | Barbarian | they/them |" in text
 
 
-def test_app_reads_characters_from_docs_lore_character_sheets():
+def test_app_uses_docs_lore_character_sheets_as_local_source_of_truth():
     assert CHARACTERS_DIR == ROOT_DIR / "docs" / "lore" / "character_sheets"
     assert CHARACTER_METADATA_DIR == ROOT_DIR / "data" / "lore" / "character_sheets"
-    assert (CHARACTERS_DIR / "Orin_Nightbloom.md").exists()
-    assert all(path.is_file() and path.suffix.lower() == ".md" for path in CHARACTERS_DIR.iterdir())
-    assert (ROOT_DIR / "docs" / "lore" / "places").exists()
+    assert (FIXTURE_CHARACTER_SHEETS_DIR / "Orin_Nightbloom.md").exists()
 
 
 def test_read_character_profile_extracts_appended_character_connections():
     character = Character(
         name="Orin_Nightbloom",
-        path=Path(__file__).resolve().parents[1] / "docs" / "lore" / "character_sheets" / "Orin_Nightbloom.md",
+        path=FIXTURE_CHARACTER_SHEETS_DIR / "Orin_Nightbloom.md",
     )
 
     profile = read_character_profile(character)
