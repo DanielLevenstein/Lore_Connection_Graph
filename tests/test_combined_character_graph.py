@@ -5,6 +5,7 @@ from character_graph.combined_graph import (
 )
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
+import local_chatbot.storage as storage
 from local_chatbot.storage import Character, append_character_connections, read_character_profile
 
 
@@ -228,3 +229,47 @@ Manual summary.
     assert "Jory Ravenmark" in text
     assert "First evidence Second evidence" in text
     assert text.count("Royal Tittles") == 1
+
+
+def test_append_character_connections_limits_long_table_cell_text(tmp_path, monkeypatch):
+    monkeypatch.setattr("local_chatbot.storage.regenerate_character_graph", lambda character: None)
+    path = tmp_path / "Mara_Voss.md"
+    path.write_text(
+        """# Mara Voss
+
+## Character Stats
+
+| Name | Race |
+| ---- | ---- |
+| Mara | Elf |
+
+## Character Backstory
+
+Manual backstory.
+
+## Character Summary
+
+Manual summary.
+""",
+        encoding="utf-8",
+    )
+    character = Character(name=path.stem, path=path)
+    long_evidence = "A" * (storage.CHARACTER_CONNECTION_CELL_MAX_LENGTH + 25)
+
+    append_character_connections(
+        character,
+        [
+            {
+                "Source": "Character Sheet",
+                "Relationship": "Ally",
+                "Name": "Jory Ravenmark",
+                "Evidence": long_evidence,
+            },
+        ],
+    )
+
+    text = path.read_text(encoding="utf-8")
+    evidence_cell = next(line for line in text.splitlines() if "Jory Ravenmark" in line).split("|")[4].strip()
+    assert len(evidence_cell) == storage.CHARACTER_CONNECTION_CELL_MAX_LENGTH
+    assert evidence_cell.endswith("...")
+    assert long_evidence not in text
