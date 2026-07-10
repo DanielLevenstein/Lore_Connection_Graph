@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from difflib import SequenceMatcher
 
 from .schema import CharacterGraph
@@ -14,6 +14,7 @@ PRESERVED_RELATIONSHIP_TYPES = {
     "rival",
     "betrayer",
     "client",
+    "family",
     "mentor",
 }
 
@@ -74,6 +75,18 @@ def build_combined_character_graph(
                     node_type="place",
                 ),
             )
+        for attribute_id, attribute in graph.attributes.items():
+            if attribute.attribute_type.lower() != "family":
+                continue
+            combined.characters.setdefault(
+                attribute_id,
+                CombinedCharacterNode(
+                    id=attribute_id,
+                    name=display_name(attribute.value),
+                    source_file=graph.primary_character.source_file,
+                    node_type="family",
+                ),
+            )
     for place_id, place_name, source_file in place_sources or []:
         combined.characters[place_id] = CombinedCharacterNode(
             id=place_id,
@@ -109,17 +122,26 @@ def build_combined_character_graph(
     for graph in graphs:
         source_id = graph.primary_character.id
         for relationship in graph.relationships:
-            if relationship.target in graph.attributes:
+            target_is_family = (
+                relationship.target in graph.attributes
+                and graph.attributes[relationship.target].attribute_type.lower() == "family"
+            )
+            if relationship.target in graph.attributes and not target_is_family:
                 continue
             target_node = graph.characters.get(relationship.target) or graph.places.get(relationship.target)
+            if target_is_family:
+                target_node = graph.attributes.get(relationship.target)
             if target_node is None:
                 continue
-            matched_primary_id = match_primary_character(
-                target_node.name,
-                relationship.evidence,
-                primary_character_nodes(combined.characters),
-                source_id,
-            ) or relationship.target
+            if relationship.target in graph.characters:
+                matched_primary_id = match_primary_character(
+                    target_node.name,
+                    relationship.evidence,
+                    primary_character_nodes(combined.characters),
+                    source_id,
+                ) or relationship.target
+            else:
+                matched_primary_id = relationship.target
             if source_id == matched_primary_id:
                 continue
             relationship_type, relationship_label = combined_relationship_type(relationship.relationship_type)
@@ -162,8 +184,61 @@ def build_combined_character_graph(
         if evidence and evidence not in edge.evidence:
             edge.evidence.append(evidence)
 
+    merge_duplicate_nodes(combined)
     prune_disconnected_nodes(combined)
+    clarify_duplicate_display_names(combined)
     return combined
+
+
+def merge_duplicate_nodes(graph: CombinedCharacterGraph) -> None:
+    canonical_by_key: dict[tuple[str, str], str] = {}
+    remapped_ids: dict[str, str] = {}
+    for node_id, node in graph.characters.items():
+        key = (node.node_type, compact(node.name))
+        canonical_id = canonical_by_key.setdefault(key, node_id)
+        if canonical_id != node_id:
+            remapped_ids[node_id] = canonical_id
+    if not remapped_ids:
+        return
+    graph.characters = {
+        node_id: node
+        for node_id, node in graph.characters.items()
+        if node_id not in remapped_ids
+    }
+    for edge in graph.edges:
+        edge.source = remapped_ids.get(edge.source, edge.source)
+        edge.target = remapped_ids.get(edge.target, edge.target)
+    dedupe_combined_edges(graph)
+
+
+def dedupe_combined_edges(graph: CombinedCharacterGraph) -> None:
+    deduped: list[CombinedRelationshipEdge] = []
+    by_key: dict[tuple[str, str, str], CombinedRelationshipEdge] = {}
+    for edge in graph.edges:
+        if edge.source == edge.target:
+            continue
+        key = (edge.source, edge.target, edge.relationship_type)
+        existing = by_key.get(key)
+        if existing is None:
+            by_key[key] = edge
+            deduped.append(edge)
+            continue
+        for evidence in edge.evidence:
+            if evidence and evidence not in existing.evidence:
+                existing.evidence.append(evidence)
+    graph.edges = deduped
+
+
+def clarify_duplicate_display_names(graph: CombinedCharacterGraph) -> None:
+    ids_by_name: dict[str, list[str]] = {}
+    for node_id, node in graph.characters.items():
+        ids_by_name.setdefault(compact(node.name), []).append(node_id)
+    for node_ids in ids_by_name.values():
+        if len(node_ids) < 2:
+            continue
+        for node_id in node_ids:
+            node = graph.characters[node_id]
+            graph.characters[node_id] = replace(node, name=f"{node.name} ({node.node_type.title()})")
 
 
 def prune_disconnected_nodes(graph: CombinedCharacterGraph) -> None:
@@ -205,7 +280,7 @@ def match_primary_character(
 def primary_aliases(name: str) -> set[str]:
     parts = [part for part in re.split(r"\s+", name.strip()) if part]
     aliases = {compact(name)}
-    if len(parts) > 1:
+    if len(parts) > 1 and compact(parts[-1]) not in {"mother", "father", "parent", "child"}:
         aliases.add(compact(parts[-1]))
     return aliases
 
@@ -251,6 +326,24 @@ def combined_relationship_rows(graph: CombinedCharacterGraph) -> list[dict[str, 
     return rows
 
 
+def combined_attribute_rows(graphs: list[CharacterGraph]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for graph in graphs:
+        primary_name = display_name(graph.primary_character.name)
+        for attribute in graph.attributes.values():
+            if attribute.attribute_type.lower() == "family":
+                continue
+            rows.append(
+                {
+                    "Character": primary_name,
+                    "Attribute": attribute.attribute_type,
+                    "Value": attribute.value,
+                    "Evidence": compact_evidence(attribute.source_spans),
+                }
+            )
+    return rows
+
+
 def combined_relationship_dot(graph: CombinedCharacterGraph) -> str:
     lines = [
         "digraph CombinedCharacterRelationships {",
@@ -259,8 +352,8 @@ def combined_relationship_dot(graph: CombinedCharacterGraph) -> str:
         "  edge [color=\"#64748b\", fontname=\"Inter\", fontsize=10];",
     ]
     for character_id, character in graph.characters.items():
-        fill = "#dcfce7" if character.node_type == "place" else "#dbeafe"
-        shape = "component" if character.node_type == "place" else "box"
+        fill = "#dcfce7" if character.node_type == "place" else "#fef3c7" if character.node_type == "family" else "#dbeafe"
+        shape = "component" if character.node_type == "place" else "ellipse" if character.node_type == "family" else "box"
         lines.append(
             f'  "{escape_dot(character_id)}" [label="{escape_dot(character.name)}", '
             f'fillcolor="{fill}", shape="{shape}"];'
@@ -280,6 +373,10 @@ def compact(value: str) -> str:
 
 def display_name(value: str) -> str:
     return value.replace("_", " ")
+
+
+def compact_evidence(values: list[str]) -> str:
+    return " ".join(" ".join(value.split()) for value in values if value.strip())
 
 
 def escape_dot(value: str) -> str:

@@ -144,13 +144,125 @@ Neal is a bard with complicated regulars.
     assert graph.attributes["drive_entertaining_sailors_on_shore_leave"].value == "Entertaining sailors on shore leave."
     assert any(edge.relationship_type == "drive" for edge in graph.relationships)
     assert any(
-        edge.relationship_type == "client" and graph.characters[edge.target].name == "Jory Ravenmark is their favorite client."
+        edge.relationship_type == "client" and graph.characters[edge.target].name == "Jory Ravenmark"
         for edge in graph.relationships
     )
     assert any(
-        edge.relationship_type == "enemy" and graph.characters[edge.target].name == "Mrs Nighbloom was not happy."
+        edge.relationship_type == "enemy" and graph.characters[edge.target].name == "Mrs Nighbloom"
         for edge in graph.relationships
     )
+
+
+def test_extract_character_graph_extracts_names_from_relationship_prose_without_blob_nodes(tmp_path):
+    source = tmp_path / "neal.md"
+    source.write_text(
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Neal | Elf | Bard |
+
+## Character Backstory
+
+Neal keeps notes on private clients.
+
+## Character Summary
+
+Neal is a bard.
+
+### Character Details
+
+| Field | Description |
+| ----- | ----------- |
+| Alliances | Jory Ravenmark is their favorite client after the harbor incident. |
+| Enemies | Mrs. Nighbloom was not happy about the missing ledger. |
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="neal_lovington"))
+    names = {character.name for character in graph.characters.values()}
+
+    assert "Jory Ravenmark" in names
+    assert "Mrs Nighbloom" in names
+    assert "Jory Ravenmark is their favorite client after the harbor incident." not in names
+    assert "Mrs Nighbloom was not happy about the missing ledger." not in names
+
+
+def test_extract_character_graph_deduplicates_repeated_character_mentions(tmp_path):
+    source = tmp_path / "neal.md"
+    source.write_text(
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class | Alliances |
+| ---- | ---- | ----- | --------- |
+| Neal | Elf | Bard | Jory Ravenmark |
+
+## Character Backstory
+
+Jory Ravenmark is their favorite client.
+Jory Ravenmark is a trusted ally.
+Jory guarded Neal on the west road.
+
+## Character Summary
+
+Neal knows everyone.
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="neal_lovington"))
+
+    assert [
+        character_id
+        for character_id, character in graph.characters.items()
+        if character.name == "Jory Ravenmark"
+    ] == ["jory_ravenmark"]
+    assert len(
+        [
+            edge
+            for edge in graph.relationships
+            if edge.target == "jory_ravenmark" and edge.relationship_type in {"ally", "client"}
+        ]
+    ) >= 1
+
+
+def test_extract_character_graph_deduplicates_place_alias_mentions(tmp_path):
+    source = tmp_path / "neal.md"
+    source.write_text(
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Neal | Elf | Bard |
+
+## Character Backstory
+
+Neal performs at the Royal Tittles Tavern.
+Royal Tittles is noisy after sunset.
+The Tavern keeps a private room for sailors.
+
+## Character Summary
+
+Neal is a performer.
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="neal_lovington"))
+
+    assert [
+        place_id
+        for place_id, place in graph.places.items()
+        if place.name == "Royal Tittles Tavern"
+    ] == ["royal_tittles_tavern"]
+    assert "Royal" in graph.places["royal_tittles_tavern"].aliases
 
 
 def test_extract_character_graph_loads_character_connections_table(tmp_path):
@@ -329,10 +441,10 @@ She learned to read the open sea as her father once had before her.
     assert "she" not in graph.characters
     assert "pronouns_unknown" not in graph.attributes
     assert graph.attributes["family_ravenmark"].value == "Ravenmark"
-    assert graph.characters["mother"].name == "Mother"
-    assert graph.characters["father"].name == "Father"
-    assert any(edge.relationship_type == "family" and edge.target == "mother" for edge in graph.relationships)
-    assert any(edge.relationship_type == "family" and edge.target == "father" for edge in graph.relationships)
+    assert graph.characters["jory_ravenmark_s_mother"].name == "Jory Ravenmark's Mother"
+    assert graph.characters["jory_ravenmark_s_father"].name == "Jory Ravenmark's Father"
+    assert any(edge.relationship_type == "family" and edge.target == "jory_ravenmark_s_mother" for edge in graph.relationships)
+    assert any(edge.relationship_type == "family" and edge.target == "jory_ravenmark_s_father" for edge in graph.relationships)
 
 
 def test_extract_character_graph_does_not_create_self_family_edge_for_underscored_heading(tmp_path):

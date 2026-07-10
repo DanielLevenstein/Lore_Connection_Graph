@@ -84,6 +84,7 @@ PLACE_SUFFIXES = {
     "Shores",
     "Temple",
     "Tower",
+    "Tavern",
     "University",
     "Village",
 }
@@ -604,8 +605,8 @@ def character_relationships(
     for relationship_type, label, stat_keys in relationship_columns:
         raw_value = next((stats.get(key, "") for key in stat_keys if key in stats and stats.get(key, "").strip()), "")
         for value in split_stat_values(raw_value):
-            cleaned_value = clean_attribute_value(value) or "Unknown"
-            inferred_type = "client" if "client" in cleaned_value.lower() else relationship_type
+            cleaned_value = clean_relationship_target_value(value) or "Unknown"
+            inferred_type = "client" if "client" in value.lower() else relationship_type
             inferred_label = "Client" if inferred_type == "client" else label
             relationships.append(
                 (
@@ -615,8 +616,21 @@ def character_relationships(
                     build_stat_evidence(inferred_label, cleaned_value),
                 )
             )
-    relationships.extend(infer_unnamed_character_relationships(text))
+    relationships.extend(
+        scope_unnamed_family_relationship(primary_name, relationship)
+        for relationship in infer_unnamed_character_relationships(text)
+    )
     return relationships
+
+
+def scope_unnamed_family_relationship(
+    primary_name: str,
+    relationship: tuple[str, str, str, str],
+) -> tuple[str, str, str, str]:
+    relationship_type, label, value, evidence = relationship
+    if relationship_type != "family" or value.lower() not in {"mother", "father", "parent"}:
+        return relationship
+    return relationship_type, label, f"{primary_name}'s {value}", evidence
 
 
 def infer_primary_name(text: str, fallback: str, stats: dict[str, str] | None = None) -> str:
@@ -912,6 +926,18 @@ def clean_attribute_value(value: str) -> str:
     cleaned = value.strip()
     if cleaned.lower() in UNKNOWN_VALUES:
         return ""
+    return cleaned
+
+
+def clean_relationship_target_value(value: str) -> str:
+    cleaned = clean_attribute_value(value).rstrip(".")
+    if not cleaned:
+        return ""
+    normalized = normalize_honorific_periods(cleaned)
+    for candidate in NAME_PATTERN.findall(normalized):
+        candidate = candidate.strip()
+        if candidate.split()[0].strip(".") in HONORIFIC_WORDS or is_probable_name(candidate):
+            return candidate
     return cleaned
 
 

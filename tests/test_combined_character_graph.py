@@ -1,5 +1,6 @@
 from character_graph.combined_graph import (
     build_combined_character_graph,
+    combined_attribute_rows,
     combined_relationship_dot,
     combined_relationship_rows,
 )
@@ -109,6 +110,364 @@ Neal is a performer.
     assert combined.characters["royal_tittles"].node_type == "place"
     assert "Royal Tittles" in dot
     assert 'shape="component"' in dot
+
+
+def test_combined_graph_includes_family_names_without_other_attributes(tmp_path):
+    neal = graph_from_text(
+        tmp_path,
+        "Neal_Lovington.md",
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class | Drives |
+| ---- | ---- | ----- | ------ |
+| Neal | Elf | Bard | make a name |
+
+## Character Backstory
+
+Neal performs at the Royal Tittles Tavern.
+
+## Character Summary
+
+Neal is a performer.
+""",
+    )
+
+    combined = build_combined_character_graph([neal])
+
+    assert combined.characters["family_lovington"].name == "Lovington"
+    assert combined.characters["family_lovington"].node_type == "family"
+    assert ("neal_lovington", "family_lovington", "family") in {
+        (edge.source, edge.target, edge.relationship_type) for edge in combined.edges
+    }
+    assert "race_elf" not in combined.characters
+    assert "class_bard" not in combined.characters
+    assert "drive_make_a_name" not in combined.characters
+
+
+def test_combined_attribute_rows_include_hidden_metadata_with_evidence(tmp_path):
+    neal = graph_from_text(
+        tmp_path,
+        "Neal_Lovington.md",
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class | Drives |
+| ---- | ---- | ----- | ------ |
+| Neal | Elf | Bard | make a name; entertain sailors |
+
+## Character Backstory
+
+Neal performs at the Royal Tittles Tavern.
+
+## Character Summary
+
+Neal is a performer.
+""",
+    )
+
+    rows = combined_attribute_rows([neal])
+
+    assert {
+        ("Neal Lovington", "Race", "Elf"),
+        ("Neal Lovington", "Class", "Bard"),
+        ("Neal Lovington", "Drive", "make a name"),
+        ("Neal Lovington", "Drive", "entertain sailors"),
+    } <= {(row["Character"], row["Attribute"], row["Value"]) for row in rows}
+    assert not any(row["Attribute"] == "Family" for row in rows)
+    assert all(row["Evidence"] for row in rows)
+
+
+def test_combined_attribute_rows_keep_each_character_metadata_separate(tmp_path):
+    neal = graph_from_text(
+        tmp_path,
+        "Neal_Lovington.md",
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class | Drives |
+| ---- | ---- | ----- | ------ |
+| Neal | Elf | Bard | entertain sailors |
+
+## Character Backstory
+
+Neal sings.
+
+## Character Summary
+
+Neal is a performer.
+""",
+    )
+    jory = graph_from_text(
+        tmp_path,
+        "Jory_Ravenmark.md",
+        """# Jory Ravenmark
+
+## Character Stats
+
+| Name | Race | Class | Drives |
+| ---- | ---- | ----- | ------ |
+| Jory | Human | Barbarian | chart the sea |
+
+## Character Backstory
+
+Jory sails.
+
+## Character Summary
+
+Jory is a sailor.
+""",
+    )
+
+    rows = combined_attribute_rows([neal, jory])
+
+    assert ("Neal Lovington", "Drive", "entertain sailors") in {
+        (row["Character"], row["Attribute"], row["Value"]) for row in rows
+    }
+    assert ("Jory Ravenmark", "Drive", "chart the sea") in {
+        (row["Character"], row["Attribute"], row["Value"]) for row in rows
+    }
+
+
+def test_combined_graph_keeps_unnamed_mothers_character_scoped(tmp_path):
+    jory = graph_from_text(
+        tmp_path,
+        "Jory_Ravenmark.md",
+        """# Jory Ravenmark
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Jory | Human | Barbarian |
+
+## Character Backstory
+
+Her mother died at sea.
+
+## Character Summary
+
+Jory is a sailor.
+""",
+    )
+    orin = graph_from_text(
+        tmp_path,
+        "Orin_Nightbloom.md",
+        """# Orin Nightbloom
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Orin | Half-Orc | Bard |
+
+## Character Backstory
+
+His mother taught him old tavern songs.
+
+## Character Summary
+
+Orin is haunted.
+""",
+    )
+
+    combined = build_combined_character_graph([jory, orin])
+
+    assert combined.characters["jory_ravenmark_s_mother"].name == "Jory Ravenmark's Mother"
+    assert combined.characters["orin_nightbloom_s_mother"].name == "Orin Nightbloom's Mother"
+    assert ("jory_ravenmark", "jory_ravenmark_s_mother", "family") in {
+        (edge.source, edge.target, edge.relationship_type) for edge in combined.edges
+    }
+    assert ("orin_nightbloom", "orin_nightbloom_s_mother", "family") in {
+        (edge.source, edge.target, edge.relationship_type) for edge in combined.edges
+    }
+    assert "mother" not in combined.characters
+
+
+def test_combined_graph_does_not_match_possessive_family_nodes_to_primary_characters(tmp_path):
+    jory = graph_from_text(
+        tmp_path,
+        "Jory_Ravenmark.md",
+        """# Jory Ravenmark
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Jory | Human | Barbarian |
+
+## Character Backstory
+
+Jory remembers Orin Nightbloom's mother from the harbor.
+
+## Character Summary
+
+Jory is a sailor.
+""",
+    )
+    orin = graph_from_text(
+        tmp_path,
+        "Orin_Nightbloom.md",
+        """# Orin Nightbloom
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Orin | Half-Orc | Bard |
+
+## Character Backstory
+
+His mother taught him old tavern songs.
+
+## Character Summary
+
+Orin is haunted.
+""",
+    )
+
+    combined = build_combined_character_graph([jory, orin])
+
+    assert ("orin_nightbloom", "orin_nightbloom_s_mother", "family") in {
+        (edge.source, edge.target, edge.relationship_type) for edge in combined.edges
+    }
+    assert ("orin_nightbloom", "jory_ravenmark", "family") not in {
+        (edge.source, edge.target, edge.relationship_type) for edge in combined.edges
+    }
+
+
+def test_combined_graph_uses_family_node_shape_and_label_in_dot(tmp_path):
+    neal = graph_from_text(
+        tmp_path,
+        "Neal_Lovington.md",
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Neal | Elf | Bard |
+
+## Character Backstory
+
+Neal sings.
+
+## Character Summary
+
+Neal is a performer.
+""",
+    )
+
+    dot = combined_relationship_dot(build_combined_character_graph([neal]))
+
+    assert '"family_lovington" [label="Lovington", fillcolor="#fef3c7", shape="ellipse"]' in dot
+    assert '"neal_lovington" -> "family_lovington" [label="Family"]' in dot
+
+
+def test_combined_graph_deduplicates_same_type_same_name_nodes():
+    combined = build_combined_character_graph(
+        [],
+        lore_relationships=[
+            {
+                "source_id": "neal_lovington",
+                "source_name": "Neal Lovington",
+                "source_type": "character",
+                "target_id": "mira_vale",
+                "target_name": "Mira Vale",
+                "target_type": "character",
+                "relationship": "Ally",
+                "evidence": "Mira Vale helped Neal.",
+            },
+            {
+                "source_id": "jory_ravenmark",
+                "source_name": "Jory Ravenmark",
+                "source_type": "character",
+                "target_id": "mira_vale_from_notes",
+                "target_name": "Mira Vale",
+                "target_type": "character",
+                "relationship": "Ally",
+                "evidence": "Mira Vale helped Jory.",
+            },
+        ],
+    )
+
+    mira_nodes = [
+        node_id
+        for node_id, node in combined.characters.items()
+        if node.node_type == "character" and node.name == "Mira Vale"
+    ]
+    assert mira_nodes == ["mira_vale"]
+    assert ("neal_lovington", "mira_vale", "ally") in {
+        (edge.source, edge.target, edge.relationship_type) for edge in combined.edges
+    }
+    assert ("jory_ravenmark", "mira_vale", "ally") in {
+        (edge.source, edge.target, edge.relationship_type) for edge in combined.edges
+    }
+    assert "mira_vale_from_notes" not in combined.characters
+
+
+def test_combined_graph_deduplicates_edges_after_node_merge():
+    combined = build_combined_character_graph(
+        [],
+        lore_relationships=[
+            {
+                "source_id": "neal_lovington",
+                "source_name": "Neal Lovington",
+                "source_type": "character",
+                "target_id": "mira_vale",
+                "target_name": "Mira Vale",
+                "target_type": "character",
+                "relationship": "Ally",
+                "evidence": "First source.",
+            },
+            {
+                "source_id": "neal_lovington",
+                "source_name": "Neal Lovington",
+                "source_type": "character",
+                "target_id": "mira_vale_duplicate",
+                "target_name": "Mira Vale",
+                "target_type": "character",
+                "relationship": "Ally",
+                "evidence": "Second source.",
+            },
+        ],
+    )
+
+    ally_edges = [
+        edge
+        for edge in combined.edges
+        if (edge.source, edge.target, edge.relationship_type) == ("neal_lovington", "mira_vale", "ally")
+    ]
+    assert len(ally_edges) == 1
+    assert ally_edges[0].evidence == ["First source.", "Second source."]
+
+
+def test_combined_graph_clarifies_same_label_for_different_entity_types():
+    combined = build_combined_character_graph(
+        [],
+        place_sources=[("royal_tittles", "Royal Tittles", "docs/lore/places/Royal_Tittles.md")],
+        lore_relationships=[
+            {
+                "source_id": "royal_tittles",
+                "source_name": "Royal Tittles",
+                "source_type": "place",
+                "target_id": "royal_tittles_bard",
+                "target_name": "Royal Tittles",
+                "target_type": "character",
+                "relationship": "Named After",
+                "evidence": "A bard uses the stage name Royal Tittles.",
+            }
+        ],
+    )
+
+    assert combined.characters["royal_tittles"].name == "Royal Tittles (Place)"
+    assert combined.characters["royal_tittles_bard"].name == "Royal Tittles (Character)"
+    assert ("royal_tittles", "royal_tittles_bard", "named") in {
+        (edge.source, edge.target, edge.relationship_type) for edge in combined.edges
+    }
 
 
 def test_combined_graph_place_sources_override_lore_primary_node_type(tmp_path):

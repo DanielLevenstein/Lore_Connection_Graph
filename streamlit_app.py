@@ -3,6 +3,7 @@ import streamlit as st
 
 from character_graph.combined_graph import (
     build_combined_character_graph,
+    combined_attribute_rows,
     combined_relationship_dot,
     combined_relationship_rows,
     compact,
@@ -294,6 +295,7 @@ def render_combined_character_graph() -> None:
     places = list_places()
     graphs = load_lore_graphs()
 
+    st.header("Combined Knowledge Graph")
     place_sources = [(compact(place.name), place.name, str(place.path)) for place in places]
     with st.expander("Combined Knowledge Graph", expanded=False):
         render_pending_lore_drafts()
@@ -315,6 +317,7 @@ def render_combined_character_graph() -> None:
             return
         combined = build_combined_character_graph(graphs, place_sources, place_lore_relationships(places))
         rows = combined_relationship_rows(combined)
+        detail_rows = combined_attribute_rows(graphs)
         character_nodes = [node for node in combined.characters.values() if node.node_type == "character"]
         character_tabs = st.tabs([node.name for node in character_nodes] or ["Lore"])
         primary_ids = {compact(character.name) for character in characters}
@@ -328,10 +331,18 @@ def render_combined_character_graph() -> None:
                     if compact(row["Character"]) == character_id or compact(row["Connection"]) == character_id
                 ]
                 st.graphviz_chart(combined_relationship_dot(combined), width="stretch")
+                scoped_detail_rows = [
+                    row
+                    for row in detail_rows
+                    if compact(row["Character"]) == character_id
+                ]
                 if scoped_rows:
                     st.table(scoped_rows, hide_index=True, width="stretch")
                 else:
                     st.info("No Combined Connections Were Found For This Character Yet.")
+                if scoped_detail_rows:
+                    st.subheader("Character Graph Details")
+                    st.table(scoped_detail_rows, hide_index=True, width="stretch")
                 if st.button(
                     "Add Character Connections",
                     icon=":material/account_tree:",
@@ -613,7 +624,7 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
 
 
 def render_place_creator() -> None:
-    st.title("Add Place")
+    st.subheader("New Place")
     places = list_places()
     if places:
         st.caption(f"{len(places)} Place Files Available.")
@@ -668,7 +679,7 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
 
 
 def render_session_notes() -> None:
-    st.title("Session Notes")
+    st.subheader("Session Notes")
     with st.expander("Lore Memory", expanded=False):
         if st.session_state.pop("clear_session_notes_draft", False):
             st.session_state["session_notes_draft"] = ""
@@ -702,7 +713,7 @@ def render_session_notes() -> None:
 
 
 def render_character_panel() -> None:
-    st.subheader("Characters")
+    st.title("Characters")
     characters = list_characters()
     if characters:
         display_names = [display_character_name(character) for character in characters]
@@ -731,7 +742,7 @@ def render_character_panel() -> None:
         if character:
             render_character_info(character)
 
-    st.title("Add Character")
+    st.subheader("New Character")
     with st.expander("Create Character", expanded=not characters):
         render_character_creator("main_new_character")
 
@@ -881,10 +892,11 @@ def render_character_info(character: Character, model_config=None) -> None:
 st.title("Roleplaying Character Creator")
 st.caption("Create Character Sheets And Explore Relationship Graphs From Local Lore.")
 
-render_character_panel()
-render_place_creator()
-render_session_notes()
 render_combined_character_graph()
+render_character_panel()
 active_character = get_active_character()
 if active_character is None:
     st.info("Create Or Open A Character To Edit Its Sheet.")
+
+render_place_creator()
+render_session_notes()
