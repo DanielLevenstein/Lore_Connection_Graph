@@ -156,7 +156,7 @@ def ensure_place_editor_open(page) -> None:
 def ensure_session_notes_open(page) -> None:
     save_button = page.get_by_role("button", name="note_add Save Session Notes")
     if not save_button.is_visible():
-        page.get_by_text("Capture Session Notes", exact=True).click()
+        page.get_by_text("Add Session Note", exact=True).click()
     expect(save_button).to_be_visible(timeout=10000)
 
 

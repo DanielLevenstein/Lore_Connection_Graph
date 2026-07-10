@@ -89,7 +89,7 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
         expect(page.get_by_role("heading", name="Session Notes", exact=True)).to_be_visible(timeout=10000)
-        page.get_by_text("Capture Session Notes", exact=True).click()
+        page.get_by_text("Add Session Note", exact=True).click()
         page.get_by_role("textbox", name="Session Notes").fill(
             "2026-07-10\n"
             "The party found a silver key.\n\n"

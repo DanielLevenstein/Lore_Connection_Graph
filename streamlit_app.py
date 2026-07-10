@@ -1027,7 +1027,7 @@ def render_session_notes() -> None:
             set_active_session_note(imported[0].path)
             st.rerun()
 
-    with st.expander("Capture Session Notes", expanded=False):
+    with st.expander("Add Session Note", expanded=False):
         if st.session_state.pop("clear_session_notes_draft", False):
             st.session_state["session_notes_draft"] = ""
             st.session_state["session_notes_title"] = ""
