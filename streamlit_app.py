@@ -1,4 +1,6 @@
 import os
+from dataclasses import replace
+
 import streamlit as st
 
 from character_graph.combined_graph import (
@@ -229,6 +231,36 @@ def render_list_field(values: list[str] | None) -> str:
     return "\n".join(values or [])
 
 
+def normalized_story_text(value: str) -> str:
+    return " ".join(value.split())
+
+
+def has_distinct_original(current: str, original: str) -> bool:
+    return bool(original.strip()) and normalized_story_text(current) != normalized_story_text(original)
+
+
+def remove_auto_generated_section(profile: CharacterProfile, section: str) -> list[str]:
+    section_key = section.lower()
+    return [value for value in profile.auto_generated_sections or [] if value.lower() != section_key]
+
+
+def accept_current_character_text(profile: CharacterProfile) -> CharacterProfile:
+    accepted = profile
+    if profile.original_backstory.strip():
+        accepted = replace(
+            accepted,
+            original_backstory="",
+            auto_generated_sections=remove_auto_generated_section(accepted, "Character Backstory"),
+        )
+    if profile.original_summary.strip():
+        accepted = replace(
+            accepted,
+            original_summary="",
+            auto_generated_sections=remove_auto_generated_section(accepted, "Character Summary"),
+        )
+    return accepted
+
+
 def graph_generated_summary(character: Character, profile: CharacterProfile) -> str:
     graph = load_graph(character.graph_path)
     if graph is None:
@@ -269,6 +301,39 @@ def undo_character_changes(character: Character) -> None:
     regenerate_character_graph(character)
     st.session_state[f"character_status_{character.name}"] = "Character Changes Undone."
     st.rerun()
+
+
+def save_character_update(character: Character, updated: CharacterProfile) -> None:
+    push_character_undo(character)
+    write_character_profile(character, updated)
+    st.session_state[f"character_status_{character.name}"] = "Character Saved."
+    st.session_state.pop(f"pending_character_save_{character.name}", None)
+    st.rerun()
+
+
+def needs_original_text_save_choice(updated: CharacterProfile) -> bool:
+    return has_distinct_original(updated.backstory, updated.original_backstory) or has_distinct_original(
+        updated.summary,
+        updated.original_summary,
+    )
+
+
+@st.dialog("Save Character Text")
+def render_character_save_choice(character: Character) -> None:
+    pending_key = f"pending_character_save_{character.name}"
+    updated = st.session_state.get(pending_key)
+    if updated is None:
+        st.warning("No Pending Character Changes Found.")
+        if st.button("Close", icon=":material/close:"):
+            st.rerun()
+        return
+
+    st.write("Do you want to replace the original text with this version, or keep both versions?")
+    action_cols = st.columns(2)
+    if action_cols[0].button("Replace Original", icon=":material/check:", width="stretch"):
+        save_character_update(character, accept_current_character_text(updated))
+    if action_cols[1].button("Keep Both", icon=":material/library_books:", width="stretch"):
+        save_character_update(character, updated)
 
 
 def push_place_undo(place: Place) -> None:
@@ -1089,7 +1154,7 @@ def render_character_editor(character: Character) -> None:
             race = stat_cols[1].text_input("Race", value=profile.race)
             character_class = stat_cols[2].text_input("Class", value=profile.character_class)
             pronouns = stat_cols[3].text_input("Pronouns", value=profile.pronouns)
-            if profile.original_backstory:
+            if has_distinct_original(profile.backstory, profile.original_backstory):
                 backstory_cols = st.columns(2)
                 backstory = backstory_cols[0].text_area(
                     section_label("Backstory", profile, "Character Backstory"),
@@ -1104,7 +1169,7 @@ def render_character_editor(character: Character) -> None:
                 )
             else:
                 backstory = st.text_area(section_label("Backstory", profile, "Character Backstory"), value=profile.backstory, height=180)
-            if profile.original_summary:
+            if has_distinct_original(profile.summary, profile.original_summary):
                 summary_cols = st.columns(2)
                 summary = summary_cols[0].text_area(
                     section_label("Summary", profile, "Character Summary"),
@@ -1202,10 +1267,13 @@ def render_character_editor(character: Character) -> None:
                     original_backstory=original_backstory,
                     original_summary=original_summary,
                 )
-                push_character_undo(character)
-                write_character_profile(character, updated)
-                st.session_state[f"character_status_{character.name}"] = "Character Saved."
-                st.rerun()
+                if save_requested and needs_original_text_save_choice(updated):
+                    st.session_state[f"pending_character_save_{character.name}"] = updated
+                else:
+                    save_character_update(character, updated)
+        if st.session_state.get(f"pending_character_save_{character.name}") is not None:
+            render_character_save_choice(character)
+
 
 def section_label(label: str, profile: CharacterProfile, section: str) -> str:
     generated = {value.lower() for value in profile.auto_generated_sections or []}

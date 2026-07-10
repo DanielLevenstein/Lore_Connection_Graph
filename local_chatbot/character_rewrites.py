@@ -40,7 +40,7 @@ def graph_generated_summary(graph: CharacterGraph, profile: CharacterProfile) ->
         pieces.append(f" and connected to {', '.join(relationships)}")
     if drives:
         pieces.append(f", driven to {drives}")
-    return "".join(pieces).strip() + "."
+    return humanize_generated_text("".join(pieces).strip() + ".")
 
 
 def graph_generated_backstory(graph: CharacterGraph, profile: CharacterProfile) -> str:
@@ -97,7 +97,7 @@ def graph_generated_backstory(graph: CharacterGraph, profile: CharacterProfile) 
         third = (
             f"Now {name} steps into the wider world with a clearer voice, determined to make the next verse his own."
         )
-    return "\n\n".join([first, second, third])
+    return humanize_generated_text("\n\n".join([first, second, third]))
 
 
 def rewrite_quality_context(graph: CharacterGraph, profile: CharacterProfile) -> str:
@@ -187,8 +187,12 @@ def story_relationship_names(graph: CharacterGraph) -> list[str]:
             continue
         if name.lower() in {"mother", "father", "parent", "half", "orc", "bard"}:
             continue
-        names.append(name)
+        names.append(humanize_generated_text(name))
     return unique_values(names)
+
+
+def humanize_generated_text(value: str) -> str:
+    return re.sub(r"(?<=\w)_(?=\w)", " ", value)
 
 
 def attribute_value(graph: CharacterGraph, attribute_type: str) -> str:

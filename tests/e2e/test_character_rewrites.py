@@ -2,6 +2,7 @@ from pathlib import Path
 
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
+from character_graph.schema import CharacterGraph, CharacterNode, PrimaryCharacterRef, RelationshipEdge
 from local_chatbot.character_rewrites import (
     graph_generated_backstory,
     graph_generated_summary,
@@ -52,6 +53,35 @@ def test_orin_graph_generated_story_scores_better_than_original_backstory():
     assert "Orin Nightbloom's Mother" in generated_story
     assert "curse" in generated_story.lower()
     assert generated_score.score > original_score.score
+
+
+def test_graph_generated_summary_humanizes_underscored_character_names():
+    graph = CharacterGraph(
+        schema_version="0.3.0",
+        primary_character=PrimaryCharacterRef(id="jory_ravenmark", name="Jory Ravenmark", source_file="Jory_Ravenmark.md"),
+        characters={
+            "jory_ravenmark": CharacterNode(name="Jory Ravenmark", source_spans=["Jory was a sailor."]),
+            "jory_ravenmark_s_mother": CharacterNode(
+                name="Jory_Ravenmark's Mother",
+                source_spans=["Jory_Ravenmark's Mother died at sea."],
+            ),
+        },
+        relationships=[
+            RelationshipEdge(
+                source="jory_ravenmark",
+                target="jory_ravenmark_s_mother",
+                relationship_type="family",
+                relationship_label="Family",
+                evidence=["Jory_Ravenmark's Mother died at sea."],
+            )
+        ],
+    )
+    profile = read_character_profile(Character(name="Jory_Ravenmark", path=FIXTURE_CHARACTER_SHEETS_DIR / "Jory_Ravenmark.md"))
+
+    generated_summary = graph_generated_summary(graph, profile)
+
+    assert "Jory Ravenmark's Mother" in generated_summary
+    assert "Jory_Ravenmark" not in generated_summary
 
 
 def test_semantic_improvement_report_includes_scores_and_result():
