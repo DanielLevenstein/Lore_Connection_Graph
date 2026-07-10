@@ -1,13 +1,36 @@
-## App Consistency
-- Do not modify a character sheet unless necessary. If a user saves changes to an existing character sheet, only update changed sections.
-  - Default Stats are ["Name", "Level", "Race", "Class", "Pronouns"]
-  - Default sections headings are ["Character Name", "Character Stats", "Character Details", "Character Summary", "Character Connections"]
-    - If heading titles or stats column are changed, add an alies field in the JSON document indicating what they have been changed to. 
-    - If any name field exists, display it in the stat table exactly as is.
-    - Display default stats columns ["Level", "Race", "Class", "Pronouns"] but keep the column order of the original file.
-    - Display any custom stats from the user stats table in the Character Details section of the UI. 
-  - Support reading knowledge graph fields from the table appended to the button of a character sheet like in Orin Nightblooms character sheet.
-- Update the edit character UI to match the UI for the new character UI.
-- Do not render _ character when displaying the name in the UI. 
-- Add dedicated fields for the first name and family name in the JSON doc for each character. 
-- Create a section of the character specs JSON which stores the fields present in the character stats table in a normalized format. 
+# Character Parsing Rules
+
+Character sheets are authored markdown files stored in `docs/lore/character_sheets`.
+
+## Supported Paths
+
+- `docs/lore/character_sheets/character_name.md`
+- `docs/lore/character_sheets/character_name/BACKSTORY.md`
+
+## Required Sections
+
+- H1 character name.
+- `Character Stats` markdown table.
+- `Character Backstory`.
+- `Character Summary`, or a short summary directly under the H1 before the first `##` section.
+
+## Save Rules
+
+- Do not modify a character sheet unless necessary.
+- When saving an existing sheet, update only the changed sections.
+- Preserve custom stat headings and section headings in `PROFILE.json` aliases.
+- If any name field exists in the stats table, display it exactly as written.
+- Default stat fields are `Name`, `Level`, `Race`, `Class`, and `Pronouns`.
+- Add missing default stat columns only when the profile has a value to save.
+- Mirror custom stat columns into `Character Details` for UI editing.
+- Support first-name-only characters without inventing a family name.
+
+## Generated Sections
+
+- Graph-derived summary or backstory text is generated only when the player clicks an explicit UI action.
+- Generated markdown headings include `(Auto Generated)`.
+- Generated sections remain normal editable markdown after creation.
+
+## Character Connections
+
+`Character Connections` may appear as a top-level section or as a subsection appended below `Character Summary`. The parser reads table rows into `knowledge_graph_fields` in the character profile JSON.

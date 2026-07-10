@@ -17,7 +17,7 @@ The current implementation is an MVP with an offline, dependency-light pipeline:
 - Generate grounded summaries for those attribute nodes.
 - Store nodes, edges, metadata, and deterministic local embeddings in JSON.
 - Retrieve relevant attribute context by exact value, fuzzy value match, and embedding similarity.
-- Inject retrieved context into the Streamlit chat prompt.
+- Expose retrieved context for UI tools and optional prompt construction.
 
 The implementation does not yet call a local language model for extraction, does not use Pydantic, and does not require sentence-transformers, FAISS, or Chroma. Those remain future upgrades.
 
@@ -187,15 +187,21 @@ Keeping these helpers outside `streamlit_app.py` makes the display formatting te
 
 ## Storage Integration
 
-Character markdown files live under:
+Authored character markdown files live under:
 
 ```text
-characters/<name>/BACKSTORY.md
+docs/lore/character_sheets/<name>/BACKSTORY.md
 ```
 or 
 
 ```text
-characters/Character_Name.md
+docs/lore/character_sheets/Character_Name.md
+```
+
+Generated draft character sheets live under:
+
+```text
+data/lore/character_sheets/Character_Name.md
 ```
 
 Graph JSON now lives under:
@@ -216,20 +222,19 @@ data/character_graph/<name>.graph.json
 2. Extracts a `CharacterGraph`.
 3. Saves the graph JSON to `character.graph_path`.
 
-## Chat Runtime Integration
+## Prompt Context Integration
 
-The Streamlit chat path calls `graph_context_for_prompt(character, prompt)` before sending a request to the local model.
+`graph_context_for_prompt(character, prompt)` can format relevant graph facts for any future prompt workflow. The current character-building UI uses graph data only when the player explicitly requests generated summary or backstory text.
 
-Runtime flow:
+Context flow:
 
-1. User sends a chat message.
+1. A user action or prompt supplies text.
 2. The app loads `character.graph_path` if it exists.
 3. Retrieval finds generated attributes relevant to the message.
 4. Prompt context is formatted with summaries and relationship metadata.
-5. `build_character_messages()` appends the section under `RELATED CHARACTER CONTEXT`.
-6. The local OpenAI-compatible model receives the normal backstory, memory, chat history, user message, and retrieved graph context.
+5. The caller may include the context in an explicit generation request.
 
-If the graph is missing or malformed, chat continues without graph context.
+If the graph is missing or malformed, normal sheet editing continues without graph context.
 
 ## Streamlit Relationship UI
 
@@ -253,7 +258,7 @@ If no graph JSON exists yet, the UI prompts the user to regenerate it. If graph 
   "primary_character": {
     "id": "arlen_voss",
     "name": "Arlen Voss",
-    "source_file": "data/characters/Arlen Voss/BACKSTORY.md"
+    "source_file": "docs/lore/character_sheets/Arlen Voss/BACKSTORY.md"
   },
   "characters": {
     "arlen_voss": {
