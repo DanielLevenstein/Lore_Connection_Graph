@@ -120,6 +120,8 @@ def build_combined_character_graph(
                 primary_character_nodes(combined.characters),
                 source_id,
             ) or relationship.target
+            if source_id == matched_primary_id:
+                continue
             relationship_type, relationship_label = combined_relationship_type(relationship.relationship_type)
             key = (source_id, matched_primary_id, relationship_type)
             edge = by_key.get(key)
@@ -140,7 +142,7 @@ def build_combined_character_graph(
     for relationship in lore_relationships or []:
         source_id = relationship.get("source_id", "")
         target_id = relationship.get("target_id", "")
-        if not source_id or not target_id:
+        if not source_id or not target_id or source_id == target_id:
             continue
         relationship_type = one_word_relationship(relationship.get("relationship", "reference"))
         relationship_label = relationship_type.title()
@@ -160,7 +162,17 @@ def build_combined_character_graph(
         if evidence and evidence not in edge.evidence:
             edge.evidence.append(evidence)
 
+    prune_disconnected_nodes(combined)
     return combined
+
+
+def prune_disconnected_nodes(graph: CombinedCharacterGraph) -> None:
+    connected_ids = {edge.source for edge in graph.edges} | {edge.target for edge in graph.edges}
+    graph.characters = {
+        node_id: node
+        for node_id, node in graph.characters.items()
+        if node_id in connected_ids
+    }
 
 
 def primary_character_nodes(nodes: dict[str, CombinedCharacterNode]) -> dict[str, CombinedCharacterNode]:

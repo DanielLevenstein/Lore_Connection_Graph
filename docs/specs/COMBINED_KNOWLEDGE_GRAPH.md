@@ -34,7 +34,9 @@ When generating the combined graph, the app should parse all supported lore file
 - Authored place files become place nodes.
 - Secondary characters mentioned in sheets or places become character nodes even if no full sheet exists.
 - Relationships sourced from other character sheets and places should be shown before relationships sourced from the current character's own sheet when appending `Character Connections`.
-- Places should appear in the graph even when no character has a complete relationship edge to that place.
+- Places should appear in the graph when they have at least one connection, even when they do not have a full character sheet associated with them.
+- Self-referencing edges are invalid and must be dropped.
+- Nodes with no remaining incoming or outgoing edges must be hidden from the combined graph UI.
 
 ## UI Requirements
 

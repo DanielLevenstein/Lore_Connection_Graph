@@ -90,6 +90,18 @@ Neal is a performer.
     combined = build_combined_character_graph(
         [neal],
         place_sources=[("royal_tittles", "Royal Tittles", "docs/lore/places/Royal_Tittles.md")],
+        lore_relationships=[
+            {
+                "source_id": "neal_lovington",
+                "source_name": "Neal Lovington",
+                "source_type": "character",
+                "target_id": "royal_tittles",
+                "target_name": "Royal Tittles",
+                "target_type": "place",
+                "relationship": "Performs",
+                "evidence": "Neal performs at the Royal Tittles Tavern.",
+            }
+        ],
     )
 
     dot = combined_relationship_dot(combined)
@@ -114,6 +126,18 @@ Neal Lovington performs at Royal Tittles.
     combined = build_combined_character_graph(
         [royal_tittles],
         place_sources=[("royal_tittles", "Royal Tittles", "docs/lore/places/Royal_Tittles.md")],
+        lore_relationships=[
+            {
+                "source_id": "royal_tittles",
+                "source_name": "Royal Tittles",
+                "source_type": "place",
+                "target_id": "neal_lovington",
+                "target_name": "Neal Lovington",
+                "target_type": "character",
+                "relationship": "Performs",
+                "evidence": "Neal Lovington performs at Royal Tittles.",
+            }
+        ],
     )
 
     assert combined.characters["royal_tittles"].node_type == "place"
@@ -144,6 +168,49 @@ def test_combined_graph_includes_lore_relationships_without_character_sheets():
     assert combined.edges[0].relationship_type == "performs"
     assert rows[0]["Relationship"] == "Performs"
     assert rows[0]["Connection"] == "Neal Lovington"
+
+
+def test_combined_graph_forbids_self_referencing_lore_edges():
+    combined = build_combined_character_graph(
+        [],
+        lore_relationships=[
+            {
+                "source_id": "neal_lovington",
+                "source_name": "Neal Lovington",
+                "source_type": "character",
+                "target_id": "neal_lovington",
+                "target_name": "Neal Lovington",
+                "target_type": "character",
+                "relationship": "Self",
+                "evidence": "Neal Lovington references himself.",
+            }
+        ],
+    )
+
+    assert combined.edges == []
+    assert combined.characters == {}
+
+
+def test_combined_graph_prunes_disconnected_nodes():
+    combined = build_combined_character_graph(
+        [],
+        place_sources=[("royal_tittles", "Royal Tittles", "docs/lore/places/Royal_Tittles.md")],
+        lore_relationships=[
+            {
+                "source_id": "neal_lovington",
+                "source_name": "Neal Lovington",
+                "source_type": "character",
+                "target_id": "jory_ravenmark",
+                "target_name": "Jory Ravenmark",
+                "target_type": "character",
+                "relationship": "Ally",
+                "evidence": "Jory Ravenmark is Neal Lovington's ally.",
+            }
+        ],
+    )
+
+    assert "royal_tittles" not in combined.characters
+    assert set(combined.characters) == {"neal_lovington", "jory_ravenmark"}
 
 
 def test_append_character_connections_adds_prioritized_table(tmp_path, monkeypatch):
