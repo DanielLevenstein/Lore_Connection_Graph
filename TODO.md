@@ -1,3 +1,5 @@
+# Commit Working Changes
+- Between each section in TODO list commit working changes to create a stable checkpoint. 
 ## App Consistency
 - Update button labels and headings to make all words start with an uppercase letter. 
 - Support characters with first name only.
@@ -32,3 +34,10 @@
 - Add the ability to add the Character Connections section to the bottom of an existing character sheet. 
   - Generated Character Connections section should place character information sourced from other character sheets and places first.
 
+## Create Remote GitHub
+
+- I need to figure out a name for the GitHub repo for this project. 
+- Possible Options
+  - D&D Character Creator
+  - Lore Connection Graph
+ 
