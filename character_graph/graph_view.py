@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import re
+
 from .schema import CharacterGraph
+
+
+EVIDENCE_MAX_LENGTH = 240
 
 
 def relationship_rows(graph: CharacterGraph) -> list[dict[str, str | float]]:
@@ -61,7 +66,7 @@ def evidence_rows(graph: CharacterGraph) -> list[dict[str, str]]:
                 "Table": "Relationships",
                 "Item": relationship.relationship_label,
                 "Value": node_label(graph, relationship.target),
-                "Evidence": " ".join(relationship.evidence),
+                "Evidence": limit_evidence(" ".join(relationship.evidence)),
             }
         )
     for attribute in graph.attributes.values():
@@ -70,7 +75,7 @@ def evidence_rows(graph: CharacterGraph) -> list[dict[str, str]]:
                 "Table": "Attributes",
                 "Item": attribute.attribute_type,
                 "Value": attribute.value,
-                "Evidence": " ".join(attribute.source_spans),
+                "Evidence": limit_evidence(" ".join(attribute.source_spans)),
             }
         )
     for place in graph.places.values():
@@ -79,10 +84,20 @@ def evidence_rows(graph: CharacterGraph) -> list[dict[str, str]]:
                 "Table": "Places",
                 "Item": place.place_type.title(),
                 "Value": place.name,
-                "Evidence": " ".join(place.source_spans),
+                "Evidence": limit_evidence(" ".join(place.source_spans)),
             }
         )
     return rows
+
+
+def limit_evidence(value: str, max_length: int = EVIDENCE_MAX_LENGTH) -> str:
+    cleaned = " ".join(value.split())
+    if len(cleaned) <= max_length:
+        return cleaned
+    sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", cleaned) if sentence.strip()]
+    if sentences and len(sentences[0]) <= max_length:
+        return sentences[0]
+    return cleaned[: max_length - 3].rstrip() + "..."
 
 
 def relationship_dot(graph: CharacterGraph) -> str:

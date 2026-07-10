@@ -153,6 +153,88 @@ Neal is a bard with complicated regulars.
     )
 
 
+def test_extract_character_graph_loads_character_connections_table(tmp_path):
+    source = tmp_path / "mara.md"
+    source.write_text(
+        """# Mara Voss
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Mara | Elf | Wizard |
+
+## Character Backstory
+
+Mara keeps careful notes.
+
+## Character Summary
+
+Mara is careful.
+
+## Character Connections
+
+| Source | Relationship | Name | Evidence |
+| ------ | ------------ | ---- | -------- |
+| Character Sheet | Ally | Jory Ravenmark | Jory guarded Mara on the west road. |
+| Place | Place | Royal Tittles | Mara met Jory at Royal Tittles. |
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="mara_voss"))
+
+    assert "jory_ravenmark" in graph.characters
+    assert graph.characters["jory_ravenmark"].name == "Jory Ravenmark"
+    assert "royal_tittles" in graph.places
+    assert any(edge.relationship_type == "ally" and edge.target == "jory_ravenmark" for edge in graph.relationships)
+    assert any(edge.relationship_type == "place" and edge.target == "royal_tittles" for edge in graph.relationships)
+
+
+def test_extract_character_graph_loads_legacy_character_connections_table_and_limits_evidence(tmp_path):
+    source = tmp_path / "orin.md"
+    long_evidence = (
+        "Jory Ravenmark helped Orin escape the docks. "
+        + "This extra generated evidence sentence is intentionally verbose and repetitive. " * 8
+    )
+    source.write_text(
+        f"""# Orin Nightbloom
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Orin | Half-Orc | Bard |
+
+## Character Backstory
+
+Orin sings against old curses.
+
+## Character Summary
+
+Orin is haunted.
+
+### Character Connections
+
+| Table | Item | Value | Evidence |
+| ----- | ---- | ----- | -------- |
+| Relationships | Ally | Jory Ravenmark | {long_evidence} |
+| Attributes | Drive | break a curse | The drive is listed in the old generated table. |
+| Places | Tavern | Royal Tittles | Orin performs at Royal Tittles. |
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="orin_nightbloom"))
+
+    ally_edge = next(edge for edge in graph.relationships if edge.relationship_type == "ally")
+    assert graph.characters[ally_edge.target].name == "Jory Ravenmark"
+    assert len(ally_edge.evidence[0]) <= 240
+    assert ally_edge.evidence[0] == "Jory Ravenmark helped Orin escape the docks."
+    assert any(attribute.attribute_type == "Drive" and attribute.value == "break a curse" for attribute in graph.attributes.values())
+    assert any(place.name == "Royal Tittles" and place.place_type == "tavern" for place in graph.places.values())
+
+
 def test_extract_character_graph_keeps_honorific_client_names_together(tmp_path):
     source = tmp_path / "neal.md"
     source.write_text(

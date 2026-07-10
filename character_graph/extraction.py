@@ -120,6 +120,7 @@ TRAIT_WORDS = {
     "cautious",
     "curious",
 }
+GENERATED_EVIDENCE_MAX_LENGTH = 240
 
 
 def extract_character_graph(
@@ -212,6 +213,66 @@ def extract_character_graph(
                 target=node_id,
                 relationship_type=relationship_type,
                 relationship_label=label,
+                sentiment=relationship_type,
+                trust_level=0.8,
+                conflict_level=0.7 if relationship_type == "enemy" else 0.0,
+                emotional_weight=0.7,
+                evidence=[evidence],
+            )
+        )
+    for connection in character_connection_rows(document.raw_text):
+        connection_kind = connection.get("table", "").lower()
+        relationship_label = connection.get("relationship") or connection.get("item") or "Referenced"
+        relationship_type = slugify(relationship_label) or "reference"
+        value = connection.get("name") or connection.get("value") or connection.get("connection") or ""
+        evidence = limit_generated_evidence(
+            connection.get("evidence") or f"{value} is listed in the Character Connections table."
+        )
+        if not value:
+            continue
+        if connection_kind == "attributes":
+            node_id = unique_node_id(attributes, slugify(f"{relationship_type}_{value}"))
+            attributes[node_id] = AttributeNode(
+                value=value,
+                attribute_type=relationship_label,
+                aliases=[],
+                summary=build_metadata_summary(primary_name, relationship_label, value, evidence),
+                source_spans=[evidence],
+            )
+            target_id = node_id
+        elif connection_kind == "places" or connection.get("source", "").lower() == "place":
+            node_id = unique_place_id(places, slugify(value))
+            places[node_id] = PlaceNode(
+                name=value,
+                place_type=relationship_label.lower(),
+                aliases=[],
+                summary=build_place_summary(primary_name, value, [evidence]),
+                source_spans=[evidence],
+            )
+            target_id = node_id
+            relationship_type = "place"
+            relationship_label = relationship_label if relationship_label.lower() != "place" else "Place"
+        else:
+            node_id = unique_character_id(characters, slugify(value))
+            if node_id == primary_id:
+                continue
+            characters.setdefault(
+                node_id,
+                CharacterNode(
+                    name=value,
+                    aliases=[],
+                    role=relationship_label.lower(),
+                    summary=f"{value} is listed in {primary_name}'s Character Connections as {relationship_label.lower()}.",
+                    source_spans=[evidence],
+                ),
+            )
+            target_id = node_id
+        relationships.append(
+            RelationshipEdge(
+                source=primary_id,
+                target=target_id,
+                relationship_type=relationship_type,
+                relationship_label=relationship_label,
                 sentiment=relationship_type,
                 trust_level=0.8,
                 conflict_level=0.7 if relationship_type == "enemy" else 0.0,
@@ -371,6 +432,54 @@ def parse_details_table(details: str) -> dict[str, list[str]]:
     return values
 
 
+def character_connection_rows(text: str) -> list[dict[str, str]]:
+    section = markdown_section(text, "Character Connections")
+    if not section:
+        return []
+    rows = [parse_table_row(line) for line in section.splitlines()]
+    rows = [row for row in rows if row]
+    if len(rows) < 3:
+        return []
+    headers = [normalize_connection_header(header) for header in rows[0]]
+    values: list[dict[str, str]] = []
+    for row in rows[1:]:
+        if all(set(cell) <= {"-"} for cell in row):
+            continue
+        item = {
+            header: value.strip()
+            for header, value in zip(headers, row)
+            if header and value.strip()
+        }
+        if item:
+            values.append(item)
+    return values
+
+
+def markdown_section(text: str, heading: str) -> str:
+    pattern = re.compile(rf"^#{{2,3}}\s+{re.escape(heading)}\s*$", re.IGNORECASE | re.MULTILINE)
+    match = pattern.search(text)
+    if not match:
+        return ""
+    next_heading = re.search(r"^#{1,3}\s+", text[match.end() :], re.MULTILINE)
+    end = match.end() + next_heading.start() if next_heading else len(text)
+    return text[match.end() : end].strip()
+
+
+def normalize_connection_header(value: str) -> str:
+    key = compact_key(value)
+    aliases = {
+        "connection": "name",
+        "relationship": "relationship",
+        "item": "item",
+        "name": "name",
+        "source": "source",
+        "table": "table",
+        "value": "value",
+        "evidence": "evidence",
+    }
+    return aliases.get(key, key)
+
+
 def normalize_detail_key(value: str) -> str:
     key = compact_key(value)
     aliases = {
@@ -394,6 +503,16 @@ def normalize_detail_key(value: str) -> str:
 
 def compact_key(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def limit_generated_evidence(value: str, max_length: int = GENERATED_EVIDENCE_MAX_LENGTH) -> str:
+    cleaned = " ".join(value.split())
+    if len(cleaned) <= max_length:
+        return cleaned
+    sentences = split_sentences(cleaned)
+    if sentences and len(sentences[0]) <= max_length:
+        return sentences[0]
+    return cleaned[: max_length - 3].rstrip() + "..."
 
 
 def required_stats_present(headers: list[str]) -> bool:
