@@ -36,6 +36,7 @@ CUSTOM_STAT_EXCLUDED_KEYS = {
 DEFAULT_SECTION_HEADINGS = [
     "Character Name",
     "Character Stats",
+    "Character Backstory",
     "Character Details",
     "Character Summary",
     "Character Connections",
@@ -114,6 +115,8 @@ class CharacterProfile:
     knowledge_graph_fields: list[dict[str, str]] | None = None
     source_locations: dict[str, str] | None = None
     auto_generated_sections: list[str] | None = None
+    original_backstory: str = ""
+    original_summary: str = ""
 
 
 def sanitize_name(name: str) -> str:
@@ -181,14 +184,16 @@ def render_backstory(profile: CharacterProfile) -> str:
     details_section = f"\n\n### Character Details\n\n{details}\n" if details else "\n"
     backstory_heading = section_heading("Character Backstory", profile)
     summary_heading = section_heading("Character Summary", profile)
+    original_backstory = original_section("Original Character Backstory", profile.original_backstory)
+    original_summary = original_section("Original Character Summary", profile.original_summary)
     return (
         f"# {profile.name}\n\n"
         "## Character Stats\n\n"
         f"{stats_table}\n\n"
         f"## {backstory_heading}\n\n"
-        f"{profile.backstory.strip()}\n\n"
+        f"{profile.backstory.strip()}{original_backstory}\n\n"
         f"## {summary_heading}\n\n"
-        f"{summary}{details_section}"
+        f"{summary}{original_summary}{details_section}"
     )
 
 
@@ -197,6 +202,13 @@ def section_heading(heading: str, profile: CharacterProfile) -> str:
     if compact_label(heading) in generated:
         return f"{heading} ({AUTO_GENERATED_MARKER})"
     return heading
+
+
+def original_section(heading: str, text: str) -> str:
+    cleaned = text.strip()
+    if not cleaned:
+        return ""
+    return f"\n\n### {heading}\n\n{cleaned}"
 
 
 def character_stats(profile: CharacterProfile) -> list[tuple[str, str]]:
@@ -377,6 +389,8 @@ def read_character_profile(character: Character) -> CharacterProfile:
             knowledge_graph_fields=payload.get("knowledge_graph_fields", []),
             source_locations=payload.get("source_locations", {}),
             auto_generated_sections=payload.get("auto_generated_sections", []),
+            original_backstory=payload.get("original_backstory", ""),
+            original_summary=payload.get("original_summary", ""),
         )
         if markdown_profile:
             return merge_profiles(stored_profile, markdown_profile)
@@ -410,6 +424,11 @@ def read_character_sheet(character: Character) -> CharacterProfile | None:
     title_summary = title_preamble(text)
     stat_items = parse_stats_table_items(stats_section)
     stats = stats_dict_from_items(stat_items)
+    backstory, original_backstory = split_original_subsection(
+        section_content(sections, "character backstory"),
+        "Original Character Backstory",
+    )
+    summary_section, original_summary = split_original_subsection(summary_section, "Original Character Summary")
     summary, details = split_summary_and_details(summary_section)
     summary_source = "character_summary_section"
     if not summary.strip() and title_summary.strip():
@@ -432,7 +451,7 @@ def read_character_sheet(character: Character) -> CharacterProfile | None:
         level=stats.get("level", ""),
         race=stats.get("race", ""),
         character_class=stats.get("class", ""),
-        backstory=section_content(sections, "character backstory"),
+        backstory=backstory,
         first_name=first_name,
         family_name=family_name,
         summary=summary,
@@ -448,6 +467,8 @@ def read_character_sheet(character: Character) -> CharacterProfile | None:
         knowledge_graph_fields=knowledge_graph_fields,
         source_locations={"summary": summary_source},
         auto_generated_sections=auto_generated_sections(raw_sections),
+        original_backstory=original_backstory,
+        original_summary=original_summary,
     )
 
 
@@ -480,7 +501,21 @@ def merge_profiles(stored: CharacterProfile, sheet: CharacterProfile) -> Charact
         knowledge_graph_fields=sheet.knowledge_graph_fields or stored.knowledge_graph_fields or [],
         source_locations={**(stored.source_locations or {}), **(sheet.source_locations or {})},
         auto_generated_sections=sheet.auto_generated_sections or stored.auto_generated_sections or [],
+        original_backstory=sheet.original_backstory or stored.original_backstory,
+        original_summary=sheet.original_summary or stored.original_summary,
     )
+
+
+def split_original_subsection(text: str, heading: str) -> tuple[str, str]:
+    pattern = re.compile(rf"^###\s+{re.escape(heading)}\s*$", re.IGNORECASE | re.MULTILINE)
+    match = pattern.search(text)
+    if not match:
+        return text.strip(), ""
+    next_heading = re.search(r"^###\s+", text[match.end() :], re.MULTILINE)
+    end = match.end() + next_heading.start() if next_heading else len(text)
+    main = text[: match.start()].strip()
+    original = text[match.end() : end].strip()
+    return main, original
 
 
 def markdown_title(text: str) -> str:
@@ -902,6 +937,8 @@ def enrich_profile(profile: CharacterProfile) -> CharacterProfile:
         knowledge_graph_fields=profile.knowledge_graph_fields or [],
         source_locations=profile.source_locations or {},
         auto_generated_sections=profile.auto_generated_sections or [],
+        original_backstory=profile.original_backstory,
+        original_summary=profile.original_summary,
     )
 
 
@@ -928,6 +965,8 @@ def profile_edit_fields(profile: CharacterProfile) -> dict[str, object]:
         "drives": profile.drives or [],
         "alliances": profile.alliances or [],
         "enemies": profile.enemies or [],
+        "original_backstory": profile.original_backstory.strip(),
+        "original_summary": profile.original_summary.strip(),
     }
 
 
@@ -944,7 +983,11 @@ def update_existing_backstory(
     if stats_changed(current_profile, profile):
         updated = replace_section(updated, "Character Stats", render_updated_stats_table(text, current_profile, profile))
     if current_profile.backstory.strip() != profile.backstory.strip():
-        updated = replace_section(updated, "Character Backstory", profile.backstory.strip())
+        backstory_content = profile.backstory.strip() + original_section(
+            "Original Character Backstory",
+            profile.original_backstory,
+        )
+        updated = replace_section(updated, "Character Backstory", backstory_content)
     summary_location = (profile.source_locations or {}).get("summary")
     summary_handled = False
     if summary_location == "title_preamble" and current_profile.summary.strip() != profile.summary.strip():
@@ -961,7 +1004,11 @@ def update_existing_backstory(
         or details_section_needs_custom_stats(updated)
     ):
         summary = "" if summary_location == "title_preamble" else profile.summary.strip()
-        content = f"{summary}\n\n### Character Details\n\n{desired_details}".strip()
+        content = (
+            f"{summary}"
+            f"{original_section('Original Character Summary', profile.original_summary)}"
+            f"\n\n### Character Details\n\n{desired_details}"
+        ).strip()
         updated = replace_section(updated, "Character Summary", content)
     return mark_auto_generated_headings(updated, profile)
 

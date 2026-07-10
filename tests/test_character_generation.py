@@ -99,6 +99,75 @@ def test_render_backstory_marks_auto_generated_sections():
     assert "## Character Summary (Auto Generated)" in markdown
 
 
+def test_render_backstory_preserves_original_text_for_auto_generated_sections():
+    profile = CharacterProfile(
+        name="Mara Voss",
+        pronouns="",
+        level="",
+        race="Elf",
+        character_class="Wizard",
+        backstory="Generated backstory.",
+        summary="Generated summary.",
+        auto_generated_sections=["Character Summary", "Character Backstory"],
+        original_backstory="Manual backstory.",
+        original_summary="Manual summary.",
+    )
+
+    markdown = render_backstory(profile)
+
+    assert "## Character Backstory (Auto Generated)" in markdown
+    assert "Generated backstory." in markdown
+    assert "### Original Character Backstory\n\nManual backstory." in markdown
+    assert "## Character Summary (Auto Generated)" in markdown
+    assert "Generated summary." in markdown
+    assert "### Original Character Summary\n\nManual summary." in markdown
+
+
+def test_read_character_profile_parses_generated_and_original_sections(tmp_path):
+    character_path = tmp_path / "Mara_Voss.md"
+    character = Character(name=character_path.stem, path=character_path)
+    character_path.write_text(
+        """# Mara Voss
+
+## Character Stats
+
+| Name | Race |
+| ---- | ---- |
+| Mara | Elf |
+
+## Character Backstory (Auto Generated)
+
+Generated backstory.
+
+### Original Character Backstory
+
+Manual backstory.
+
+## Character Summary (Auto Generated)
+
+Generated summary.
+
+### Original Character Summary
+
+Manual summary.
+
+### Character Details
+
+Drives:
+- keep records
+""",
+        encoding="utf-8",
+    )
+
+    profile = read_character_profile(character)
+
+    assert profile.backstory == "Generated backstory."
+    assert profile.original_backstory == "Manual backstory."
+    assert profile.summary == "Generated summary."
+    assert profile.original_summary == "Manual summary."
+    assert set(profile.auto_generated_sections) == {"Character Backstory", "Character Summary"}
+
+
 def test_random_generator_produces_template_ready_profile():
     generator = RandomCharacterGenerator(seed=7)
     profile = generator.generate_profile()
