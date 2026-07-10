@@ -1,17 +1,34 @@
 ## App Consistency
-- Do not modify a character sheet. If user saves changes to an existing character sheet only update changed sections
-  - Default Stats are ["Name", "Level", "Race", "Class", "Pronouns"]
-  - Default sections headings are ["Character Name", "Character Stats", "Character Details", "Character Summary", "Character Connections"]
-    - If heading titles or stats column are changed, add an alies field in the JSON document indicating what they have been changed to. 
-    - Wrote a unit test which takes the existing 3 characters md files and validates that they can be loaded in the UI and saved back without modifying untouched sections. 
-  - Support reading knowledge graph fields from the table appended to the button of a character sheet like in Orin Nightblooms character sheet.
-- Update the edit character UI to match the UI for the new character UI.
-- Do not render _ character when displaying the name in the UI. 
-- Add dedicated fields for the first name and family name in the JSON doc for each character. 
-- Create a section of the character specs JSON which stores the fields present in the character stats table in a normalized format. 
+- Update button labels and headings to make all words start with an uppercase letter. 
+- Support characters with first name only.
+- Update the config directory so model configs are stored under config/model.
+- Change the root level characters directory to docs/lore/character_sheets
+  - Support both character_name/BACKSTORY.md and character_name.md format
+  - Add a stub folder for places in docs/lore/places
+- Move lore files in the data directory to data/lore/character_sheets/*
+- Support storing summary as a standalone section or under the character name. Keep track of where the data came from when saving character.
+- Save auto-generated characters to data/lore/character_sheets/character_name.md by default and let the player move them to the main characters folder manually.
+  - make the docs/lore folder the source of truth for what characters and places are currently available. 
 
 ## App Improvements
 
+- Create a PLACE_TEMPLATE.md file and PLACE_PARSING_RULES.md file
+  - Create an editor in the UI allowing the player to create places.
 - Support generation of backstory and summary text from the knowledge graph but only when the user specifically requests it.
-- Update the knowledge graph UI so that each tab shows the graph for a different character, avoiding the need to manually load character files for the graph to populate.
-- Show all places and relationships in a combined graph even if they do not have full character sheets associated with them.
+  - For auto-generated sections write Auto Generated next to the section title.
+- UI buttons ["Populate Summary" , "Repopulate Summary" , "Rewrite Backstory"]
+
+## Documentation
+- Rewrite the README.md file to match the current app design. Focus description on character creation and relationship graphing and remove references to chatbot.
+- Review REQUIREMENTS.md and existing specification files for consistency.
+- Write a specification file for COMBINED_KNOWLEDGE_GRAPH before modifying existing code. 
+
+## Combined knowledge graph
+- Hide the combined knowledge graph in the UI behind an environmental variable.
+  - parse all files in the doc/lore folder when generating the knowledge graph. 
+  - Show all places and relationships in a combined graph even if they do not have full character sheets associated with them.
+  - Update the knowledge graph UI so that each tab shows the graph for a different character, avoiding the need to manually load character files for the graph to populate.
+- Support the ability to create new place and character files from secondary characters. 
+- Add the ability to add the Character Connections section to the bottom of an existing character sheet. 
+  - Generated Character Connections section should place character information sourced from other character sheets and places first.
+

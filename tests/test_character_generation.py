@@ -647,6 +647,7 @@ def test_app_reads_characters_from_root_level_character_folder():
     assert CHARACTERS_DIR == ROOT_DIR / "characters"
     assert CHARACTER_METADATA_DIR == ROOT_DIR / "data" / "characters"
     assert (CHARACTERS_DIR / "Orin_Nightbloom.md").exists()
+    assert all(path.is_file() and path.suffix.lower() == ".md" for path in CHARACTERS_DIR.iterdir())
     assert not any(path.is_dir() and (path / "BACKSTORY.md").exists() for path in CHARACTERS_DIR.iterdir())
 
 

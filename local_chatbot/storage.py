@@ -8,7 +8,7 @@ from .paths import CHARACTER_GRAPHS_DIR, CHARACTER_METADATA_DIR, CHARACTERS_DIR,
 
 
 SAFE_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_. -]+")
-BACKSTORY_TEMPLATE_PATH = CHARACTERS_DIR / "TEMPLATE.md"
+BACKSTORY_TEMPLATE_PATH = CHARACTER_METADATA_DIR / "TEMPLATE.md"
 DEFAULT_STAT_LABELS = ["Name", "Race", "Class", "Level", "Pronouns"]
 DEFAULT_ADDABLE_STAT_FIELDS = [
     ("Race", "race", "race"),
@@ -47,7 +47,7 @@ class Character:
 
     @property
     def backstory_path(self) -> Path:
-        if self.path.is_file():
+        if self.path.suffix.lower() == ".md":
             return self.path
         return self.path / "BACKSTORY.md"
 

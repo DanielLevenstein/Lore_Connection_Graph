@@ -301,15 +301,21 @@ def render_character_panel() -> None:
             key="main_existing_character",
         )
         selected_character = characters[display_names.index(selected_character_label)]
-        if st.button("Open character", icon=":material/chat:", key="main_open_character"):
+        if st.button("Open Character", icon=":material/chat:", key="main_open_character"):
             set_active_character(selected_character)
             st.rerun()
         if "active_character" not in st.session_state:
             set_active_character(selected_character)
     else:
         st.info("Create your first character to begin.")
+    # When a character is opened show it here before the create character section.
+    if "active_character" in st.session_state:
+        character = get_active_character()
+        if character:
+            render_character_info(character)
 
-    with st.expander("Create character", expanded=not characters):
+    st.title("Add Character")
+    with st.expander("Create Character", expanded=not characters):
         render_character_creator("main_new_character")
 
 
@@ -392,5 +398,4 @@ render_character_panel()
 active_character = get_active_character()
 if active_character is None:
     st.info("Create or open a character to edit its sheet.")
-else:
-    render_character_info(active_character)
+

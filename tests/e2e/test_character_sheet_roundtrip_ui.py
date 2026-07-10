@@ -86,9 +86,10 @@ def isolated_character_app(tmp_path):
 
 
 def select_character(page, character_label: str, index: int) -> None:
-    page.get_by_role("combobox", name="Existing Characters").click()
-    page.keyboard.type(character_label)
-    page.keyboard.press("Enter")
+    if index > 0:
+        page.get_by_role("combobox", name="Existing Characters").click()
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
     page.get_by_role("button", name="Open character").click()
     expect(page.get_by_role("heading", name=character_label, exact=True)).to_be_visible(timeout=10000)
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from model_harness import ModelConfig
 from .client import chat_completion
-from .paths import CHARACTERS_DIR
+from .paths import CHARACTER_METADATA_DIR
 from .storage import Character, CharacterProfile, create_character, sanitize_name
 
 
@@ -23,8 +23,8 @@ class WorldBuildingData:
 class RandomCharacterGenerator:
     """Generate lightweight D&D 5e-inspired character profiles."""
 
-    WORLD_BUILDING_PATH = CHARACTERS_DIR / "world_building.json"
-    REQUIRED_WORLD_BUILDING_KEYS = {
+    WORLD_BUILDING_PATH = CHARACTER_METADATA_DIR / "world_building.json"
+    WORLD_BUILDING_KEYS = {
         "races": 1,
         "classes": 1,
         "pronouns": 1,

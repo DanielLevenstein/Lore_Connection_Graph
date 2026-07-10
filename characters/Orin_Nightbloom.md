@@ -29,7 +29,6 @@ Drives:
 
 ### Character Connections
 
-
 | Table         | Item   | Value                   | Evidence                                                                                                                   |
 | ------------- | ------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Relationships | Family | Nightbloom              | Nightbloom is inferred as the family relationship value from the full character name Orin Nightbloom.                      |
