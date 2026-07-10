@@ -1,0 +1,175 @@
+{
+  "name": "qwen2.5-3b-instruct-gguf",
+  "model_id": "bartowski/Qwen2.5-3B-Instruct-GGUF",
+  "model_url": "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF",
+  "api_base_url": "http://127.0.0.1:8000/v1",
+  "size": "3B",
+  "download_size": "Q4_K_M 1.93 GB",
+  "description": "Selected semantic model: compact GGUF instruction model for local people/place extraction, character rewrites, and knowledge graph summaries.",
+  "server": {
+    "runner": "llama.cpp",
+    "command": [
+      "llama",
+      "serve",
+      "-hf",
+      "bartowski/Qwen2.5-3B-Instruct-GGUF:Q4_K_M",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "8000"
+    ],
+    "health_url": "http://127.0.0.1:8000/v1/models"
+  },
+  "download_options": [
+    {
+      "quant": "IQ2_M",
+      "filename": "Qwen2.5-3B-Instruct-IQ2_M.gguf",
+      "size": "1.14 GB",
+      "size_bytes": 1140516000
+    },
+    {
+      "quant": "Q2_K",
+      "filename": "Qwen2.5-3B-Instruct-Q2_K.gguf",
+      "size": "1.27 GB",
+      "size_bytes": 1274756256
+    },
+    {
+      "quant": "Q2_K_L",
+      "filename": "Qwen2.5-3B-Instruct-Q2_K_L.gguf",
+      "size": "1.35 GB",
+      "size_bytes": 1350116512
+    },
+    {
+      "quant": "IQ3_XS",
+      "filename": "Qwen2.5-3B-Instruct-IQ3_XS.gguf",
+      "size": "1.39 GB",
+      "size_bytes": 1391836320
+    },
+    {
+      "quant": "Q3_K_S",
+      "filename": "Qwen2.5-3B-Instruct-Q3_K_S.gguf",
+      "size": "1.45 GB",
+      "size_bytes": 1454357664
+    },
+    {
+      "quant": "IQ3_M",
+      "filename": "Qwen2.5-3B-Instruct-IQ3_M.gguf",
+      "size": "1.49 GB",
+      "size_bytes": 1488895136
+    },
+    {
+      "quant": "Q3_K_M",
+      "filename": "Qwen2.5-3B-Instruct-Q3_K_M.gguf",
+      "size": "1.59 GB",
+      "size_bytes": 1590475936
+    },
+    {
+      "quant": "Q3_K_L",
+      "filename": "Qwen2.5-3B-Instruct-Q3_K_L.gguf",
+      "size": "1.71 GB",
+      "size_bytes": 1707392160
+    },
+    {
+      "quant": "IQ4_XS",
+      "filename": "Qwen2.5-3B-Instruct-IQ4_XS.gguf",
+      "size": "1.74 GB",
+      "size_bytes": 1739095200
+    },
+    {
+      "quant": "Q3_K_XL",
+      "filename": "Qwen2.5-3B-Instruct-Q3_K_XL.gguf",
+      "size": "1.78 GB",
+      "size_bytes": 1782752416
+    },
+    {
+      "quant": "Q4_0_4_4",
+      "filename": "Qwen2.5-3B-Instruct-Q4_0_4_4.gguf",
+      "size": "1.82 GB",
+      "size_bytes": 1822850208
+    },
+    {
+      "quant": "Q4_0_4_8",
+      "filename": "Qwen2.5-3B-Instruct-Q4_0_4_8.gguf",
+      "size": "1.82 GB",
+      "size_bytes": 1822850208
+    },
+    {
+      "quant": "Q4_0_8_8",
+      "filename": "Qwen2.5-3B-Instruct-Q4_0_8_8.gguf",
+      "size": "1.82 GB",
+      "size_bytes": 1822850208
+    },
+    {
+      "quant": "Q4_0",
+      "filename": "Qwen2.5-3B-Instruct-Q4_0.gguf",
+      "size": "1.83 GB",
+      "size_bytes": 1828486304
+    },
+    {
+      "quant": "Q4_K_S",
+      "filename": "Qwen2.5-3B-Instruct-Q4_K_S.gguf",
+      "size": "1.83 GB",
+      "size_bytes": 1834384544
+    },
+    {
+      "quant": "Q4_K_M",
+      "filename": "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+      "size": "1.93 GB",
+      "size_bytes": 1929903264
+    },
+    {
+      "quant": "Q4_K_L",
+      "filename": "Qwen2.5-3B-Instruct-Q4_K_L.gguf",
+      "size": "2.01 GB",
+      "size_bytes": 2005263520
+    },
+    {
+      "quant": "Q5_K_S",
+      "filename": "Qwen2.5-3B-Instruct-Q5_K_S.gguf",
+      "size": "2.17 GB",
+      "size_bytes": 2169666720
+    },
+    {
+      "quant": "Q5_K_M",
+      "filename": "Qwen2.5-3B-Instruct-Q5_K_M.gguf",
+      "size": "2.22 GB",
+      "size_bytes": 2224815264
+    },
+    {
+      "quant": "Q5_K_L",
+      "filename": "Qwen2.5-3B-Instruct-Q5_K_L.gguf",
+      "size": "2.30 GB",
+      "size_bytes": 2300175520
+    },
+    {
+      "quant": "Q6_K",
+      "filename": "Qwen2.5-3B-Instruct-Q6_K.gguf",
+      "size": "2.54 GB",
+      "size_bytes": 2538159264
+    },
+    {
+      "quant": "Q6_K_L",
+      "filename": "Qwen2.5-3B-Instruct-Q6_K_L.gguf",
+      "size": "2.61 GB",
+      "size_bytes": 2613519520
+    },
+    {
+      "quant": "Q8_0",
+      "filename": "Qwen2.5-3B-Instruct-Q8_0.gguf",
+      "size": "3.29 GB",
+      "size_bytes": 3285476512
+    },
+    {
+      "quant": "default",
+      "filename": "Qwen2.5-3B-Instruct-f16.gguf",
+      "size": "6.18 GB",
+      "size_bytes": 6178317216
+    },
+    {
+      "quant": "default",
+      "filename": "Qwen2.5-3B-Instruct-f32.gguf",
+      "size": "12.35 GB",
+      "size_bytes": 12349710624
+    }
+  ]
+}

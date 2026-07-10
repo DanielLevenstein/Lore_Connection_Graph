@@ -1,0 +1,22 @@
+{
+  "name": "qwen2.5-vl-3b-instruct",
+  "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+  "model_url": "https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct",
+  "api_base_url": "http://127.0.0.1:8000/v1",
+  "size": "3B",
+  "download_size": "6.99 GB",
+  "description": "Selected visual inspection model: compact vision-language model for local UI screenshot review against page requirements.",
+  "server": {
+    "runner": "vLLM",
+    "command": [
+      "vllm",
+      "serve",
+      "Qwen/Qwen2.5-VL-3B-Instruct",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "8000"
+    ],
+    "health_url": "http://127.0.0.1:8000/v1/models"
+  }
+}
