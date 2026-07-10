@@ -21,6 +21,7 @@ from .schema import (
 NAME_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:[ \t]+(?:the[ \t]+)?[A-Z][a-z]+){0,3})\b")
 HEADING_PATTERN = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 SENTENCE_PATTERN = re.compile(r"[^.!?\n]+[.!?]?")
+HONORIFIC_WORDS = {"Mr", "Mrs", "Ms", "Mx", "Dr", "Miss"}
 UNKNOWN_VALUES = {"", "unknown", "none", "n/a", "na", "unspecified", "not specified", "tbd"}
 NON_NAME_WORDS = {
     "A",
@@ -44,6 +45,7 @@ NON_NAME_WORDS = {
     "No",
     "On",
     "Or",
+    "One",
     "She",
     "That",
     "The",
@@ -93,6 +95,7 @@ RELATIONSHIP_RULES = [
     ("betrayer", "Betrayer", "hostile", ("betray", "betrayed", "betraying")),
     ("former_mentor", "Former mentor", "complicated", ("former mentor", "trained", "teacher", "mentor")),
     ("family", "Family", "positive", ("sister", "brother", "mother", "father", "parent", "child", "family")),
+    ("client", "Client", "positive", ("client", "customer", "patron", "regular")),
     ("rival", "Rival", "hostile", ("rival", "competitor")),
     ("enemy", "Enemy", "hostile", ("enemy", "foe", "hates", "opposes", "against")),
     ("ally", "Ally", "positive", ("ally", "companion", "friend", "trusted")),
@@ -375,6 +378,8 @@ def normalize_detail_key(value: str) -> str:
         "alliance": "alliances",
         "alliances": "alliances",
         "allies": "alliances",
+        "client": "clients",
+        "clients": "clients",
         "drive": "drives",
         "drives": "drives",
         "enemy": "enemies",
@@ -425,7 +430,8 @@ def attribute_connections(
     text: str,
 ) -> list[tuple[str, str, str, str]]:
     relationships: list[tuple[str, str, str, str]] = []
-    family_name = primary_name.strip().split()[-1] if len(primary_name.strip().split()) > 1 else ""
+    name_parts = [part for part in re.split(r"[\s_]+", primary_name.strip()) if part]
+    family_name = name_parts[-1] if len(name_parts) > 1 else ""
     if family_name:
         relationships.append(
             (
@@ -470,17 +476,8 @@ def character_relationships(
     text: str,
 ) -> list[tuple[str, str, str, str]]:
     relationships: list[tuple[str, str, str, str]] = []
-    last_name = character_last_name(primary_name)
-    if last_name:
-        relationships.append(
-            (
-                "family",
-                "Family",
-                last_name,
-                f"{last_name} is inferred as the family relationship value from the full character name {primary_name}.",
-            )
-        )
     relationship_columns = [
+        ("client", "Client", ["clients", "client"]),
         ("ally", "Ally", ["allies", "alliances", "ally"]),
         ("enemy", "Enemy", ["enemies", "enemy"]),
         ("lover", "Lover", ["lovers", "lover"]),
@@ -489,12 +486,14 @@ def character_relationships(
         raw_value = next((stats.get(key, "") for key in stat_keys if key in stats and stats.get(key, "").strip()), "")
         for value in split_stat_values(raw_value):
             cleaned_value = clean_attribute_value(value) or "Unknown"
+            inferred_type = "client" if "client" in cleaned_value.lower() else relationship_type
+            inferred_label = "Client" if inferred_type == "client" else label
             relationships.append(
                 (
-                    relationship_type,
-                    label,
+                    inferred_type,
+                    inferred_label,
                     cleaned_value,
-                    build_stat_evidence(label, cleaned_value),
+                    build_stat_evidence(inferred_label, cleaned_value),
                 )
             )
     relationships.extend(infer_unnamed_character_relationships(text))
@@ -524,21 +523,49 @@ def find_mentioned_names(text: str, primary_name: str, stats: dict[str, str] | N
         "Character Stats",
         "Character Backstory",
         "Character Summary",
+        "Clients",
+        "Favorite Color",
         "Name Level Race Class Pronouns",
         "BACKSTORY",
         "SUMMARY",
     }
     primary_aliases = primary_name_aliases(primary_name, stats)
     names: list[str] = []
-    for candidate in NAME_PATTERN.findall(text):
-        cleaned = candidate.strip()
+    normalized_text = normalize_honorific_periods(text)
+    for candidate in NAME_PATTERN.findall(normalized_text):
+        cleaned = clean_name_candidate(candidate)
         if cleaned in blocked or normalize_name_ref(cleaned) in primary_aliases:
             continue
         if not is_probable_name(cleaned):
             continue
         if cleaned not in names:
             names.append(cleaned)
-    return names
+    return remove_name_fragments(names)
+
+
+def remove_name_fragments(names: list[str]) -> list[str]:
+    long_name_parts = {
+        normalize_name_ref(part)
+        for name in names
+        if len(name.split()) > 1
+        for part in name.split()
+    }
+    return [
+        name
+        for name in names
+        if len(name.split()) > 1 or normalize_name_ref(name) not in long_name_parts
+    ]
+
+
+def normalize_honorific_periods(text: str) -> str:
+    return re.sub(r"\b(Mr|Mrs|Ms|Mx|Dr)\.", r"\1", text)
+
+
+def clean_name_candidate(value: str) -> str:
+    parts = [part for part in value.strip().split() if part]
+    while parts and parts[0].strip(".") in HONORIFIC_WORDS:
+        parts.pop(0)
+    return " ".join(parts)
 
 
 def find_place_mentions(text: str) -> list[tuple[str, list[str], list[str]]]:
@@ -648,7 +675,8 @@ def normalize_name_ref(value: str) -> str:
 
 def split_sentences(text: str) -> list[str]:
     sentences = []
-    for match in SENTENCE_PATTERN.findall(text.replace("\r\n", "\n")):
+    normalized_text = normalize_honorific_periods(text.replace("\r\n", "\n"))
+    for match in SENTENCE_PATTERN.findall(normalized_text):
         sentence = " ".join(match.strip().split())
         if sentence and not sentence.startswith("|") and not sentence.startswith("#"):
             sentences.append(sentence)
@@ -656,8 +684,17 @@ def split_sentences(text: str) -> list[str]:
 
 
 def evidence_for_name(sentences: list[str], name: str) -> list[str]:
-    first_name = name.split()[0]
-    evidence = [sentence for sentence in sentences if name in sentence or first_name in sentence]
+    parts = name.split()
+    first_name = parts[0]
+    family_name = parts[-1] if len(parts) > 1 else ""
+    refs = [name, first_name]
+    if family_name:
+        refs.append(family_name)
+    evidence = [
+        sentence
+        for sentence in sentences
+        if any(ref in sentence or ref.lower() in sentence.lower() for ref in refs)
+    ]
     return evidence[:5]
 
 
@@ -688,6 +725,23 @@ def infer_relationship(
             re.IGNORECASE,
         ):
             continue
+        if relationship_type == "family":
+            family_target = target_name.strip().lower() in {
+                "sister",
+                "brother",
+                "mother",
+                "father",
+                "parent",
+                "child",
+                "family",
+            }
+            family_name_pattern = re.search(
+                rf"(?:\b(?:sister|brother|mother|father|parent|child|family)\b[^.!?]*\b{target_pattern}\b|\b{target_pattern}\b\s*,?\s*(?:a|an|the|his|her|their)?\s*\b(?:sister|brother|mother|father|parent|child)\b)",
+                " ".join(evidence),
+                re.IGNORECASE,
+            )
+            if not family_target and not family_name_pattern:
+                continue
         if any(keyword in evidence_text for keyword in keywords):
             conflict_level = 0.7 if sentiment == "hostile" else 0.3 if sentiment == "complicated" else 0.0
             trust_level = 0.25 if sentiment == "hostile" else 0.45 if sentiment == "complicated" else 0.75
@@ -781,6 +835,8 @@ def evidence_for_pattern(text: str, pattern: str) -> str:
 def is_probable_name(value: str) -> bool:
     parts = value.split()
     if not parts:
+        return False
+    if parts[0].strip(".") in HONORIFIC_WORDS:
         return False
     if parts[0] in NON_NAME_WORDS:
         return False

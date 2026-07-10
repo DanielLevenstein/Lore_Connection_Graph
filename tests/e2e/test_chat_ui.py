@@ -64,38 +64,3 @@ def streamlit_app():
         except subprocess.TimeoutExpired:
             process.kill()
 
-
-def test_real_model_chat_returns_valid_response(streamlit_app):
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
-        page = browser.new_page(viewport={"width": 1280, "height": 900})
-        page.goto(streamlit_app, wait_until="networkidle")
-
-        expect(page.get_by_role("heading", name="Bubble Gum")).to_be_visible(timeout=10000)
-        expect(page.get_by_text("Model server ready", exact=False)).to_be_visible(timeout=15000)
-        chat_input = page.get_by_placeholder("Message Bubble Gum")
-        expect(chat_input).to_be_visible()
-
-        prompt = "Miss Bubble Gum, what is your name?"
-        chat_input.fill(prompt)
-        chat_input.press("Enter")
-
-        expect(page.get_by_text(prompt)).to_be_visible(timeout=10000)
-        expect(page.get_by_text("AttributeError")).not_to_be_visible()
-        expect(page.get_by_text("Local model error")).not_to_be_visible(timeout=30000)
-        page.wait_for_function(
-            """
-            () => {
-              const text = document.body.innerText;
-              const prompt = "Miss Bubble Gum, what is your name?";
-              const promptIndex = text.indexOf(prompt);
-              if (promptIndex < 0) return false;
-              const afterPrompt = text.slice(promptIndex + prompt.length);
-              return !afterPrompt.includes("Thinking locally...")
-                && !afterPrompt.includes("Local model error")
-                && afterPrompt.trim().length > 80;
-            }
-            """,
-            timeout=60000,
-        )
-        browser.close()

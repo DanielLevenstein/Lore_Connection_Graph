@@ -187,12 +187,15 @@ Keeping these helpers outside `streamlit_app.py` makes the display formatting te
 
 ## Storage Integration
 
-Character data still lives under:
+Character markdown files live under:
 
 ```text
-data/characters/<name>/BACKSTORY.md
-data/characters/<name>/PROFILE.json
-data/characters/<name>/MEMORY.md
+characters/<name>/BACKSTORY.md
+```
+or 
+
+```text
+characters/Character_Name.md
 ```
 
 Graph JSON now lives under:

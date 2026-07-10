@@ -1,6 +1,11 @@
 import requests
 import streamlit as st
 
+from character_graph.combined_graph import (
+    build_combined_character_graph,
+    combined_relationship_dot,
+    combined_relationship_rows,
+)
 from character_graph.graph_view import (
     evidence_rows,
 )
@@ -16,6 +21,8 @@ from local_chatbot.storage import (
     Character,
     CharacterProfile,
     append_chatlog,
+    character_family_name,
+    character_first_name,
     create_character,
     default_details,
     list_characters,
@@ -66,6 +73,11 @@ def get_active_character() -> Character | None:
     if not name:
         return None
     return next((character for character in list_characters() if character.name == name), None)
+
+
+def display_character_name(character: Character) -> str:
+    profile = read_character_profile(character)
+    return (profile.name or character.name).replace("_", " ")
 
 
 def build_character_messages(
@@ -164,9 +176,36 @@ def render_relationship_graph(character: Character) -> None:
         with attributes_tab:
             st.table(evidence, hide_index=True, width="stretch")
 
+
+def render_combined_character_graph() -> None:
+    graphs = []
+    for character in list_characters():
+        try:
+            graph = load_graph(character.graph_path)
+        except (OSError, ValueError):
+            graph = None
+        if graph is not None:
+            graphs.append(graph)
+
+    with st.expander("Combined Character Graph", expanded=False):
+        if len(graphs) < 2:
+            st.info("Add at least two character graphs to see combined connections.")
+            return
+        combined = build_combined_character_graph(graphs)
+        rows = combined_relationship_rows(combined)
+        if not rows:
+            st.info("No cross-character connections were found yet.")
+            return
+        st.graphviz_chart(combined_relationship_dot(combined), width="stretch")
+        st.table(rows, hide_index=True, width="stretch")
+
+
 def render_character_creator(key_prefix: str = "new_character") -> None:
     with st.form(key_prefix, clear_on_submit=True):
         name = st.text_input("Name", placeholder="Mara Voss", key=f"{key_prefix}_name")
+        name_cols = st.columns(2)
+        first_name = name_cols[0].text_input("First name", placeholder="Mara", key=f"{key_prefix}_first_name")
+        family_name = name_cols[1].text_input("Family name", placeholder="Voss", key=f"{key_prefix}_family_name")
         stat_cols = st.columns(4)
         level = stat_cols[0].text_input("Level", placeholder="3", key=f"{key_prefix}_level")
         race = stat_cols[1].text_input("Race", placeholder="Elf", key=f"{key_prefix}_race")
@@ -225,6 +264,8 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
                     race=race.strip(),
                     character_class=character_class.strip(),
                     backstory=backstory.strip(),
+                    first_name=first_name.strip() or character_first_name(name),
+                    family_name=family_name.strip() or character_family_name(name),
                     summary=summary.strip(),
                     motivations=[],
                     drives=parse_list_field(drives),
@@ -247,15 +288,19 @@ def render_character_panel() -> None:
     st.subheader("Characters")
     characters = list_characters()
     if characters:
-        names = [character.name for character in characters]
-        current = st.session_state.get("active_character", names[0])
-        selected_character_name = st.selectbox(
+        display_names = [display_character_name(character) for character in characters]
+        current = st.session_state.get("active_character", characters[0].name)
+        current_index = next(
+            (index for index, character in enumerate(characters) if character.name == current),
+            0,
+        )
+        selected_character_label = st.selectbox(
             "Existing Characters",
-            names,
-            index=names.index(current) if current in names else 0,
+            display_names,
+            index=current_index,
             key="main_existing_character",
         )
-        selected_character = next(character for character in characters if character.name == selected_character_name)
+        selected_character = characters[display_names.index(selected_character_label)]
         if st.button("Open character", icon=":material/chat:", key="main_open_character"):
             set_active_character(selected_character)
             st.rerun()
@@ -273,15 +318,17 @@ def render_character_editor(character: Character) -> None:
     with st.expander("Edit Character", expanded=False):
         with st.form(f"edit_character_{character.name}"):
             st.text_input("Name", value=profile.name, disabled=True)
-            stat_cols = st.columns(2)
-            race = stat_cols[0].text_input("Race", value=profile.race)
-            character_class = stat_cols[1].text_input("Class", value=profile.character_class)
+            name_cols = st.columns(2)
+            first_name = name_cols[0].text_input("First name", value=profile.first_name)
+            family_name = name_cols[1].text_input("Family name", value=profile.family_name)
+            stat_cols = st.columns(4)
+            level = stat_cols[0].text_input("Level", value=profile.level)
+            race = stat_cols[1].text_input("Race", value=profile.race)
+            character_class = stat_cols[2].text_input("Class", value=profile.character_class)
+            pronouns = stat_cols[3].text_input("Pronouns", value=profile.pronouns)
             backstory = st.text_area("Backstory", value=profile.backstory, height=180)
             summary = st.text_area("Summary", value=profile.summary, height=96)
             with st.expander("Optional metadata", expanded=False):
-                optional_cols = st.columns(2)
-                level = optional_cols[0].text_input("Level", value=profile.level)
-                pronouns = optional_cols[1].text_input("Pronouns", value=profile.pronouns)
                 detail_cols = st.columns(3)
                 drives = detail_cols[0].text_area("Drives", value=render_list_field(profile.drives), height=96)
                 alliances = detail_cols[1].text_area("Alliances", value=render_list_field(profile.alliances), height=96)
@@ -289,6 +336,9 @@ def render_character_editor(character: Character) -> None:
                 details_value = profile.details or default_details(profile)
                 details = st.text_area("Character details", value=details_value, height=120)
             if st.form_submit_button("Save character", icon=":material/save:"):
+                submitted_details = details.strip()
+                if not profile.details.strip() and submitted_details == default_details(profile).strip():
+                    submitted_details = ""
                 updated = CharacterProfile(
                     name=profile.name,
                     pronouns=pronouns.strip(),
@@ -296,6 +346,8 @@ def render_character_editor(character: Character) -> None:
                     race=race.strip(),
                     character_class=character_class.strip(),
                     backstory=backstory.strip(),
+                    first_name=first_name.strip(),
+                    family_name=family_name.strip(),
                     summary=summary.strip(),
                     motivations=profile.motivations,
                     drives=parse_list_field(drives),
@@ -303,7 +355,10 @@ def render_character_editor(character: Character) -> None:
                     enemies=parse_list_field(enemies),
                     origin=profile.origin,
                     gender=profile.gender,
-                    details=details.strip(),
+                    details=submitted_details,
+                    stat_fields=profile.stat_fields,
+                    aliases=profile.aliases,
+                    knowledge_graph_fields=profile.knowledge_graph_fields,
                 )
                 write_character_profile(character, updated)
                 st.success("Character saved.")
@@ -324,7 +379,7 @@ def render_character_info(character: Character, model_config=None) -> None:
     if "chatlog_path" not in st.session_state:
         st.session_state.chatlog_path = str(start_chatlog(character))
 
-    st.subheader(character.name)
+    st.subheader(display_character_name(character))
     render_character_editor(character)
     render_relationship_graph(character)
 

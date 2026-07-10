@@ -4,11 +4,36 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from .paths import CHARACTER_GRAPHS_DIR, CHARACTERS_DIR, ensure_base_dirs
+from .paths import CHARACTER_GRAPHS_DIR, CHARACTER_METADATA_DIR, CHARACTERS_DIR, ensure_base_dirs
 
 
 SAFE_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_. -]+")
 BACKSTORY_TEMPLATE_PATH = CHARACTERS_DIR / "TEMPLATE.md"
+DEFAULT_STAT_LABELS = ["Name", "Race", "Class", "Level", "Pronouns"]
+DEFAULT_ADDABLE_STAT_FIELDS = [
+    ("Race", "race", "race"),
+    ("Class", "class", "character_class"),
+    ("Level", "level", "level"),
+    ("Pronouns", "pronouns", "pronouns"),
+]
+CUSTOM_STAT_EXCLUDED_KEYS = {
+    "name",
+    "familyname",
+    "family_name",
+    "race",
+    "class",
+    "character_class",
+    "level",
+    "pronouns",
+}
+DEFAULT_SECTION_HEADINGS = [
+    "Character Name",
+    "Character Stats",
+    "Character Details",
+    "Character Summary",
+    "Character Connections",
+]
+HONORIFIC_TOKENS = {"ms", "miss", "mr", "mrs", "mx", "dr"}
 
 
 @dataclass(frozen=True)
@@ -17,20 +42,26 @@ class Character:
     path: Path
 
     @property
+    def data_dir(self) -> Path:
+        return CHARACTER_METADATA_DIR / self.name
+
+    @property
     def backstory_path(self) -> Path:
+        if self.path.is_file():
+            return self.path
         return self.path / "BACKSTORY.md"
 
     @property
     def memory_path(self) -> Path:
-        return self.path / "MEMORY.md"
+        return self.data_dir / "MEMORY.md"
 
     @property
     def chatlogs_dir(self) -> Path:
-        return self.path / "chatlogs"
+        return self.data_dir / "chatlogs"
 
     @property
     def profile_path(self) -> Path:
-        return self.path / "PROFILE.json"
+        return self.data_dir / "PROFILE.json"
 
     @property
     def graph_path(self) -> Path:
@@ -45,6 +76,8 @@ class CharacterProfile:
     race: str
     character_class: str
     backstory: str
+    first_name: str = ""
+    family_name: str = ""
     summary: str = ""
     motivations: list[str] | None = None
     origin: str = ""
@@ -53,6 +86,9 @@ class CharacterProfile:
     alliances: list[str] | None = None
     enemies: list[str] | None = None
     details: str = ""
+    stat_fields: dict[str, str] | None = None
+    aliases: dict[str, dict[str, str]] | None = None
+    knowledge_graph_fields: list[dict[str, str]] | None = None
 
 
 def sanitize_name(name: str) -> str:
@@ -67,8 +103,8 @@ def list_characters() -> list[Character]:
     ensure_base_dirs()
     characters = []
     for path in sorted(CHARACTERS_DIR.iterdir()):
-        if path.is_dir() and (path / "BACKSTORY.md").exists():
-            characters.append(Character(name=path.name, path=path))
+        if path.is_file() and path.suffix.lower() == ".md" and path.name != "TEMPLATE.md":
+            characters.append(Character(name=path.stem, path=path))
     return characters
 
 
@@ -91,10 +127,11 @@ def render_backstory(profile: CharacterProfile) -> str:
 
 def character_stats(profile: CharacterProfile) -> list[tuple[str, str]]:
     stats = [
-        ("Name", character_first_name(profile.name)),
+        ("Name", profile.first_name or character_first_name(profile.name)),
         ("Level", profile.level),
         ("Race", profile.race),
         ("Class", profile.character_class),
+        ("Pronouns", profile.pronouns),
     ]
     return [(label, value.strip()) for label, value in stats if value.strip()]
 
@@ -116,8 +153,6 @@ def render_stats_table(stats: list[tuple[str, str]]) -> str:
 
 def default_details(profile: CharacterProfile) -> str:
     lines: list[str] = []
-    if profile.pronouns.strip():
-        lines.append(f"Pronouns: {profile.pronouns.strip()}")
     if profile.gender.strip():
         lines.append(f"Gender: {profile.gender.strip()}")
     if profile.origin.strip():
@@ -136,7 +171,18 @@ def labeled_list(label: str, values: list[str]) -> list[str]:
 
 
 def character_first_name(name: str) -> str:
-    return name.strip().split()[0] if name.strip() else ""
+    parts = name_tokens_without_honorifics(name)
+    return parts[0] if parts else ""
+
+
+def character_family_name(name: str) -> str:
+    parts = name_tokens_without_honorifics(name)
+    return parts[-1] if len(parts) > 1 else ""
+
+
+def name_tokens_without_honorifics(name: str) -> list[str]:
+    parts = name.strip().split()
+    return [part for part in parts if compact_label(part) not in HONORIFIC_TOKENS]
 
 
 def default_summary(profile: CharacterProfile) -> str:
@@ -158,8 +204,10 @@ def gender_from_pronouns(pronouns: str) -> str:
 def create_character(profile: CharacterProfile) -> Character:
     ensure_base_dirs()
     safe_name = sanitize_name(profile.name)
-    character = Character(name=safe_name, path=CHARACTERS_DIR / safe_name)
-    character.path.mkdir(parents=True, exist_ok=False)
+    character = Character(name=safe_name, path=CHARACTERS_DIR / f"{safe_name}.md")
+    if character.backstory_path.exists():
+        raise FileExistsError(character.backstory_path)
+    character.data_dir.mkdir(parents=True, exist_ok=False)
     character.chatlogs_dir.mkdir(exist_ok=True)
     write_character_profile(character, profile)
     character.memory_path.write_text(
@@ -184,6 +232,8 @@ def read_character_profile(character: Character) -> CharacterProfile:
             race=payload.get("race", ""),
             character_class=payload.get("character_class", payload.get("class", "")),
             backstory=payload.get("backstory", ""),
+            first_name=payload.get("first_name", ""),
+            family_name=payload.get("family_name", ""),
             summary=payload.get("summary", ""),
             motivations=payload.get("motivations", []),
             origin=payload.get("origin", ""),
@@ -192,6 +242,9 @@ def read_character_profile(character: Character) -> CharacterProfile:
             alliances=payload.get("alliances", []),
             enemies=payload.get("enemies", []),
             details=payload.get("details", ""),
+            stat_fields=payload.get("stat_fields") or payload.get("stats"),
+            aliases=payload.get("aliases"),
+            knowledge_graph_fields=payload.get("knowledge_graph_fields", []),
         )
         if markdown_profile:
             return merge_profiles(stored_profile, markdown_profile)
@@ -219,17 +272,31 @@ def read_character_sheet(character: Character) -> CharacterProfile | None:
         return None
     sections = markdown_sections(text)
     title = markdown_title(text) or character.name
-    stats = parse_stats_table(sections.get("character stats", ""))
-    summary, details = split_summary_and_details(sections.get("character summary", ""))
+    stats_section = section_content(sections, "character stats")
+    summary_section = section_content(sections, "character summary")
+    stat_items = parse_stats_table_items(stats_section)
+    stats = stats_dict_from_items(stat_items)
+    summary, details = split_summary_and_details(summary_section)
+    details = append_custom_stat_details(details, stat_items)
+    connections_section = section_content(sections, "character connections") or markdown_subsection(
+        text, "Character Connections"
+    )
     detail_values = parse_details(details)
+    details = remove_detail_fields(details, {"pronouns"})
     legacy_detail_values = parse_legacy_stats_details(stats)
+    first_name, family_name = name_parts(title, stats)
+    aliases = sheet_aliases(title, sections, stats_section)
+    stat_fields = normalized_stat_fields(stats)
+    knowledge_graph_fields = parse_character_connections(connections_section)
     return CharacterProfile(
         name=title,
         pronouns=str(detail_values.get("pronouns") or legacy_detail_values.get("pronouns", "")),
         level=stats.get("level", ""),
         race=stats.get("race", ""),
         character_class=stats.get("class", ""),
-        backstory=sections.get("character backstory", ""),
+        backstory=section_content(sections, "character backstory"),
+        first_name=first_name,
+        family_name=family_name,
         summary=summary,
         motivations=[],
         origin=str(detail_values.get("home") or legacy_detail_values.get("home", "")),
@@ -238,6 +305,9 @@ def read_character_sheet(character: Character) -> CharacterProfile | None:
         alliances=detail_values.get("allies") or legacy_detail_values.get("allies", []),
         enemies=detail_values.get("enemies") or legacy_detail_values.get("enemies", []),
         details=details,
+        stat_fields=stat_fields,
+        aliases=aliases,
+        knowledge_graph_fields=knowledge_graph_fields,
     )
 
 
@@ -248,23 +318,6 @@ def merge_profiles(stored: CharacterProfile, sheet: CharacterProfile) -> Charact
     pronouns = sheet.pronouns or stored.pronouns
     origin = sheet.origin or stored.origin
     gender = sheet.gender or stored.gender
-    details = sheet.details or default_details(
-        CharacterProfile(
-            name=sheet.name or stored.name,
-            pronouns=pronouns,
-            level=sheet.level,
-            race=sheet.race,
-            character_class=sheet.character_class,
-            backstory=sheet.backstory,
-            summary=sheet.summary,
-            motivations=stored.motivations,
-            origin=origin,
-            gender=gender,
-            drives=drives,
-            alliances=alliances,
-            enemies=enemies,
-        )
-    )
     return CharacterProfile(
         name=sheet.name or stored.name,
         pronouns=pronouns,
@@ -272,6 +325,8 @@ def merge_profiles(stored: CharacterProfile, sheet: CharacterProfile) -> Charact
         race=sheet.race,
         character_class=sheet.character_class,
         backstory=sheet.backstory,
+        first_name=sheet.first_name or stored.first_name,
+        family_name=sheet.family_name or stored.family_name,
         summary=sheet.summary,
         motivations=stored.motivations,
         origin=origin,
@@ -279,7 +334,10 @@ def merge_profiles(stored: CharacterProfile, sheet: CharacterProfile) -> Charact
         drives=drives,
         alliances=alliances,
         enemies=enemies,
-        details=details,
+        details=sheet.details,
+        stat_fields=sheet.stat_fields or stored.stat_fields,
+        aliases=merge_aliases(stored.aliases, sheet.aliases),
+        knowledge_graph_fields=sheet.knowledge_graph_fields or stored.knowledge_graph_fields or [],
     )
 
 
@@ -298,14 +356,167 @@ def markdown_sections(text: str) -> dict[str, str]:
     return sections
 
 
+def section_content(sections: dict[str, str], heading: str) -> str:
+    return sections.get(heading, "")
+
+
 def parse_stats_table(text: str) -> dict[str, str]:
+    return stats_dict_from_items(parse_stats_table_items(text))
+
+
+def stats_dict_from_items(items: list[tuple[str, str, str]]) -> dict[str, str]:
+    return {canonical_key: value for canonical_key, _label, value in items if value.strip()}
+
+
+def parse_stats_table_items(text: str) -> list[tuple[str, str, str]]:
     rows = [parse_table_row(line) for line in text.splitlines()]
     rows = [row for row in rows if row]
     if len(rows) < 2:
-        return {}
-    headers = [canonical_table_key(header) for header in rows[0]]
+        return []
+    labels = rows[0]
+    headers = [canonical_table_key(header) for header in labels]
     data_row = next((row for row in rows[1:] if not all(set(cell) <= {"-"} for cell in row)), [])
-    return {header: value.strip() for header, value in zip(headers, data_row) if value.strip()}
+    return [
+        (canonical_key, label, value.strip())
+        for canonical_key, label, value in zip(headers, labels, data_row)
+        if value.strip()
+    ]
+
+
+def normalized_stat_fields(stats: dict[str, str]) -> dict[str, str]:
+    fields = dict(stats)
+    if "class" in fields:
+        fields["character_class"] = fields["class"]
+    return fields
+
+
+def custom_stat_items(items: list[tuple[str, str, str]]) -> list[tuple[str, str]]:
+    return [
+        (label, value.strip())
+        for canonical_key, label, value in items
+        if canonical_key not in CUSTOM_STAT_EXCLUDED_KEYS and value.strip()
+    ]
+
+
+def append_custom_stat_details(details: str, items: list[tuple[str, str, str]]) -> str:
+    custom_items = custom_stat_items(items)
+    if not custom_items:
+        return details.strip()
+    existing_keys = set(parse_details(details).keys())
+    lines = [details.strip()] if details.strip() else []
+    for label, value in custom_items:
+        if normalize_detail_key(label) in existing_keys:
+            continue
+        lines.append(f"{label}: {value}")
+    return "\n".join(line for line in lines if line).strip()
+
+
+def remove_detail_fields(details: str, field_keys: set[str]) -> str:
+    lines = details.splitlines()
+    filtered: list[str] = []
+    table_field_index: int | None = None
+    skip_list = False
+    for line in lines:
+        row = parse_table_row(line)
+        if row:
+            normalized_row = [canonical_table_key(cell) for cell in row]
+            if "field" in normalized_row:
+                table_field_index = normalized_row.index("field")
+                filtered.append(line)
+                continue
+            if table_field_index is not None and len(row) > table_field_index:
+                field_key = normalize_detail_key(row[table_field_index])
+                if field_key in field_keys:
+                    continue
+            filtered.append(line)
+            continue
+
+        stripped = line.strip()
+        if skip_list:
+            if stripped.startswith("-") or not stripped:
+                continue
+            skip_list = False
+        if ":" in stripped and not stripped.startswith("-"):
+            label, value = stripped.split(":", 1)
+            if normalize_detail_key(label) in field_keys:
+                skip_list = not value.strip()
+                continue
+        filtered.append(line)
+    return "\n".join(filtered).strip()
+
+
+def name_parts(name: str, stats: dict[str, str]) -> tuple[str, str]:
+    stat_name = stats.get("name", "").strip()
+    full_name = best_full_name(name, stat_name)
+    first_name = character_first_name(full_name)
+    family_name = (
+        stats.get("familyname")
+        or stats.get("family_name")
+        or character_family_name(full_name)
+    )
+    return first_name.strip(), family_name.strip()
+
+
+def best_full_name(title_name: str, stat_name: str) -> str:
+    title_parts = name_tokens_without_honorifics(title_name)
+    stat_parts = name_tokens_without_honorifics(stat_name)
+    title_compact = compact_label(" ".join(title_parts))
+    stat_compact = compact_label(" ".join(stat_parts))
+    if len(stat_parts) >= 2 and title_compact.startswith(stat_compact):
+        return stat_name
+    if len(stat_parts) >= 2 and len(stat_parts) >= len(title_parts):
+        return stat_name
+    if len(title_parts) >= 2:
+        return title_name
+    return stat_name or title_name
+
+
+def sheet_aliases(title: str, sections: dict[str, str], stats_section: str) -> dict[str, dict[str, str]]:
+    aliases: dict[str, dict[str, str]] = {}
+    section_aliases: dict[str, str] = {}
+    if title and title != "Character Name":
+        section_aliases["Character Name"] = title
+    for actual in sections:
+        canonical = default_section_heading(actual)
+        if canonical and actual != canonical.lower():
+            section_aliases[canonical] = actual
+    if section_aliases:
+        aliases["sections"] = section_aliases
+
+    stat_aliases: dict[str, str] = {}
+    rows = [parse_table_row(line) for line in stats_section.splitlines()]
+    header_row = next((row for row in rows if row), [])
+    for header in header_row:
+        canonical = default_stat_label(header)
+        if canonical and header != canonical:
+            stat_aliases[canonical] = header
+    if stat_aliases:
+        aliases["stats"] = stat_aliases
+    return aliases
+
+
+def default_section_heading(heading: str) -> str:
+    compact = compact_label(heading)
+    defaults = {compact_label(value): value for value in DEFAULT_SECTION_HEADINGS}
+    return defaults.get(compact, "")
+
+
+def default_stat_label(label: str) -> str:
+    compact = compact_label(label)
+    defaults = {compact_label(value): value for value in DEFAULT_STAT_LABELS}
+    aliases = {"characterclass": "Class", "classname": "Class", "familyname": "Name"}
+    return defaults.get(compact) or aliases.get(compact, "")
+
+
+def merge_aliases(
+    stored: dict[str, dict[str, str]] | None,
+    sheet: dict[str, dict[str, str]] | None,
+) -> dict[str, dict[str, str]]:
+    merged: dict[str, dict[str, str]] = {}
+    for source in (stored or {}, sheet or {}):
+        for key, values in source.items():
+            merged.setdefault(key, {}).update(values)
+    return merged
 
 
 def parse_table_row(line: str) -> list[str]:
@@ -328,6 +539,7 @@ def canonical_table_key(value: str) -> str:
     aliases = {
         "characterclass": "class",
         "classname": "class",
+        "familyname": "familyname",
     }
     return aliases.get(key, key)
 
@@ -336,7 +548,27 @@ def split_summary_and_details(text: str) -> tuple[str, str]:
     match = re.search(r"^###\s+Character Details\s*$", text, re.IGNORECASE | re.MULTILINE)
     if not match:
         return text.strip(), ""
-    return text[: match.start()].strip(), text[match.end() :].strip()
+    summary = text[: match.start()].strip()
+    details = strip_markdown_subsection(text[match.end() :], "Character Connections").strip()
+    return summary, details
+
+
+def markdown_subsection(text: str, heading: str) -> str:
+    pattern = re.compile(rf"^###\s+{re.escape(heading)}\s*$", re.IGNORECASE | re.MULTILINE)
+    match = pattern.search(text)
+    if not match:
+        return ""
+    next_heading = re.search(r"^#{1,3}\s+", text[match.end() :], re.MULTILINE)
+    end = match.end() + next_heading.start() if next_heading else len(text)
+    return text[match.end() : end].strip()
+
+
+def strip_markdown_subsection(text: str, heading: str) -> str:
+    pattern = re.compile(
+        rf"^###\s+{re.escape(heading)}\s*$.*?(?=^###\s+|\Z)",
+        re.IGNORECASE | re.MULTILINE | re.DOTALL,
+    )
+    return pattern.sub("", text)
 
 
 def parse_details(details: str) -> dict[str, str | list[str]]:
@@ -397,12 +629,30 @@ def parse_details_table(details: str) -> dict[str, str | list[str]]:
     return values
 
 
+def parse_character_connections(text: str) -> list[dict[str, str]]:
+    rows = [parse_table_row(line) for line in text.splitlines()]
+    rows = [row for row in rows if row]
+    if len(rows) < 3:
+        return []
+    headers = [normalize_label(header) for header in rows[0]]
+    values: list[dict[str, str]] = []
+    for row in rows[1:]:
+        if all(set(cell) <= {"-"} for cell in row):
+            continue
+        item = {header: value.strip() for header, value in zip(headers, row) if value.strip()}
+        if item:
+            values.append(item)
+    return values
+
+
 def normalize_detail_key(value: str) -> str:
     key = compact_label(value)
     aliases = {
         "ally": "allies",
         "alliance": "allies",
         "alliances": "allies",
+        "client": "clients",
+        "clients": "clients",
         "drive": "drives",
         "drives": "drives",
         "enemy": "enemies",
@@ -437,9 +687,200 @@ def split_detail_values(value: str) -> list[str]:
 
 
 def write_character_profile(character: Character, profile: CharacterProfile) -> None:
+    profile = enrich_profile(profile)
+    character.profile_path.parent.mkdir(parents=True, exist_ok=True)
     character.profile_path.write_text(json.dumps(asdict(profile), indent=2) + "\n", encoding="utf-8")
-    character.backstory_path.write_text(render_backstory(profile), encoding="utf-8")
+    if character.backstory_path.exists():
+        current_profile = read_character_sheet(character)
+        current_text = read_text(character.backstory_path)
+        if current_profile and profiles_match(current_profile, profile) and not sheet_needs_save_update(current_text, current_profile, profile):
+            next_text = current_text
+        else:
+            next_text = update_existing_backstory(current_text, current_profile, profile)
+        if next_text != current_text:
+            character.backstory_path.write_text(next_text, encoding="utf-8")
+    else:
+        character.backstory_path.write_text(render_backstory(profile), encoding="utf-8")
     regenerate_character_graph(character)
+
+
+def enrich_profile(profile: CharacterProfile) -> CharacterProfile:
+    first_name = profile.first_name or character_first_name(profile.name)
+    family_name = profile.family_name or character_family_name(profile.name)
+    stats = normalized_stat_fields(parse_stats_table(render_stats_table(character_stats(profile))))
+    if family_name:
+        stats.setdefault("family_name", family_name)
+    return CharacterProfile(
+        name=profile.name,
+        pronouns=profile.pronouns,
+        level=profile.level,
+        race=profile.race,
+        character_class=profile.character_class,
+        backstory=profile.backstory,
+        first_name=first_name,
+        family_name=family_name,
+        summary=profile.summary,
+        motivations=profile.motivations,
+        origin=profile.origin,
+        gender=profile.gender,
+        drives=profile.drives,
+        alliances=profile.alliances,
+        enemies=profile.enemies,
+        details=profile.details,
+        stat_fields=profile.stat_fields or stats,
+        aliases=profile.aliases or {},
+        knowledge_graph_fields=profile.knowledge_graph_fields or [],
+    )
+
+
+def profiles_match(left: CharacterProfile, right: CharacterProfile) -> bool:
+    return profile_edit_fields(left) == profile_edit_fields(right)
+
+
+def sheet_needs_save_update(text: str, current_profile: CharacterProfile, profile: CharacterProfile) -> bool:
+    return stats_changed(current_profile, profile) or details_section_needs_custom_stats(text)
+
+
+def profile_edit_fields(profile: CharacterProfile) -> dict[str, object]:
+    return {
+        "name": profile.name.strip(),
+        "first_name": profile.first_name.strip(),
+        "family_name": profile.family_name.strip(),
+        "pronouns": profile.pronouns.strip(),
+        "level": profile.level.strip(),
+        "race": profile.race.strip(),
+        "character_class": profile.character_class.strip(),
+        "backstory": profile.backstory.strip(),
+        "summary": profile.summary.strip(),
+        "details": profile.details.strip(),
+        "drives": profile.drives or [],
+        "alliances": profile.alliances or [],
+        "enemies": profile.enemies or [],
+    }
+
+
+def update_existing_backstory(
+    text: str,
+    current_profile: CharacterProfile | None,
+    profile: CharacterProfile,
+) -> str:
+    if not text.strip() or current_profile is None:
+        return render_backstory(profile)
+    updated = text
+    if current_profile.name != profile.name:
+        updated = replace_markdown_title(updated, profile.name)
+    if stats_changed(current_profile, profile):
+        updated = replace_section(updated, "Character Stats", render_updated_stats_table(text, current_profile, profile))
+    if current_profile.backstory.strip() != profile.backstory.strip():
+        updated = replace_section(updated, "Character Backstory", profile.backstory.strip())
+    desired_details = remove_detail_fields(profile.details.strip() or default_details(profile), {"pronouns"})
+    desired_details = append_custom_stat_details(
+        desired_details,
+        parse_stats_table_items(section_content(markdown_sections(updated), "character stats")),
+    )
+    if (
+        current_profile.summary.strip() != profile.summary.strip()
+        or current_profile.details.strip() != desired_details.strip()
+        or details_section_needs_custom_stats(updated)
+    ):
+        summary = profile.summary.strip()
+        content = f"{summary}\n\n### Character Details\n\n{desired_details}".strip()
+        updated = replace_section(updated, "Character Summary", content)
+    return updated
+
+
+def details_section_needs_custom_stats(text: str) -> bool:
+    sections = markdown_sections(text)
+    stat_items = parse_stats_table_items(section_content(sections, "character stats"))
+    summary, details = split_summary_and_details(section_content(sections, "character summary"))
+    normalized_details = remove_detail_fields(details, {"pronouns"})
+    normalized_details = append_custom_stat_details(normalized_details, stat_items)
+    return normalized_details != details.strip()
+
+
+def stats_changed(left: CharacterProfile, right: CharacterProfile) -> bool:
+    stat_fields = left.stat_fields or {}
+    checks: list[tuple[str, str]] = []
+    if "name" in stat_fields:
+        checks.append(("first_name", "first_name"))
+    if "familyname" in stat_fields or "family_name" in stat_fields:
+        checks.append(("family_name", "family_name"))
+    checks.extend(
+        [
+            ("level", "level"),
+            ("race", "race"),
+            ("class", "character_class"),
+            ("character_class", "character_class"),
+            ("pronouns", "pronouns"),
+        ]
+    )
+    for stat_key, profile_field in checks:
+        if stat_key not in stat_fields:
+            continue
+        if getattr(left, profile_field, "").strip() != getattr(right, profile_field, "").strip():
+            return True
+    for _label, stat_key, profile_field in DEFAULT_ADDABLE_STAT_FIELDS:
+        if stat_key in stat_fields:
+            continue
+        if getattr(right, profile_field, "").strip():
+            return True
+    return False
+
+
+def render_updated_stats_table(
+    text: str,
+    current_profile: CharacterProfile,
+    profile: CharacterProfile,
+) -> str:
+    stats_section = section_content(markdown_sections(text), "character stats")
+    current_items = parse_stats_table_items(stats_section)
+    stats: list[tuple[str, str]] = [
+        (label, stat_value_for(canonical_key, value, current_profile, profile))
+        for canonical_key, label, value in current_items
+    ]
+    existing_keys = {canonical_key for canonical_key, _label, _value in current_items}
+    for label, canonical_key, profile_field in DEFAULT_ADDABLE_STAT_FIELDS:
+        if canonical_key in existing_keys:
+            continue
+        value = getattr(profile, profile_field, "").strip()
+        if value:
+            stats.append((label, value))
+    return render_stats_table(stats)
+
+
+def stat_value_for(
+    canonical_key: str,
+    original_value: str,
+    current_profile: CharacterProfile,
+    profile: CharacterProfile,
+) -> str:
+    field_map = {
+        "level": "level",
+        "race": "race",
+        "class": "character_class",
+        "character_class": "character_class",
+        "pronouns": "pronouns",
+    }
+    profile_field = field_map.get(canonical_key)
+    if not profile_field:
+        return original_value
+    if getattr(current_profile, profile_field, "").strip() == getattr(profile, profile_field, "").strip():
+        return original_value
+    return getattr(profile, profile_field, "").strip()
+
+
+def replace_markdown_title(text: str, title: str) -> str:
+    return re.sub(r"^#\s+.+?\s*$", f"# {title}", text, count=1, flags=re.MULTILINE)
+
+
+def replace_section(text: str, heading: str, content: str) -> str:
+    pattern = re.compile(rf"(^##\s+{re.escape(heading)}\s*$)(.*?)(?=^##\s+|\Z)", re.MULTILINE | re.DOTALL)
+    match = pattern.search(text)
+    if not match:
+        suffix = "" if text.endswith("\n") else "\n"
+        return f"{text}{suffix}\n## {heading}\n\n{content.strip()}\n"
+    replacement = f"{match.group(1)}\n\n{content.strip()}\n"
+    return f"{text[: match.start()]}{replacement}{text[match.end():]}"
 
 
 def regenerate_character_graph(character: Character) -> None:

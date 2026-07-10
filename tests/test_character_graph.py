@@ -63,7 +63,7 @@ def test_extract_character_graph_creates_stats_and_known_prose_relationships(tmp
 
     assert graph.primary_character.name == "Arlen Voss"
     assert "arlen_voss" in graph.characters
-    assert {"arlen_voss", "mirelle", "old_household_retainers", "silver_court", "torvak", "voss"} <= set(graph.characters)
+    assert {"arlen_voss", "mirelle", "old_household_retainers", "silver_court", "torvak"} <= set(graph.characters)
     assert {
         "family_voss",
         "race_elf",
@@ -93,7 +93,6 @@ def test_extract_character_graph_creates_stats_and_known_prose_relationships(tmp
     assert graph.embeddings[race_edge.target].vector
     enemy_edges = [edge for edge in graph.relationships if edge.relationship_type == "enemy"]
     assert {edge.target for edge in enemy_edges} == {"silver_court", "torvak"}
-    assert any(edge.relationship_type == "family" and edge.target == "voss" for edge in graph.relationships)
     assert any(edge.relationship_type == "betrayer" and edge.target == "mirelle" for edge in graph.relationships)
     assert any(edge.relationship_type == "rival" and edge.target == "torvak" for edge in graph.relationships)
 
@@ -104,7 +103,7 @@ def test_extract_character_graph_accepts_minimal_character_stats_table(tmp_path)
 
     graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
 
-    assert set(graph.characters) == {"arlen_voss", "voss"}
+    assert set(graph.characters) == {"arlen_voss"}
     assert {"family_voss", "race_elf", "class_wizard"} <= set(graph.attributes)
     assert {edge.relationship_type for edge in graph.relationships} == {"family", "race", "class"}
 
@@ -145,11 +144,49 @@ Neal is a bard with complicated regulars.
     assert graph.attributes["drive_entertaining_sailors_on_shore_leave"].value == "Entertaining sailors on shore leave."
     assert any(edge.relationship_type == "drive" for edge in graph.relationships)
     assert any(
-        edge.relationship_type == "ally" and graph.characters[edge.target].name == "Jory Ravenmark is their favorite client."
+        edge.relationship_type == "client" and graph.characters[edge.target].name == "Jory Ravenmark is their favorite client."
         for edge in graph.relationships
     )
     assert any(
         edge.relationship_type == "enemy" and graph.characters[edge.target].name == "Mrs Nighbloom was not happy."
+        for edge in graph.relationships
+    )
+
+
+def test_extract_character_graph_keeps_honorific_client_names_together(tmp_path):
+    source = tmp_path / "neal.md"
+    source.write_text(
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Mx. Lovington | Elf | Bard |
+
+## Character Backstory
+
+One of these clients was Mr. Nightbloom. Orin Nightbloom was haunted by the loss of his mother.
+But Neals favorite client was actually Ms. Ravenmark. Jory Ravenmark was a lonely woman who worked in the shoreline lighthouse.
+
+## Character Summary
+
+Neal works with private clients.
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="neal_lovington"))
+    client_names = {
+        graph.characters[edge.target].name
+        for edge in graph.relationships
+        if edge.relationship_type == "client" and edge.target in graph.characters
+    }
+
+    assert "Jory Ravenmark" in client_names
+    assert "Orin Nightbloom" in client_names
+    assert not any(
+        edge.relationship_type == "family" and edge.target in graph.characters and graph.characters[edge.target].name in client_names
         for edge in graph.relationships
     )
 
@@ -175,7 +212,7 @@ Joren owned a blue cloak.
 
     graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
 
-    assert set(graph.characters) == {"arlen_voss", "voss"}
+    assert set(graph.characters) == {"arlen_voss"}
     assert all(edge.relationship_type != "unknown" for edge in graph.relationships)
 
 
@@ -210,8 +247,6 @@ She learned to read the open sea as her father once had before her.
     assert "she" not in graph.characters
     assert "pronouns_unknown" not in graph.attributes
     assert graph.attributes["family_ravenmark"].value == "Ravenmark"
-    assert graph.characters["ravenmark"].name == "Ravenmark"
-    assert any(edge.relationship_type == "family" and edge.target == "ravenmark" for edge in graph.relationships)
     assert graph.characters["mother"].name == "Mother"
     assert graph.characters["father"].name == "Father"
     assert any(edge.relationship_type == "family" and edge.target == "mother" for edge in graph.relationships)
@@ -240,7 +275,8 @@ Haunted by the loss of her family and the inexplicable mercy shown by a monster,
 
     assert "jory" not in graph.characters
     assert not any(edge.relationship_type == "family" and edge.target == "jory" for edge in graph.relationships)
-    assert any(edge.relationship_type == "family" and edge.target == "ravenmark" for edge in graph.relationships)
+    assert "ravenmark" not in graph.characters
+    assert graph.attributes["family_ravenmark"].value == "Ravenmark"
 
 
 def test_graph_storage_round_trips_json(tmp_path):

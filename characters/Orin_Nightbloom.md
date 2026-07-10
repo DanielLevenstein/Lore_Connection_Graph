@@ -3,10 +3,9 @@
 ## Character Stats
 
 
-| Name            | Level | Race     | Class |
-|-----------------| ----- | -------- | ----- |
-| Orin Nightbloom | 1     | Half-Orc | Bard  |
-
+| Name | Level | Race | Class | Pronouns |
+| ---- | ----- | ---- | ----- | -------- |
+| Orin Nightbloom | 1 | Half-Orc | Bard | he/him |
 ## Character Backstory
 
 Orin was born with a weight the world seldom places on a child, the weight of a half-orc heritage clashing with the refined air of the Sunstone Mage College nestled on the frosted coast of his life. He shouldered his lineage with the strength of a lineage elder, a duty his mother, a revered elven mage, instilled in him. He excelled, his magic a beacon in the night, but his untamed half-orc blood often felt at odds with the elegant halls and whispers of "less-than-pure lineage." He learned the lute and the stories woven through song, the solace found in melody rather than the strict, precise incantations favored at the college. But his world fractured when a lingering illness stole his mother from him, her death a chilling echo of a lingering, potent curse she carried.  A whispered tale, carried across the sea by the blood of his kin - a treacherous pact with a shadowy entity, one that poisoned her soul and, upon her death, amplified the affliction to its zenith, now bearing upon his soul.
@@ -21,7 +20,6 @@ Orin is a male character from a coastal mage college.
 
 ### Character Details
 
-Pronouns: he/him
 Gender: male
 Home: a coastal mage college
 Drives:
