@@ -978,6 +978,44 @@ def test_read_character_profile_extracts_appended_character_connections():
     }.items() <= profile.knowledge_graph_fields[0].items()
 
 
+def test_read_character_profile_imports_source_relationship_name_connections(tmp_path):
+    character_path = tmp_path / "Mara_Voss.md"
+    character_path.write_text(
+        """# Mara Voss
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Mara Voss | Elf | Wizard |
+
+## Character Backstory
+
+Mara keeps careful notes.
+
+## Character Summary
+
+Mara is careful.
+
+## Character Connections
+
+| Source | Relationship | Name | Evidence |
+| ------ | ------------ | ---- | -------- |
+| Character Sheet | Ally | Silver Index | Mara works with the Silver Index. |
+""",
+        encoding="utf-8",
+    )
+
+    profile = read_character_profile(Character(name=character_path.stem, path=character_path))
+
+    assert {
+        "table": "Character Sheet",
+        "item": "Ally",
+        "value": "Silver Index",
+        "evidence": "Mara works with the Silver Index.",
+    } in profile.knowledge_graph_fields
+
+
 def test_world_building_data_has_enough_options():
     world = RandomCharacterGenerator.load_world_building()
 

@@ -44,6 +44,10 @@ from local_chatbot.storage import (
     write_character_profile,
     write_place_profile,
 )
+from local_chatbot.character_rewrites import (
+    graph_generated_backstory as build_graph_generated_backstory,
+    graph_generated_summary as build_graph_generated_summary,
+)
 from local_chatbot.session_notes import (
     import_discord_session_notes_text,
     delete_session_note,
@@ -222,56 +226,14 @@ def graph_generated_summary(character: Character, profile: CharacterProfile) -> 
     graph = load_graph(character.graph_path)
     if graph is None:
         raise ValueError("No Character Graph Is Available. Regenerate The Graph First.")
-    primary = graph.characters.get(graph.primary_character.id)
-    traits = ", ".join(primary.traits[:3]) if primary and primary.traits else ""
-    motivations = ", ".join(primary.motivations[:2]) if primary and primary.motivations else ""
-    places = ", ".join(place.name for place in list(graph.places.values())[:2])
-    relationships = [
-        graph.characters[edge.target].name
-        for edge in graph.relationships
-        if edge.target in graph.characters and edge.target != graph.primary_character.id
-    ][:2]
-    pieces = [f"{profile.first_name or character_first_name(profile.name) or profile.name}"]
-    descriptor = " is"
-    if traits:
-        descriptor += f" {traits}"
-    role = " ".join(value for value in [profile.race, profile.character_class] if value).strip()
-    if role:
-        descriptor += f" a {role}"
-    pieces.append(descriptor)
-    if places:
-        pieces.append(f" tied to {places}")
-    if relationships:
-        pieces.append(f" and connected to {', '.join(relationships)}")
-    if motivations:
-        pieces.append(f", driven to {motivations}")
-    return "".join(pieces).strip() + "."
+    return build_graph_generated_summary(graph, profile)
 
 
 def graph_generated_backstory(character: Character, profile: CharacterProfile) -> str:
     graph = load_graph(character.graph_path)
     if graph is None:
         raise ValueError("No Character Graph Is Available. Regenerate The Graph First.")
-    name = profile.first_name or character_first_name(profile.name) or profile.name
-    places = [place.name for place in graph.places.values()]
-    relationships = [
-        graph.characters[edge.target].name
-        for edge in graph.relationships
-        if edge.target in graph.characters and edge.target != graph.primary_character.id
-    ]
-    attributes = [attribute.value for attribute in graph.attributes.values() if attribute.value]
-    first = f"{name} carries a history shaped by {', '.join(attributes[:3]) or 'unsettled origins'}."
-    second = (
-        f"Their path keeps crossing {', '.join(relationships[:3])}."
-        if relationships
-        else "Their closest relationships are still waiting to be written."
-    )
-    third = (
-        f"Places such as {', '.join(places[:3])} keep pulling the story back into motion."
-        if places
-        else "The places that matter most to them have not yet been named."
-    )
-    return "\n\n".join([first, second, third])
+    return build_graph_generated_backstory(graph, profile)
 
 
 def mark_auto_generated(profile: CharacterProfile, section: str) -> list[str]:

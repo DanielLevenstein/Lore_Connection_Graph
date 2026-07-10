@@ -446,9 +446,9 @@ def merge_connection_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
 
 def normalize_connection_row(row: dict[str, str]) -> dict[str, str]:
     return {
-        "Source": row.get("Source") or row.get("source") or "",
-        "Relationship": row.get("Relationship") or row.get("relationship") or "",
-        "Name": row.get("Name") or row.get("name") or row.get("connection") or "",
+        "Source": row.get("Source") or row.get("source") or row.get("Table") or row.get("table") or "",
+        "Relationship": row.get("Relationship") or row.get("relationship") or row.get("Item") or row.get("item") or "",
+        "Name": row.get("Name") or row.get("name") or row.get("connection") or row.get("Value") or row.get("value") or "",
         "Evidence": row.get("Evidence") or row.get("evidence") or "",
     }
 
@@ -1032,10 +1032,31 @@ def parse_character_connections(text: str) -> list[dict[str, str]]:
     for row in rows[1:]:
         if all(set(cell) <= {"-"} for cell in row):
             continue
-        item = {header: value.strip() for header, value in zip(headers, row) if value.strip()}
+        item = normalize_character_connection_item(
+            {header: value.strip() for header, value in zip(headers, row) if value.strip()}
+        )
         if item:
             values.append(item)
     return values
+
+
+def normalize_character_connection_item(item: dict[str, str]) -> dict[str, str]:
+    if {"table", "item", "value"} & set(item):
+        return item
+    source = item.get("source", "")
+    relationship = item.get("relationship", "")
+    name = item.get("name", "")
+    evidence = item.get("evidence", "")
+    normalized = {}
+    if source:
+        normalized["table"] = source
+    if relationship:
+        normalized["item"] = relationship
+    if name:
+        normalized["value"] = name
+    if evidence:
+        normalized["evidence"] = evidence
+    return normalized
 
 
 def normalize_detail_key(value: str) -> str:

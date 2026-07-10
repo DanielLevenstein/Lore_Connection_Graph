@@ -337,7 +337,7 @@ def combined_attribute_rows(graphs: list[CharacterGraph]) -> list[dict[str, str]
                 {
                     "Character": primary_name,
                     "Attribute": attribute.attribute_type,
-                    "Value": attribute.value,
+                    "Value": display_name(attribute.value),
                     "Evidence": compact_evidence(attribute.source_spans),
                 }
             )

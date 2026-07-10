@@ -599,6 +599,34 @@ def test_graph_view_helpers_format_relationships_and_dot(tmp_path):
     assert 'shape="ellipse"' in dot
 
 
+def test_graph_view_value_columns_replace_underscores(tmp_path):
+    source = tmp_path / "arlen.md"
+    source.write_text(
+        """# Arlen Voss
+
+## Character Stats
+
+| Name | Race | Class | Drives |
+|------|------|-------|--------|
+| Arlen | Elf | Wizard | restore_family_name |
+
+## Character Backstory
+
+Arlen trains in the Silver_Court archives.
+""",
+        encoding="utf-8",
+    )
+    graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
+
+    attributes = attribute_rows(graph)
+    evidence = evidence_rows(graph)
+
+    assert any(row["Value"] == "restore family name" for row in attributes)
+    assert any(row["Table"] == "Attributes" and row["Value"] == "restore family name" for row in evidence)
+    assert not any("_" in row["Value"] for row in attributes)
+    assert not any("_" in row["Value"] for row in evidence)
+
+
 def test_extract_character_graph_routes_place_evidence_away_from_family_relationships(tmp_path):
     source = tmp_path / "orin.md"
     source.write_text(

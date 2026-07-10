@@ -33,7 +33,7 @@ def attribute_rows(graph: CharacterGraph) -> list[dict[str, str]]:
     for attribute in graph.attributes.values():
         rows.append(
             {
-                "Value": attribute.value,
+                "Value": display_value(attribute.value),
                 "Attribute": attribute.attribute_type,
                 "Aliases": ", ".join(attribute.aliases),
                 "Summary": attribute.summary,
@@ -47,7 +47,7 @@ def place_rows(graph: CharacterGraph) -> list[dict[str, str]]:
     for place in graph.places.values():
         rows.append(
             {
-                "Value": place.name,
+                "Value": display_value(place.name),
                 "Attribute": place.place_type.title(),
                 "Aliases": ", ".join(place.aliases),
                 "Summary": place.summary,
@@ -65,7 +65,7 @@ def evidence_rows(graph: CharacterGraph) -> list[dict[str, str]]:
             {
                 "Table": "Relationships",
                 "Item": relationship.relationship_label,
-                "Value": node_label(graph, relationship.target),
+                "Value": display_value(node_label(graph, relationship.target)),
                 "Evidence": limit_evidence(" ".join(relationship.evidence)),
             }
         )
@@ -74,7 +74,7 @@ def evidence_rows(graph: CharacterGraph) -> list[dict[str, str]]:
             {
                 "Table": "Attributes",
                 "Item": attribute.attribute_type,
-                "Value": attribute.value,
+                "Value": display_value(attribute.value),
                 "Evidence": limit_evidence(" ".join(attribute.source_spans)),
             }
         )
@@ -83,7 +83,7 @@ def evidence_rows(graph: CharacterGraph) -> list[dict[str, str]]:
             {
                 "Table": "Places",
                 "Item": place.place_type.title(),
-                "Value": place.name,
+                "Value": display_value(place.name),
                 "Evidence": limit_evidence(" ".join(place.source_spans)),
             }
         )
@@ -98,6 +98,10 @@ def limit_evidence(value: str, max_length: int = EVIDENCE_MAX_LENGTH) -> str:
     if sentences and len(sentences[0]) <= max_length:
         return sentences[0]
     return cleaned[: max_length - 3].rstrip() + "..."
+
+
+def display_value(value: str) -> str:
+    return " ".join(value.replace("_", " ").split())
 
 
 def relationship_dot(graph: CharacterGraph) -> str:

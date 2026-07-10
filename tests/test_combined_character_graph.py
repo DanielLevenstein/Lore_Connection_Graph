@@ -180,6 +180,30 @@ Neal is a performer.
     assert all(row["Evidence"] for row in rows)
 
 
+def test_combined_attribute_rows_replace_underscores_in_values(tmp_path):
+    neal = graph_from_text(
+        tmp_path,
+        "Neal_Lovington.md",
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class | Drives |
+| ---- | ---- | ----- | ------ |
+| Neal | Elf | Bard | entertain_sailors |
+
+## Character Backstory
+
+Neal performs at the Royal Tittles Tavern.
+""",
+    )
+
+    rows = combined_attribute_rows([neal])
+
+    assert any(row["Value"] == "entertain sailors" for row in rows)
+    assert not any("_" in row["Value"] for row in rows)
+
+
 def test_combined_attribute_rows_keep_each_character_metadata_separate(tmp_path):
     neal = graph_from_text(
         tmp_path,
