@@ -256,6 +256,51 @@ Drives:
     assert set(profile.auto_generated_sections) == {"Character Backstory", "Character Summary"}
 
 
+def test_read_character_profile_trusts_markdown_auto_generated_headings_over_stale_json(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
+    character_path = tmp_path / "Mara_Voss.md"
+    character = Character(name=character_path.stem, path=character_path)
+    character.profile_path.parent.mkdir(parents=True)
+    character.profile_path.write_text(
+        json.dumps(
+            {
+                "name": "Mara Voss",
+                "race": "Elf",
+                "character_class": "Wizard",
+                "backstory": "Generated backstory.",
+                "summary": "Generated summary.",
+                "auto_generated_sections": ["Character Summary", "Character Backstory"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    character_path.write_text(
+        """# Mara Voss
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Mara | Elf | Wizard |
+
+## Character Backstory
+
+Human-written backstory.
+
+## Character Summary
+
+Human-written summary.
+""",
+        encoding="utf-8",
+    )
+
+    profile = read_character_profile(character)
+
+    assert profile.backstory == "Human-written backstory."
+    assert profile.summary == "Human-written summary."
+    assert profile.auto_generated_sections == []
+
+
 def test_random_generator_produces_template_ready_profile():
     generator = RandomCharacterGenerator(seed=7)
     profile = generator.generate_profile()
