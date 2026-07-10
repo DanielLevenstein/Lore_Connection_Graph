@@ -386,7 +386,7 @@ def render_character_connections_table(rows: list[dict[str, str]]) -> str:
         lines.append(
             "| "
             + " | ".join(
-                escape_table_cell(row.get(key, ""))
+                render_connection_cell(row, key)
                 for key in ("Source", "Relationship", "Name", "Evidence")
             )
             + " |"
@@ -426,8 +426,55 @@ def connection_rows_from_profile_rows(rows: list[dict[str, str]]) -> list[dict[s
     return [normalize_connection_row(row) for row in rows]
 
 
+def render_connection_cell(row: dict[str, str], key: str) -> str:
+    value = row.get(key, "")
+    if key == "Evidence":
+        value = summarize_connection_evidence(value, row)
+    return escape_table_cell(value)
+
+
 def escape_table_cell(value: str) -> str:
     return truncate_table_cell(value).replace("|", "\\|")
+
+
+def summarize_connection_evidence(
+    evidence: str,
+    row: dict[str, str],
+    max_length: int = CHARACTER_CONNECTION_CELL_MAX_LENGTH,
+) -> str:
+    cleaned = " ".join(evidence.split())
+    if len(cleaned) <= max_length:
+        return cleaned
+    sentences = split_summary_sentences(cleaned)
+    context_terms = connection_context_terms(row)
+    ranked = sorted(
+        sentences,
+        key=lambda sentence: (-sentence_context_score(sentence, context_terms), len(sentence)),
+    )
+    for sentence in ranked:
+        if sentence_context_score(sentence, context_terms) <= 0:
+            continue
+        if len(sentence) <= max_length:
+            return sentence
+        return truncate_table_cell(sentence, max_length)
+    return truncate_table_cell(cleaned, max_length)
+
+
+def split_summary_sentences(text: str) -> list[str]:
+    sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence.strip()]
+    return sentences or [text]
+
+
+def connection_context_terms(row: dict[str, str]) -> list[str]:
+    terms: list[str] = []
+    for key in ("Name", "Relationship", "Source"):
+        terms.extend(term for term in re.findall(r"[A-Za-z0-9]+", row.get(key, "").lower()) if len(term) > 2)
+    return terms
+
+
+def sentence_context_score(sentence: str, terms: list[str]) -> int:
+    compact_sentence = sentence.lower()
+    return sum(1 for term in terms if term in compact_sentence)
 
 
 def truncate_table_cell(value: str, max_length: int = CHARACTER_CONNECTION_CELL_MAX_LENGTH) -> str:

@@ -273,3 +273,47 @@ Manual summary.
     assert len(evidence_cell) == storage.CHARACTER_CONNECTION_CELL_MAX_LENGTH
     assert evidence_cell.endswith("...")
     assert long_evidence not in text
+
+
+def test_append_character_connections_summarizes_evidence_with_connection_context(tmp_path, monkeypatch):
+    monkeypatch.setattr("local_chatbot.storage.regenerate_character_graph", lambda character: None)
+    path = tmp_path / "Mara_Voss.md"
+    path.write_text(
+        """# Mara Voss
+
+## Character Stats
+
+| Name | Race |
+| ---- | ---- |
+| Mara | Elf |
+
+## Character Backstory
+
+Manual backstory.
+
+## Character Summary
+
+Manual summary.
+""",
+        encoding="utf-8",
+    )
+    character = Character(name=path.stem, path=path)
+    filler = " ".join(["The archive shelves were dusty and crowded"] * 8) + "."
+    relevant = "Jory Ravenmark is Mara's trusted ally after guarding the west road."
+
+    append_character_connections(
+        character,
+        [
+            {
+                "Source": "Character Sheet",
+                "Relationship": "Ally",
+                "Name": "Jory Ravenmark",
+                "Evidence": f"{filler} {relevant}",
+            },
+        ],
+    )
+
+    text = path.read_text(encoding="utf-8")
+    evidence_cell = next(line for line in text.splitlines() if "Jory Ravenmark" in line).split("|")[4].strip()
+    assert evidence_cell == relevant
+    assert "archive shelves" not in evidence_cell
