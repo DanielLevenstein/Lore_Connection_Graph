@@ -37,6 +37,11 @@ from local_chatbot.storage import (
     start_chatlog,
     write_character_profile,
 )
+from local_chatbot.session_notes import (
+    list_session_notes,
+    read_session_note,
+    save_session_notes,
+)
 
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
@@ -542,6 +547,35 @@ def render_place_creator() -> None:
                     st.rerun()
 
 
+def render_session_notes() -> None:
+    st.title("Session Notes")
+    with st.expander("Lore Memory", expanded=False):
+        notes = st.text_area(
+            "Session Notes",
+            height=180,
+            placeholder="Write campaign memory here. Include dates to split notes into dated files.",
+            key="session_notes_draft",
+        )
+        if st.button("Save Session Notes", icon=":material/note_add:", key="save_session_notes"):
+            if not notes.strip():
+                st.error("Add Session Notes Before Saving.")
+                return
+            saved = save_session_notes(notes)
+            st.success(f"Saved {len(saved)} Session Note File{'s' if len(saved) != 1 else ''}.")
+            st.session_state.session_notes_draft = ""
+            st.rerun()
+
+        note_files = list_session_notes()
+        if note_files:
+            selected = st.selectbox(
+                "Saved Session Notes",
+                [path.name for path in note_files],
+                key="saved_session_notes",
+            )
+            selected_path = next(path for path in note_files if path.name == selected)
+            st.markdown(read_session_note(selected_path))
+
+
 def render_character_panel() -> None:
     st.subheader("Characters")
     characters = list_characters()
@@ -724,6 +758,7 @@ st.caption("Create Character Sheets And Explore Relationship Graphs From Local L
 
 render_character_panel()
 render_place_creator()
+render_session_notes()
 render_combined_character_graph()
 active_character = get_active_character()
 if active_character is None:

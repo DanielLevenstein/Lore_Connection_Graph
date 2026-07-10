@@ -10,6 +10,7 @@ CHARACTERS_DIR = Path(
     os.environ.get("LOCAL_CHATBOT_CHARACTERS_DIR", DOCS_LORE_DIR / "character_sheets")
 ).resolve()
 PLACES_DIR = Path(os.environ.get("LOCAL_CHATBOT_PLACES_DIR", DOCS_LORE_DIR / "places")).resolve()
+SESSION_NOTES_DIR = Path(os.environ.get("LOCAL_CHATBOT_SESSION_NOTES_DIR", DOCS_LORE_DIR / "session_notes")).resolve()
 GENERATED_LORE_DIR = DATA_DIR / "lore"
 GENERATED_CHARACTER_SHEETS_DIR = GENERATED_LORE_DIR / "character_sheets"
 CHARACTER_METADATA_DIR = GENERATED_CHARACTER_SHEETS_DIR
@@ -22,6 +23,7 @@ def ensure_base_dirs() -> None:
     DOCS_LORE_DIR.mkdir(parents=True, exist_ok=True)
     CHARACTERS_DIR.mkdir(parents=True, exist_ok=True)
     PLACES_DIR.mkdir(parents=True, exist_ok=True)
+    SESSION_NOTES_DIR.mkdir(parents=True, exist_ok=True)
     GENERATED_LORE_DIR.mkdir(parents=True, exist_ok=True)
     GENERATED_CHARACTER_SHEETS_DIR.mkdir(parents=True, exist_ok=True)
     CHARACTER_METADATA_DIR.mkdir(parents=True, exist_ok=True)
