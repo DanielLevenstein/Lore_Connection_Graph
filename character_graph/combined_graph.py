@@ -23,6 +23,7 @@ class CombinedCharacterNode:
     id: str
     name: str
     source_file: str
+    node_type: str = "character"
 
 
 @dataclass
@@ -40,33 +41,64 @@ class CombinedCharacterGraph:
     edges: list[CombinedRelationshipEdge] = field(default_factory=list)
 
 
-def build_combined_character_graph(graphs: list[CharacterGraph]) -> CombinedCharacterGraph:
-    combined = CombinedCharacterGraph(
-        characters={
-            graph.primary_character.id: CombinedCharacterNode(
-                id=graph.primary_character.id,
-                name=display_name(graph.primary_character.name),
-                source_file=graph.primary_character.source_file,
+def build_combined_character_graph(
+    graphs: list[CharacterGraph],
+    place_sources: list[tuple[str, str, str]] | None = None,
+) -> CombinedCharacterGraph:
+    combined = CombinedCharacterGraph()
+    for graph in graphs:
+        combined.characters[graph.primary_character.id] = CombinedCharacterNode(
+            id=graph.primary_character.id,
+            name=display_name(graph.primary_character.name),
+            source_file=graph.primary_character.source_file,
+            node_type="character",
+        )
+        for character_id, character in graph.characters.items():
+            combined.characters.setdefault(
+                character_id,
+                CombinedCharacterNode(
+                    id=character_id,
+                    name=display_name(character.name),
+                    source_file=graph.primary_character.source_file,
+                    node_type="character",
+                ),
             )
-            for graph in graphs
-        }
-    )
+        for place_id, place in graph.places.items():
+            combined.characters.setdefault(
+                place_id,
+                CombinedCharacterNode(
+                    id=place_id,
+                    name=display_name(place.name),
+                    source_file=graph.primary_character.source_file,
+                    node_type="place",
+                ),
+            )
+    for place_id, place_name, source_file in place_sources or []:
+        combined.characters.setdefault(
+            place_id,
+            CombinedCharacterNode(
+                id=place_id,
+                name=display_name(place_name),
+                source_file=source_file,
+                node_type="place",
+            ),
+        )
     by_key: dict[tuple[str, str, str], CombinedRelationshipEdge] = {}
 
     for graph in graphs:
         source_id = graph.primary_character.id
         for relationship in graph.relationships:
-            if relationship.target not in graph.characters:
+            if relationship.target in graph.attributes:
                 continue
-            target_node = graph.characters[relationship.target]
+            target_node = graph.characters.get(relationship.target) or graph.places.get(relationship.target)
+            if target_node is None:
+                continue
             matched_primary_id = match_primary_character(
                 target_node.name,
                 relationship.evidence,
-                combined.characters,
+                primary_character_nodes(combined.characters),
                 source_id,
-            )
-            if not matched_primary_id:
-                continue
+            ) or relationship.target
             relationship_type, relationship_label = combined_relationship_type(relationship.relationship_type)
             key = (source_id, matched_primary_id, relationship_type)
             edge = by_key.get(key)
@@ -85,6 +117,10 @@ def build_combined_character_graph(graphs: list[CharacterGraph]) -> CombinedChar
                     edge.evidence.append(evidence)
 
     return combined
+
+
+def primary_character_nodes(nodes: dict[str, CombinedCharacterNode]) -> dict[str, CombinedCharacterNode]:
+    return {node_id: node for node_id, node in nodes.items() if node.node_type == "character"}
 
 
 def match_primary_character(
@@ -131,6 +167,8 @@ def fuzzy_name_score(candidate_name: str, primary_name: str) -> float:
 def combined_relationship_type(relationship_type: str) -> tuple[str, str]:
     if relationship_type in PRESERVED_RELATIONSHIP_TYPES:
         return relationship_type, relationship_type.replace("_", " ").title()
+    if relationship_type == "place":
+        return "place", "Place"
     return "reference", "Referenced"
 
 
@@ -142,8 +180,10 @@ def combined_relationship_rows(graph: CombinedCharacterGraph) -> list[dict[str, 
         rows.append(
             {
                 "Character": source.name if source else edge.source,
+                "Character Type": source.node_type.title() if source else "",
                 "Relationship": edge.relationship_label,
                 "Connection": target.name if target else edge.target,
+                "Connection Type": target.node_type.title() if target else "",
                 "Evidence": " ".join(edge.evidence),
             }
         )
@@ -158,7 +198,12 @@ def combined_relationship_dot(graph: CombinedCharacterGraph) -> str:
         "  edge [color=\"#64748b\", fontname=\"Inter\", fontsize=10];",
     ]
     for character_id, character in graph.characters.items():
-        lines.append(f'  "{escape_dot(character_id)}" [label="{escape_dot(character.name)}"];')
+        fill = "#dcfce7" if character.node_type == "place" else "#dbeafe"
+        shape = "component" if character.node_type == "place" else "box"
+        lines.append(
+            f'  "{escape_dot(character_id)}" [label="{escape_dot(character.name)}", '
+            f'fillcolor="{fill}", shape="{shape}"];'
+        )
     for edge in graph.edges:
         lines.append(
             f'  "{escape_dot(edge.source)}" -> "{escape_dot(edge.target)}" '

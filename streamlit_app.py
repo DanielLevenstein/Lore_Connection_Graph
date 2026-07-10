@@ -1,3 +1,4 @@
+import os
 import requests
 import streamlit as st
 
@@ -5,6 +6,7 @@ from character_graph.combined_graph import (
     build_combined_character_graph,
     combined_relationship_dot,
     combined_relationship_rows,
+    compact,
 )
 from character_graph.graph_view import (
     evidence_rows,
@@ -22,10 +24,12 @@ from local_chatbot.storage import (
     CharacterProfile,
     PlaceProfile,
     append_chatlog,
+    append_character_connections,
     character_family_name,
     character_first_name,
     create_character,
     create_place,
+    create_stub_character,
     default_details,
     list_places,
     list_characters,
@@ -244,8 +248,12 @@ def render_relationship_graph(character: Character) -> None:
 
 
 def render_combined_character_graph() -> None:
+    if os.environ.get("LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH") != "1":
+        return
     graphs = []
-    for character in list_characters():
+    characters = list_characters()
+    places = list_places()
+    for character in characters:
         try:
             graph = load_graph(character.graph_path)
         except (OSError, ValueError):
@@ -253,17 +261,123 @@ def render_combined_character_graph() -> None:
         if graph is not None:
             graphs.append(graph)
 
-    with st.expander("Combined Character Graph", expanded=False):
-        if len(graphs) < 2:
-            st.info("Add At Least Two Character Graphs To See Combined Connections.")
+    place_sources = [(compact(place.name), place.name, str(place.path)) for place in places]
+    with st.expander("Combined Knowledge Graph", expanded=False):
+        if st.button("Regenerate All Lore Graphs", icon=":material/sync:", key="regen_all_lore_graphs"):
+            failures = []
+            for character in characters:
+                try:
+                    regenerate_character_graph(character)
+                except (OSError, ValueError) as exc:
+                    failures.append(f"{display_character_name(character)}: {exc}")
+            if failures:
+                st.error("Could Not Regenerate Every Lore Graph. " + " ".join(failures))
+            else:
+                st.success("All Lore Graphs Regenerated.")
+                st.rerun()
+
+        if not graphs and not place_sources:
+            st.info("Add Character Or Place Lore To See The Combined Graph.")
             return
-        combined = build_combined_character_graph(graphs)
+        combined = build_combined_character_graph(graphs, place_sources)
         rows = combined_relationship_rows(combined)
-        if not rows:
-            st.info("No Cross-Character Connections Were Found Yet.")
-            return
-        st.graphviz_chart(combined_relationship_dot(combined), width="stretch")
-        st.table(rows, hide_index=True, width="stretch")
+        character_tabs = st.tabs([display_character_name(character) for character in characters] or ["Lore"])
+        primary_ids = {graph.primary_character.id for graph in graphs}
+        for tab, character in zip(character_tabs, characters):
+            with tab:
+                character_id = compact(character.name)
+                scoped_rows = [
+                    row
+                    for row in rows
+                    if compact(row["Character"]) == character_id or compact(row["Connection"]) == character_id
+                ]
+                st.graphviz_chart(combined_relationship_dot(combined), width="stretch")
+                if scoped_rows:
+                    st.table(scoped_rows, hide_index=True, width="stretch")
+                else:
+                    st.info("No Combined Connections Were Found For This Character Yet.")
+                if st.button(
+                    "Add Character Connections",
+                    icon=":material/account_tree:",
+                    key=f"append_connections_{character.name}",
+                ):
+                    append_character_connections(character, connection_rows_for_character(combined, character_id))
+                    st.success("Character Connections Added.")
+                    st.rerun()
+
+        secondary_characters = [
+            node
+            for node_id, node in combined.characters.items()
+            if node.node_type == "character" and node_id not in primary_ids
+        ]
+        secondary_places = [
+            node
+            for node_id, node in combined.characters.items()
+            if node.node_type == "place" and not any(compact(place.name) == node_id for place in places)
+        ]
+        action_cols = st.columns(2)
+        with action_cols[0]:
+            if secondary_characters:
+                labels = [node.name for node in secondary_characters]
+                selected = st.selectbox("Secondary Character", labels, key="secondary_character_file")
+                if st.button("Create Character File", icon=":material/person_add:", key="create_secondary_character"):
+                    try:
+                        create_stub_character(selected)
+                    except FileExistsError:
+                        st.error("A Character With That Name Already Exists.")
+                    except ValueError as exc:
+                        st.error(str(exc))
+                    else:
+                        st.success("Character File Created.")
+                        st.rerun()
+        with action_cols[1]:
+            if secondary_places:
+                labels = [node.name for node in secondary_places]
+                selected = st.selectbox("Secondary Place", labels, key="secondary_place_file")
+                if st.button("Create Place File", icon=":material/add_location_alt:", key="create_secondary_place"):
+                    try:
+                        create_place(
+                            PlaceProfile(
+                                name=selected,
+                                place_type="Place",
+                                summary=f"{selected} is a referenced place awaiting full lore.",
+                            )
+                        )
+                    except FileExistsError:
+                        st.error("A Place With That Name Already Exists.")
+                    except ValueError as exc:
+                        st.error(str(exc))
+                    else:
+                        st.success("Place File Created.")
+                        st.rerun()
+
+
+def connection_rows_for_character(combined, character_id: str) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for edge in combined.edges:
+        source = combined.characters.get(edge.source)
+        target = combined.characters.get(edge.target)
+        if not source or not target:
+            continue
+        if compact(source.name) == character_id:
+            rows.append(
+                {
+                    "Source": "Character Sheet",
+                    "Relationship": edge.relationship_label,
+                    "Name": target.name,
+                    "Evidence": " ".join(edge.evidence),
+                }
+            )
+        elif compact(target.name) == character_id:
+            rows.append(
+                {
+                    "Source": "Place" if source.node_type == "place" else "Character Sheet",
+                    "Relationship": edge.relationship_label,
+                    "Name": source.name,
+                    "Evidence": " ".join(edge.evidence),
+                }
+            )
+    return rows
 
 
 def render_character_creator(key_prefix: str = "new_character") -> None:
@@ -531,6 +645,7 @@ st.caption("Create Character Sheets And Explore Relationship Graphs From Local L
 
 render_character_panel()
 render_place_creator()
+render_combined_character_graph()
 active_character = get_active_character()
 if active_character is None:
     st.info("Create Or Open A Character To Edit Its Sheet.")

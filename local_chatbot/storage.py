@@ -297,6 +297,56 @@ def create_generated_character(profile: CharacterProfile) -> Character:
     return create_character(profile, GENERATED_CHARACTER_SHEETS_DIR)
 
 
+def create_stub_character(name: str) -> Character:
+    clean_name = sanitize_name(name)
+    return create_character(
+        CharacterProfile(
+            name=clean_name,
+            pronouns="",
+            level="",
+            race="",
+            character_class="",
+            backstory=f"{character_first_name(clean_name) or clean_name}'s story has not been written yet.",
+            summary=f"{clean_name} is a secondary character awaiting a full sheet.",
+        )
+    )
+
+
+def append_character_connections(character: Character, rows: list[dict[str, str]]) -> None:
+    if not rows:
+        return
+    text = read_text(character.backstory_path).rstrip()
+    table = render_character_connections_table(rows)
+    if re.search(r"^##\s+Character Connections\s*$", text, re.IGNORECASE | re.MULTILINE):
+        next_text = replace_section(text, "Character Connections", table)
+    else:
+        next_text = f"{text}\n\n## Character Connections\n\n{table}\n"
+    character.backstory_path.write_text(next_text, encoding="utf-8")
+    regenerate_character_graph(character)
+
+
+def render_character_connections_table(rows: list[dict[str, str]]) -> str:
+    sorted_rows = sorted(rows, key=lambda row: 0 if row.get("Source") in {"Character Sheet", "Place"} else 1)
+    lines = [
+        "| Source | Relationship | Name | Evidence |",
+        "| ------ | ------------ | ---- | -------- |",
+    ]
+    for row in sorted_rows:
+        lines.append(
+            "| "
+            + " | ".join(
+                escape_table_cell(row.get(key, ""))
+                for key in ("Source", "Relationship", "Name", "Evidence")
+            )
+            + " |"
+        )
+    return "\n".join(lines)
+
+
+def escape_table_cell(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ").strip()
+
+
 def read_backstory_template() -> str:
     return read_text(BACKSTORY_TEMPLATE_PATH)
 
