@@ -7,9 +7,11 @@ from character_graph.combined_graph import (
     combined_relationship_rows,
     compact,
 )
+from character_graph.extraction import extract_character_graph
 from character_graph.graph_view import (
     evidence_rows,
 )
+from character_graph.ingest import load_backstory
 from character_graph.prompt_context import build_prompt_context
 from character_graph.retrieval import retrieve_relevant_context
 from character_graph.storage import load_graph
@@ -27,7 +29,6 @@ from local_chatbot.storage import (
     character_first_name,
     create_character,
     create_place,
-    create_stub_character,
     default_details,
     list_places,
     list_characters,
@@ -42,6 +43,7 @@ from local_chatbot.session_notes import (
     read_session_note,
     save_session_notes,
 )
+from local_chatbot.paths import DOCS_LORE_DIR
 
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
@@ -287,19 +289,13 @@ def render_relationship_graph(character: Character) -> None:
 def render_combined_character_graph() -> None:
     if os.environ.get("LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH") != "1":
         return
-    graphs = []
     characters = list_characters()
     places = list_places()
-    for character in characters:
-        try:
-            graph = load_graph(character.graph_path)
-        except (OSError, ValueError):
-            graph = None
-        if graph is not None:
-            graphs.append(graph)
+    graphs = load_lore_graphs()
 
     place_sources = [(compact(place.name), place.name, str(place.path)) for place in places]
     with st.expander("Combined Knowledge Graph", expanded=False):
+        render_pending_lore_drafts()
         if st.button("Regenerate All Lore Graphs", icon=":material/sync:", key="regen_all_lore_graphs"):
             failures = []
             for character in characters:
@@ -316,13 +312,15 @@ def render_combined_character_graph() -> None:
         if not graphs and not place_sources:
             st.info("Add Character Or Place Lore To See The Combined Graph.")
             return
-        combined = build_combined_character_graph(graphs, place_sources)
+        combined = build_combined_character_graph(graphs, place_sources, place_lore_relationships(places))
         rows = combined_relationship_rows(combined)
-        character_tabs = st.tabs([display_character_name(character) for character in characters] or ["Lore"])
-        primary_ids = {graph.primary_character.id for graph in graphs}
-        for tab, character in zip(character_tabs, characters):
+        character_nodes = [node for node in combined.characters.values() if node.node_type == "character"]
+        character_tabs = st.tabs([node.name for node in character_nodes] or ["Lore"])
+        primary_ids = {compact(character.name) for character in characters}
+        characters_by_id = {compact(character.name): character for character in characters}
+        for tab, node in zip(character_tabs, character_nodes):
             with tab:
-                character_id = compact(character.name)
+                character_id = node.id
                 scoped_rows = [
                     row
                     for row in rows
@@ -336,9 +334,10 @@ def render_combined_character_graph() -> None:
                 if st.button(
                     "Add Character Connections",
                     icon=":material/account_tree:",
-                    key=f"append_connections_{character.name}",
+                    key=f"append_connections_{character_id}",
+                    disabled=character_id not in characters_by_id,
                 ):
-                    append_character_connections(character, connection_rows_for_character(combined, character_id))
+                    append_character_connections(characters_by_id[character_id], connection_rows_for_character(combined, character_id))
                     st.success("Character Connections Added.")
                     st.rerun()
 
@@ -358,35 +357,110 @@ def render_combined_character_graph() -> None:
                 labels = [node.name for node in secondary_characters]
                 selected = st.selectbox("Secondary Character", labels, key="secondary_character_file")
                 if st.button("Create Character File", icon=":material/person_add:", key="create_secondary_character"):
-                    try:
-                        create_stub_character(selected)
-                    except FileExistsError:
-                        st.error("A Character With That Name Already Exists.")
-                    except ValueError as exc:
-                        st.error(str(exc))
-                    else:
-                        st.success("Character File Created.")
-                        st.rerun()
+                    prepare_pending_character(selected)
+                    st.rerun()
         with action_cols[1]:
             if secondary_places:
                 labels = [node.name for node in secondary_places]
                 selected = st.selectbox("Secondary Place", labels, key="secondary_place_file")
                 if st.button("Create Place File", icon=":material/add_location_alt:", key="create_secondary_place"):
-                    try:
-                        create_place(
-                            PlaceProfile(
-                                name=selected,
-                                place_type="Place",
-                                summary=f"{selected} is a referenced place awaiting full lore.",
-                            )
-                        )
-                    except FileExistsError:
-                        st.error("A Place With That Name Already Exists.")
-                    except ValueError as exc:
-                        st.error(str(exc))
-                    else:
-                        st.success("Place File Created.")
-                        st.rerun()
+                    prepare_pending_place(selected)
+                    st.rerun()
+
+
+def load_lore_graphs():
+    graphs = []
+    for path in lore_markdown_files():
+        try:
+            document = load_backstory(path, character_id=compact(path.stem))
+            graphs.append(extract_character_graph(document))
+        except (OSError, ValueError):
+            continue
+    return graphs
+
+
+def lore_markdown_files():
+    if not DOCS_LORE_DIR.exists():
+        return []
+    return [
+        path
+        for path in sorted(DOCS_LORE_DIR.rglob("*.md"))
+        if "TEMPLATE" not in path.name.upper() and not path.name.startswith(".")
+    ]
+
+
+def place_lore_relationships(places) -> list[dict[str, str]]:
+    relationships: list[dict[str, str]] = []
+    for place in places:
+        text = read_text(place.path)
+        source_id = compact(place.name)
+        for line in place_connections_lines(text):
+            if ":" in line:
+                name, relationship = line.split(":", 1)
+            else:
+                name, relationship = line, "reference"
+            target_name = name.strip().lstrip("-").strip()
+            if not target_name:
+                continue
+            relationships.append(
+                {
+                    "source_id": source_id,
+                    "source_name": place.name,
+                    "source_type": "place",
+                    "source_file": str(place.path),
+                    "target_id": compact(target_name),
+                    "target_name": target_name,
+                    "target_type": "character",
+                    "relationship": relationship.strip() or "reference",
+                    "evidence": line.strip(),
+                }
+            )
+    return relationships
+
+
+def place_connections_lines(text: str) -> list[str]:
+    sections = text.splitlines()
+    lines: list[str] = []
+    in_connections = False
+    for line in sections:
+        stripped = line.strip()
+        if stripped.lower().startswith("## "):
+            in_connections = stripped.lower() == "## place connections"
+            continue
+        if in_connections and stripped.startswith("-"):
+            lines.append(stripped.lstrip("-").strip())
+    return lines
+
+
+def prepare_pending_character(name: str) -> None:
+    clean_name = clean_display_name(name)
+    st.session_state.pending_character_profile = CharacterProfile(
+        name=clean_name,
+        pronouns="",
+        level="",
+        race="",
+        character_class="",
+        backstory=f"{character_first_name(clean_name) or clean_name}'s story has not been written yet.",
+        summary=f"{clean_name} is a secondary character awaiting a full sheet.",
+    )
+
+
+def prepare_pending_place(name: str) -> None:
+    clean_name = clean_display_name(name)
+    st.session_state.pending_place_profile = PlaceProfile(
+        name=clean_name,
+        place_type="Place",
+        summary=f"{clean_name} is a referenced place awaiting full lore.",
+    )
+
+
+def render_pending_lore_drafts() -> None:
+    if "pending_character_profile" in st.session_state:
+        st.subheader("Draft Character")
+        render_character_creator("graph_pending_character", st.session_state.pending_character_profile)
+    if "pending_place_profile" in st.session_state:
+        st.subheader("Draft Place")
+        render_place_creator_form("graph_pending_place", st.session_state.pending_place_profile)
 
 
 def connection_rows_for_character(combined, character_id: str) -> list[dict[str, str]]:
@@ -417,26 +491,56 @@ def connection_rows_for_character(combined, character_id: str) -> list[dict[str,
     return rows
 
 
-def render_character_creator(key_prefix: str = "new_character") -> None:
+def render_character_creator(key_prefix: str = "new_character", draft_profile: CharacterProfile | None = None) -> None:
+    draft_profile = draft_profile or CharacterProfile(
+        name="",
+        pronouns="",
+        level="",
+        race="",
+        character_class="",
+        backstory="",
+    )
     with st.form(key_prefix, clear_on_submit=True):
-        name = st.text_input("Name", placeholder="Mara Voss", key=f"{key_prefix}_name")
+        name = st.text_input("Name", value=draft_profile.name, placeholder="Mara Voss", key=f"{key_prefix}_name")
         name_cols = st.columns(2)
-        first_name = name_cols[0].text_input("First Name", placeholder="Mara", key=f"{key_prefix}_first_name")
-        family_name = name_cols[1].text_input("Family Name", placeholder="Voss", key=f"{key_prefix}_family_name")
+        first_name = name_cols[0].text_input(
+            "First Name",
+            value=draft_profile.first_name,
+            placeholder="Mara",
+            key=f"{key_prefix}_first_name",
+        )
+        family_name = name_cols[1].text_input(
+            "Family Name",
+            value=draft_profile.family_name,
+            placeholder="Voss",
+            key=f"{key_prefix}_family_name",
+        )
         stat_cols = st.columns(4)
-        level = stat_cols[0].text_input("Level", placeholder="3", key=f"{key_prefix}_level")
-        race = stat_cols[1].text_input("Race", placeholder="Elf", key=f"{key_prefix}_race")
-        character_class = stat_cols[2].text_input("Class", placeholder="Wizard", key=f"{key_prefix}_class")
-        pronouns = stat_cols[3].text_input("Pronouns", placeholder="she/her", key=f"{key_prefix}_pronouns")
+        level = stat_cols[0].text_input("Level", value=draft_profile.level, placeholder="3", key=f"{key_prefix}_level")
+        race = stat_cols[1].text_input("Race", value=draft_profile.race, placeholder="Elf", key=f"{key_prefix}_race")
+        character_class = stat_cols[2].text_input(
+            "Class",
+            value=draft_profile.character_class,
+            placeholder="Wizard",
+            key=f"{key_prefix}_class",
+        )
+        pronouns = stat_cols[3].text_input(
+            "Pronouns",
+            value=draft_profile.pronouns,
+            placeholder="she/her",
+            key=f"{key_prefix}_pronouns",
+        )
 
         backstory = st.text_area(
             "Backstory",
+            value=draft_profile.backstory,
             placeholder="A terse archivist from a vanished city who tests every lock twice...",
             height=160,
             key=f"{key_prefix}_backstory",
         )
         summary = st.text_area(
             "Summary",
+            value=draft_profile.summary,
             placeholder="Mara is a wary archivist whose courage looks like preparation.",
             height=96,
             key=f"{key_prefix}_summary",
@@ -445,24 +549,28 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
             detail_cols = st.columns(3)
             drives = detail_cols[0].text_area(
                 "Drives",
+                value=render_list_field(draft_profile.drives),
                 placeholder="Restore Family Name\nProtect Old Friends",
                 height=96,
                 key=f"{key_prefix}_drives",
             )
             alliances = detail_cols[1].text_area(
                 "Alliances",
+                value=render_list_field(draft_profile.alliances),
                 placeholder="Silver Cartographers\nMara Voss",
                 height=96,
                 key=f"{key_prefix}_alliances",
             )
             enemies = detail_cols[2].text_area(
                 "Enemies",
+                value=render_list_field(draft_profile.enemies),
                 placeholder="The Ash Court\nTorvak",
                 height=96,
                 key=f"{key_prefix}_enemies",
             )
             details = st.text_area(
                 "Character Details",
+                value=draft_profile.details,
                 placeholder="Add Any Freeform Character Sheet Fields Here.",
                 height=120,
                 key=f"{key_prefix}_details",
@@ -496,6 +604,8 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
             except ValueError as exc:
                 st.error(str(exc))
             else:
+                if key_prefix == "graph_pending_character":
+                    st.session_state.pop("pending_character_profile", None)
                 set_active_character(character)
                 st.success(f"Created {character.name}.")
                 st.rerun()
@@ -507,44 +617,53 @@ def render_place_creator() -> None:
     if places:
         st.caption(f"{len(places)} Place Files Available.")
     with st.expander("Create Place", expanded=False):
-        with st.form("new_place", clear_on_submit=True):
-            name = st.text_input("Name", placeholder="Royal Tittles", key="place_name")
-            place_type = st.text_input("Type", placeholder="Tavern", key="place_type")
-            summary = st.text_area(
-                "Summary",
-                placeholder="A dockside tavern where private bargains sound like songs.",
-                height=96,
-                key="place_summary",
-            )
-            details = st.text_area("Place Details", height=120, key="place_details")
-            connections = st.text_area(
-                "Place Connections",
-                placeholder="Neal Lovington: Performs Here",
-                height=96,
-                key="place_connections",
-            )
-            submitted = st.form_submit_button("Create Place", icon=":material/add_location_alt:")
-            if submitted:
-                if not all([name.strip(), place_type.strip(), summary.strip()]):
-                    st.error("Complete Name, Type, And Summary.")
-                    return
-                try:
-                    create_place(
-                        PlaceProfile(
-                            name=name.strip(),
-                            place_type=place_type.strip(),
-                            summary=summary.strip(),
-                            details=details.strip(),
-                            connections=parse_list_field(connections),
-                        )
+        render_place_creator_form("new_place")
+
+
+def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | None = None) -> None:
+    draft_profile = draft_profile or PlaceProfile(name="", place_type="", summary="")
+    with st.form(key_prefix, clear_on_submit=True):
+        name = st.text_input("Name", value=draft_profile.name, placeholder="Royal Tittles", key=f"{key_prefix}_name")
+        place_type = st.text_input("Type", value=draft_profile.place_type, placeholder="Tavern", key=f"{key_prefix}_type")
+        summary = st.text_area(
+            "Summary",
+            value=draft_profile.summary,
+            placeholder="A dockside tavern where private bargains sound like songs.",
+            height=96,
+            key=f"{key_prefix}_summary",
+        )
+        details = st.text_area("Place Details", value=draft_profile.details, height=120, key=f"{key_prefix}_details")
+        connections = st.text_area(
+            "Place Connections",
+            value=render_list_field(draft_profile.connections),
+            placeholder="Neal Lovington: Performs Here",
+            height=96,
+            key=f"{key_prefix}_connections",
+        )
+        submitted = st.form_submit_button("Create Place", icon=":material/add_location_alt:")
+        if submitted:
+            if not all([name.strip(), place_type.strip(), summary.strip()]):
+                st.error("Complete Name, Type, And Summary.")
+                return
+            try:
+                create_place(
+                    PlaceProfile(
+                        name=name.strip(),
+                        place_type=place_type.strip(),
+                        summary=summary.strip(),
+                        details=details.strip(),
+                        connections=parse_list_field(connections),
                     )
-                except FileExistsError:
-                    st.error("A Place With That Name Already Exists.")
-                except ValueError as exc:
-                    st.error(str(exc))
-                else:
-                    st.success(f"Created {name.strip()}.")
-                    st.rerun()
+                )
+            except FileExistsError:
+                st.error("A Place With That Name Already Exists.")
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                if key_prefix == "graph_pending_place":
+                    st.session_state.pop("pending_place_profile", None)
+                st.success(f"Created {name.strip()}.")
+                st.rerun()
 
 
 def render_session_notes() -> None:

@@ -328,7 +328,10 @@ def append_character_connections(character: Character, rows: list[dict[str, str]
     if not rows:
         return
     text = read_text(character.backstory_path).rstrip()
-    table = render_character_connections_table(rows)
+    existing = []
+    if re.search(r"^##\s+Character Connections\s*$", text, re.IGNORECASE | re.MULTILINE):
+        existing = connection_rows_from_profile_rows(parse_character_connections(section_content(markdown_sections(text), "character connections")))
+    table = render_character_connections_table(merge_connection_rows([*existing, *rows]))
     if re.search(r"^##\s+Character Connections\s*$", text, re.IGNORECASE | re.MULTILINE):
         next_text = replace_section(text, "Character Connections", table)
     else:
@@ -338,7 +341,10 @@ def append_character_connections(character: Character, rows: list[dict[str, str]
 
 
 def render_character_connections_table(rows: list[dict[str, str]]) -> str:
-    sorted_rows = sorted(rows, key=lambda row: 0 if row.get("Source") in {"Character Sheet", "Place"} else 1)
+    sorted_rows = sorted(
+        [normalize_connection_row(row) for row in rows],
+        key=lambda row: 0 if row.get("Source") in {"Character Sheet", "Place"} else 1,
+    )
     lines = [
         "| Source | Relationship | Name | Evidence |",
         "| ------ | ------------ | ---- | -------- |",
@@ -353,6 +359,38 @@ def render_character_connections_table(rows: list[dict[str, str]]) -> str:
             + " |"
         )
     return "\n".join(lines)
+
+
+def merge_connection_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    merged: dict[tuple[str, str, str], dict[str, str]] = {}
+    for row in rows:
+        normalized = normalize_connection_row(row)
+        key = (
+            compact_label(normalized.get("Source", "")),
+            compact_label(normalized.get("Relationship", "")),
+            compact_label(normalized.get("Name", "")),
+        )
+        if key not in merged:
+            merged[key] = normalized
+            continue
+        evidence = normalized.get("Evidence", "")
+        existing_evidence = merged[key].get("Evidence", "")
+        if evidence and evidence not in existing_evidence:
+            merged[key]["Evidence"] = " ".join(value for value in [existing_evidence, evidence] if value)
+    return list(merged.values())
+
+
+def normalize_connection_row(row: dict[str, str]) -> dict[str, str]:
+    return {
+        "Source": row.get("Source") or row.get("source") or "",
+        "Relationship": row.get("Relationship") or row.get("relationship") or "",
+        "Name": row.get("Name") or row.get("name") or row.get("connection") or "",
+        "Evidence": row.get("Evidence") or row.get("evidence") or "",
+    }
+
+
+def connection_rows_from_profile_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    return [normalize_connection_row(row) for row in rows]
 
 
 def escape_table_cell(value: str) -> str:

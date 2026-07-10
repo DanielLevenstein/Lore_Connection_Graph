@@ -98,6 +98,53 @@ Neal is a performer.
     assert 'shape="component"' in dot
 
 
+def test_combined_graph_place_sources_override_lore_primary_node_type(tmp_path):
+    royal_tittles = graph_from_text(
+        tmp_path,
+        "Royal_Tittles.md",
+        """# Royal Tittles
+
+## Place Summary
+
+Neal Lovington performs at Royal Tittles.
+""",
+    )
+
+    combined = build_combined_character_graph(
+        [royal_tittles],
+        place_sources=[("royal_tittles", "Royal Tittles", "docs/lore/places/Royal_Tittles.md")],
+    )
+
+    assert combined.characters["royal_tittles"].node_type == "place"
+
+
+def test_combined_graph_includes_lore_relationships_without_character_sheets():
+    combined = build_combined_character_graph(
+        [],
+        place_sources=[("royal_tittles", "Royal Tittles", "docs/lore/places/Royal_Tittles.md")],
+        lore_relationships=[
+            {
+                "source_id": "royal_tittles",
+                "source_name": "Royal Tittles",
+                "source_type": "place",
+                "source_file": "docs/lore/places/Royal_Tittles.md",
+                "target_id": "neal_lovington",
+                "target_name": "Neal Lovington",
+                "target_type": "character",
+                "relationship": "Performs Here",
+                "evidence": "Neal Lovington: Performs Here",
+            }
+        ],
+    )
+
+    rows = combined_relationship_rows(combined)
+
+    assert combined.characters["neal_lovington"].node_type == "character"
+    assert combined.edges[0].relationship_type == "performs"
+    assert rows[0]["Relationship"] == "Performs"
+    assert rows[0]["Connection"] == "Neal Lovington"
+
+
 def test_append_character_connections_adds_prioritized_table(tmp_path, monkeypatch):
     monkeypatch.setattr("local_chatbot.storage.regenerate_character_graph", lambda character: None)
     path = tmp_path / "Mara_Voss.md"
@@ -135,3 +182,49 @@ Manual summary.
     assert "## Character Connections" in text
     assert text.index("Royal Tittles") < text.index("Late Note")
     assert profile.knowledge_graph_fields
+
+
+def test_append_character_connections_merges_existing_table_without_losing_rows(tmp_path, monkeypatch):
+    monkeypatch.setattr("local_chatbot.storage.regenerate_character_graph", lambda character: None)
+    path = tmp_path / "Mara_Voss.md"
+    path.write_text(
+        """# Mara Voss
+
+## Character Stats
+
+| Name | Race |
+| ---- | ---- |
+| Mara | Elf |
+
+## Character Backstory
+
+Manual backstory.
+
+## Character Summary
+
+Manual summary.
+
+## Character Connections
+
+| Source | Relationship | Name | Evidence |
+| ------ | ------------ | ---- | -------- |
+| Self | Referenced | Old Contact | Old evidence |
+| Place | Place | Royal Tittles | First evidence |
+""",
+        encoding="utf-8",
+    )
+    character = Character(name=path.stem, path=path)
+
+    append_character_connections(
+        character,
+        [
+            {"Source": "Place", "Relationship": "Place", "Name": "Royal Tittles", "Evidence": "Second evidence"},
+            {"Source": "Character Sheet", "Relationship": "Ally", "Name": "Jory Ravenmark", "Evidence": "Jory evidence"},
+        ],
+    )
+
+    text = path.read_text(encoding="utf-8")
+    assert "Old Contact" in text
+    assert "Jory Ravenmark" in text
+    assert "First evidence Second evidence" in text
+    assert text.count("Royal Tittles") == 1

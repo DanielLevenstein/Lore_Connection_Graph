@@ -44,6 +44,7 @@ class CombinedCharacterGraph:
 def build_combined_character_graph(
     graphs: list[CharacterGraph],
     place_sources: list[tuple[str, str, str]] | None = None,
+    lore_relationships: list[dict[str, str]] | None = None,
 ) -> CombinedCharacterGraph:
     combined = CombinedCharacterGraph()
     for graph in graphs:
@@ -74,13 +75,33 @@ def build_combined_character_graph(
                 ),
             )
     for place_id, place_name, source_file in place_sources or []:
+        combined.characters[place_id] = CombinedCharacterNode(
+            id=place_id,
+            name=display_name(place_name),
+            source_file=source_file,
+            node_type="place",
+        )
+    for relationship in lore_relationships or []:
+        source_id = relationship.get("source_id", "")
+        target_id = relationship.get("target_id", "")
+        if not source_id or not target_id:
+            continue
         combined.characters.setdefault(
-            place_id,
+            source_id,
             CombinedCharacterNode(
-                id=place_id,
-                name=display_name(place_name),
-                source_file=source_file,
-                node_type="place",
+                id=source_id,
+                name=display_name(relationship.get("source_name", source_id)),
+                source_file=relationship.get("source_file", ""),
+                node_type=relationship.get("source_type", "place"),
+            ),
+        )
+        combined.characters.setdefault(
+            target_id,
+            CombinedCharacterNode(
+                id=target_id,
+                name=display_name(relationship.get("target_name", target_id)),
+                source_file=relationship.get("target_file", relationship.get("source_file", "")),
+                node_type=relationship.get("target_type", "character"),
             ),
         )
     by_key: dict[tuple[str, str, str], CombinedRelationshipEdge] = {}
@@ -115,6 +136,29 @@ def build_combined_character_graph(
             for evidence in relationship.evidence:
                 if evidence and evidence not in edge.evidence:
                     edge.evidence.append(evidence)
+
+    for relationship in lore_relationships or []:
+        source_id = relationship.get("source_id", "")
+        target_id = relationship.get("target_id", "")
+        if not source_id or not target_id:
+            continue
+        relationship_type = one_word_relationship(relationship.get("relationship", "reference"))
+        relationship_label = relationship_type.title()
+        key = (source_id, target_id, relationship_type)
+        edge = by_key.get(key)
+        if edge is None:
+            edge = CombinedRelationshipEdge(
+                source=source_id,
+                target=target_id,
+                relationship_type=relationship_type,
+                relationship_label=relationship_label,
+                evidence=[],
+            )
+            by_key[key] = edge
+            combined.edges.append(edge)
+        evidence = relationship.get("evidence", "")
+        if evidence and evidence not in edge.evidence:
+            edge.evidence.append(evidence)
 
     return combined
 
@@ -170,6 +214,11 @@ def combined_relationship_type(relationship_type: str) -> tuple[str, str]:
     if relationship_type == "place":
         return "place", "Place"
     return "reference", "Referenced"
+
+
+def one_word_relationship(value: str) -> str:
+    words = re.findall(r"[A-Za-z0-9]+", value.lower())
+    return words[0] if words else "reference"
 
 
 def combined_relationship_rows(graph: CombinedCharacterGraph) -> list[dict[str, str]]:
