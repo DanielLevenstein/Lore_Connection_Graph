@@ -669,6 +669,11 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
 def render_session_notes() -> None:
     st.title("Session Notes")
     with st.expander("Lore Memory", expanded=False):
+        if st.session_state.pop("clear_session_notes_draft", False):
+            st.session_state["session_notes_draft"] = ""
+        saved_count = st.session_state.pop("session_notes_saved_count", 0)
+        if saved_count:
+            st.success(f"Saved {saved_count} Session Note File{'s' if saved_count != 1 else ''}.")
         notes = st.text_area(
             "Session Notes",
             height=180,
@@ -680,8 +685,8 @@ def render_session_notes() -> None:
                 st.error("Add Session Notes Before Saving.")
                 return
             saved = save_session_notes(notes)
-            st.success(f"Saved {len(saved)} Session Note File{'s' if len(saved) != 1 else ''}.")
-            st.session_state.session_notes_draft = ""
+            st.session_state["session_notes_saved_count"] = len(saved)
+            st.session_state["clear_session_notes_draft"] = True
             st.rerun()
 
         note_files = list_session_notes()
