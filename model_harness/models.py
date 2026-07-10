@@ -1,9 +1,10 @@
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .environment import config_dir, data_dir, ensure_base_dirs
+from .environment import DEFAULT_PROJECT_DIR, CONFIG_DIR_ENV, config_dir, data_dir, ensure_base_dirs
 
 
 @dataclass(frozen=True)
@@ -56,7 +57,11 @@ def _read_config(path: Path) -> ModelConfig:
 
 def list_model_configs(downloaded_only: bool = False) -> list[ModelConfig]:
     ensure_base_dirs()
-    configs = [_read_config(path) for path in sorted(config_dir().glob("*.json"))]
+    config_paths = sorted(config_dir().glob("*.json"))
+    legacy_dir = DEFAULT_PROJECT_DIR / "config"
+    if CONFIG_DIR_ENV not in os.environ and legacy_dir != config_dir():
+        config_paths.extend(path for path in sorted(legacy_dir.glob("*.json")) if path not in config_paths)
+    configs = [_read_config(path) for path in config_paths]
     if downloaded_only:
         configs = [config for config in configs if config.is_downloaded]
     return configs

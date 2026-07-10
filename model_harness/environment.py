@@ -8,7 +8,7 @@ DEFAULT_PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 
 def config_dir() -> Path:
-    return Path(os.environ.get(CONFIG_DIR_ENV, DEFAULT_PROJECT_DIR / "config")).resolve()
+    return Path(os.environ.get(CONFIG_DIR_ENV, DEFAULT_PROJECT_DIR / "config" / "model")).resolve()
 
 
 def data_dir() -> Path:

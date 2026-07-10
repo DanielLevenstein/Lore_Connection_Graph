@@ -138,7 +138,7 @@ Allies:
 
 
 def test_read_character_profile_does_not_restore_removed_stats_from_json(tmp_path, monkeypatch):
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Mara Voss"
     character_path.mkdir()
     character = Character(name="Mara Voss", path=character_path)
@@ -272,8 +272,8 @@ Manual summary text.
 
 def test_existing_character_sheets_save_without_losing_stat_values(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
-    source_dir = Path(__file__).resolve().parents[1] / "characters"
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
+    source_dir = Path(__file__).resolve().parents[1] / "docs" / "lore" / "character_sheets"
 
     for source_file in source_dir.glob("*.md"):
         character_path = tmp_path / source_file.name
@@ -290,9 +290,12 @@ def test_existing_character_sheets_save_without_losing_stat_values(tmp_path, mon
 
 def test_character_sheet_file_path_save_adds_missing_default_stats(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Orin_Nightbloom.md"
-    shutil.copyfile(Path(__file__).resolve().parents[1] / "characters" / character_path.name, character_path)
+    shutil.copyfile(
+        Path(__file__).resolve().parents[1] / "docs" / "lore" / "character_sheets" / character_path.name,
+        character_path,
+    )
     character = Character(name=character_path.stem, path=character_path)
     storage.write_character_profile(character, read_character_profile(character))
 
@@ -301,24 +304,27 @@ def test_character_sheet_file_path_save_adds_missing_default_stats(tmp_path, mon
     assert "| Orin Nightbloom | 1 | Half-Orc | Bard | he/him |" in text
 
 
-def test_character_file_path_metadata_is_saved_under_data_characters(tmp_path, monkeypatch):
+def test_character_file_path_metadata_is_saved_under_data_lore_character_sheets(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Orin_Nightbloom.md"
-    shutil.copyfile(Path(__file__).resolve().parents[1] / "characters" / character_path.name, character_path)
+    shutil.copyfile(
+        Path(__file__).resolve().parents[1] / "docs" / "lore" / "character_sheets" / character_path.name,
+        character_path,
+    )
     character = Character(name=character_path.stem, path=character_path)
 
     storage.write_character_profile(character, read_character_profile(character))
 
-    assert character.profile_path == tmp_path / "data" / "characters" / "Orin_Nightbloom" / "PROFILE.json"
+    assert character.profile_path == tmp_path / "data" / "lore" / "character_sheets" / "Orin_Nightbloom" / "PROFILE.json"
     assert character.profile_path.exists()
     assert not character_path.with_suffix(".PROFILE.json").exists()
 
 
-def test_create_character_keeps_only_sheet_in_root_characters_dir(tmp_path, monkeypatch):
+def test_create_character_keeps_only_sheet_in_docs_lore_character_sheets(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
-    monkeypatch.setattr(storage, "CHARACTERS_DIR", tmp_path / "characters")
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
+    monkeypatch.setattr(storage, "CHARACTERS_DIR", tmp_path / "docs" / "lore" / "character_sheets")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     storage.CHARACTERS_DIR.mkdir(parents=True)
     storage.CHARACTER_METADATA_DIR.mkdir(parents=True)
 
@@ -334,20 +340,20 @@ def test_create_character_keeps_only_sheet_in_root_characters_dir(tmp_path, monk
         )
     )
 
-    assert character.path == tmp_path / "characters" / "Mara Voss.md"
+    assert character.path == tmp_path / "docs" / "lore" / "character_sheets" / "Mara Voss.md"
     assert character.backstory_path.exists()
-    assert not (tmp_path / "characters" / "Mara Voss").exists()
-    assert character.profile_path == tmp_path / "data" / "characters" / "Mara Voss" / "PROFILE.json"
+    assert not (tmp_path / "docs" / "lore" / "character_sheets" / "Mara Voss").exists()
+    assert character.profile_path == tmp_path / "data" / "lore" / "character_sheets" / "Mara Voss" / "PROFILE.json"
     assert character.profile_path.exists()
-    assert character.memory_path == tmp_path / "data" / "characters" / "Mara Voss" / "MEMORY.md"
+    assert character.memory_path == tmp_path / "data" / "lore" / "character_sheets" / "Mara Voss" / "MEMORY.md"
     assert character.memory_path.exists()
-    assert character.chatlogs_dir == tmp_path / "data" / "characters" / "Mara Voss" / "chatlogs"
+    assert character.chatlogs_dir == tmp_path / "data" / "lore" / "character_sheets" / "Mara Voss" / "chatlogs"
     assert character.chatlogs_dir.exists()
 
 
 def test_title_name_wins_when_stats_name_is_honorific_and_family_name(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Neal_Lovington.md"
     character_path.write_text(
         """# Neal Lovington
@@ -382,7 +388,7 @@ Manual summary.
 
 def test_missing_default_stat_is_added_only_when_value_changes(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Neal_Lovington.md"
     character_path.write_text(
         """# Neal Lovington
@@ -431,7 +437,7 @@ Manual summary.
 
 def test_missing_default_stats_with_existing_values_are_added_on_save(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Neal_Lovington.md"
     character_path.write_text(
         """# Neal Lovington
@@ -484,7 +490,7 @@ Pronouns: They/Them
 
 def test_present_stat_update_does_not_add_unchanged_missing_stats(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Neal_Lovington.md"
     character_path.write_text(
         """# Neal Lovington
@@ -534,7 +540,7 @@ Manual summary.
 
 def test_existing_name_stat_value_is_preserved_when_first_name_changes(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Neal_Lovington.md"
     character_path.write_text(
         """# Neal Lovington
@@ -582,7 +588,7 @@ Manual summary.
 
 def test_custom_stats_are_mirrored_into_character_details_on_save(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Neal_Lovington.md"
     character_path.write_text(
         """# Neal Lovington
@@ -615,9 +621,12 @@ Manual summary.
 
 def test_present_pronouns_stat_updates_in_stats_table(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "characters")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
     character_path = tmp_path / "Jory_Ravenmark.md"
-    shutil.copyfile(Path(__file__).resolve().parents[1] / "characters" / character_path.name, character_path)
+    shutil.copyfile(
+        Path(__file__).resolve().parents[1] / "docs" / "lore" / "character_sheets" / character_path.name,
+        character_path,
+    )
     character = Character(name=character_path.stem, path=character_path)
     profile = read_character_profile(character)
 
@@ -643,18 +652,18 @@ def test_present_pronouns_stat_updates_in_stats_table(tmp_path, monkeypatch):
     assert "| Ravenmark | 4 | Human | Barbarian | they/them |" in text
 
 
-def test_app_reads_characters_from_root_level_character_folder():
-    assert CHARACTERS_DIR == ROOT_DIR / "characters"
-    assert CHARACTER_METADATA_DIR == ROOT_DIR / "data" / "characters"
+def test_app_reads_characters_from_docs_lore_character_sheets():
+    assert CHARACTERS_DIR == ROOT_DIR / "docs" / "lore" / "character_sheets"
+    assert CHARACTER_METADATA_DIR == ROOT_DIR / "data" / "lore" / "character_sheets"
     assert (CHARACTERS_DIR / "Orin_Nightbloom.md").exists()
     assert all(path.is_file() and path.suffix.lower() == ".md" for path in CHARACTERS_DIR.iterdir())
-    assert not any(path.is_dir() and (path / "BACKSTORY.md").exists() for path in CHARACTERS_DIR.iterdir())
+    assert (ROOT_DIR / "docs" / "lore" / "places").exists()
 
 
 def test_read_character_profile_extracts_appended_character_connections():
     character = Character(
         name="Orin_Nightbloom",
-        path=Path(__file__).resolve().parents[1] / "characters" / "Orin_Nightbloom.md",
+        path=Path(__file__).resolve().parents[1] / "docs" / "lore" / "character_sheets" / "Orin_Nightbloom.md",
     )
 
     profile = read_character_profile(character)

@@ -150,26 +150,26 @@ def render_relationship_graph(character: Character) -> None:
         try:
             graph = load_graph(character.graph_path)
         except (OSError, ValueError) as exc:
-            st.warning(f"Could not load relationship graph: {exc}")
+            st.warning(f"Could Not Load Relationship Graph: {exc}")
 
         toolbar_cols = st.columns([1, 3])
         if toolbar_cols[0].button("Regenerate", icon=":material/sync:", key=f"regen_graph_{character.name}"):
             try:
                 regenerate_character_graph(character)
             except (OSError, ValueError) as exc:
-                st.error(f"Could not regenerate graph: {exc}")
+                st.error(f"Could Not Regenerate Graph: {exc}")
             else:
-                st.success("Relationship graph regenerated.")
+                st.success("Relationship Graph Regenerated.")
                 st.rerun()
 
         if graph is None:
-            toolbar_cols[1].caption("No graph JSON found yet. Regenerate it from the current backstory.")
+            toolbar_cols[1].caption("No Graph JSON Found Yet. Regenerate It From The Current Backstory.")
             return
 
         evidence = evidence_rows(graph)
 
         if not evidence:
-            st.info("No character graph attributes were extracted from this backstory.")
+            st.info("No Character Graph Attributes Were Extracted From This Backstory.")
             return
 
         attributes_tab = st.tabs(["Attributes"])[0]
@@ -189,12 +189,12 @@ def render_combined_character_graph() -> None:
 
     with st.expander("Combined Character Graph", expanded=False):
         if len(graphs) < 2:
-            st.info("Add at least two character graphs to see combined connections.")
+            st.info("Add At Least Two Character Graphs To See Combined Connections.")
             return
         combined = build_combined_character_graph(graphs)
         rows = combined_relationship_rows(combined)
         if not rows:
-            st.info("No cross-character connections were found yet.")
+            st.info("No Cross-Character Connections Were Found Yet.")
             return
         st.graphviz_chart(combined_relationship_dot(combined), width="stretch")
         st.table(rows, hide_index=True, width="stretch")
@@ -204,8 +204,8 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
     with st.form(key_prefix, clear_on_submit=True):
         name = st.text_input("Name", placeholder="Mara Voss", key=f"{key_prefix}_name")
         name_cols = st.columns(2)
-        first_name = name_cols[0].text_input("First name", placeholder="Mara", key=f"{key_prefix}_first_name")
-        family_name = name_cols[1].text_input("Family name", placeholder="Voss", key=f"{key_prefix}_family_name")
+        first_name = name_cols[0].text_input("First Name", placeholder="Mara", key=f"{key_prefix}_first_name")
+        family_name = name_cols[1].text_input("Family Name", placeholder="Voss", key=f"{key_prefix}_family_name")
         stat_cols = st.columns(4)
         level = stat_cols[0].text_input("Level", placeholder="3", key=f"{key_prefix}_level")
         race = stat_cols[1].text_input("Race", placeholder="Elf", key=f"{key_prefix}_race")
@@ -224,11 +224,11 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
             height=96,
             key=f"{key_prefix}_summary",
         )
-        with st.expander("Optional metadata", expanded=False):
+        with st.expander("Optional Metadata", expanded=False):
             detail_cols = st.columns(3)
             drives = detail_cols[0].text_area(
                 "Drives",
-                placeholder="Restore family name\nProtect old friends",
+                placeholder="Restore Family Name\nProtect Old Friends",
                 height=96,
                 key=f"{key_prefix}_drives",
             )
@@ -245,16 +245,16 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
                 key=f"{key_prefix}_enemies",
             )
             details = st.text_area(
-                "Character details",
-                placeholder="Add any freeform character sheet fields here.",
+                "Character Details",
+                placeholder="Add Any Freeform Character Sheet Fields Here.",
                 height=120,
                 key=f"{key_prefix}_details",
             )
 
-        submitted = st.form_submit_button("Create character", icon=":material/person_add:")
+        submitted = st.form_submit_button("Create Character", icon=":material/person_add:")
         if submitted:
             if not all([name.strip(), race.strip(), character_class.strip(), backstory.strip()]):
-                st.error("Complete name, race, class, and backstory.")
+                st.error("Complete Name, Race, Class, And Backstory.")
                 return
             try:
                 profile = CharacterProfile(
@@ -275,7 +275,7 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
                 )
                 character = create_character(profile)
             except FileExistsError:
-                st.error("A character with that name already exists.")
+                st.error("A Character With That Name Already Exists.")
             except ValueError as exc:
                 st.error(str(exc))
             else:
@@ -307,7 +307,7 @@ def render_character_panel() -> None:
         if "active_character" not in st.session_state:
             set_active_character(selected_character)
     else:
-        st.info("Create your first character to begin.")
+            st.info("Create Your First Character To Begin.")
     # When a character is opened show it here before the create character section.
     if "active_character" in st.session_state:
         character = get_active_character()
@@ -325,8 +325,8 @@ def render_character_editor(character: Character) -> None:
         with st.form(f"edit_character_{character.name}"):
             st.text_input("Name", value=profile.name, disabled=True)
             name_cols = st.columns(2)
-            first_name = name_cols[0].text_input("First name", value=profile.first_name)
-            family_name = name_cols[1].text_input("Family name", value=profile.family_name)
+            first_name = name_cols[0].text_input("First Name", value=profile.first_name)
+            family_name = name_cols[1].text_input("Family Name", value=profile.family_name)
             stat_cols = st.columns(4)
             level = stat_cols[0].text_input("Level", value=profile.level)
             race = stat_cols[1].text_input("Race", value=profile.race)
@@ -334,14 +334,14 @@ def render_character_editor(character: Character) -> None:
             pronouns = stat_cols[3].text_input("Pronouns", value=profile.pronouns)
             backstory = st.text_area("Backstory", value=profile.backstory, height=180)
             summary = st.text_area("Summary", value=profile.summary, height=96)
-            with st.expander("Optional metadata", expanded=False):
+            with st.expander("Optional Metadata", expanded=False):
                 detail_cols = st.columns(3)
                 drives = detail_cols[0].text_area("Drives", value=render_list_field(profile.drives), height=96)
                 alliances = detail_cols[1].text_area("Alliances", value=render_list_field(profile.alliances), height=96)
                 enemies = detail_cols[2].text_area("Enemies", value=render_list_field(profile.enemies), height=96)
                 details_value = profile.details or default_details(profile)
-                details = st.text_area("Character details", value=details_value, height=120)
-            if st.form_submit_button("Save character", icon=":material/save:"):
+                details = st.text_area("Character Details", value=details_value, height=120)
+            if st.form_submit_button("Save Character", icon=":material/save:"):
                 submitted_details = details.strip()
                 if not profile.details.strip() and submitted_details == default_details(profile).strip():
                     submitted_details = ""
@@ -367,12 +367,12 @@ def render_character_editor(character: Character) -> None:
                     knowledge_graph_fields=profile.knowledge_graph_fields,
                 )
                 write_character_profile(character, updated)
-                st.success("Character saved.")
+                st.success("Character Saved.")
                 st.rerun()
 
 
 def render_memory_tools(character: Character) -> None:
-    with st.expander("Backstory and memory", expanded=False):
+    with st.expander("Backstory And Memory", expanded=False):
         st.markdown("**Backstory**")
         st.markdown(read_text(character.backstory_path))
         st.markdown("**Memory**")
@@ -391,11 +391,10 @@ def render_character_info(character: Character, model_config=None) -> None:
 
 # active_model = render_sidebar()
 
-st.title("Local Huggingface Chatbot")
-st.caption("Chat with local characters, backed by Markdown memory and raw text logs.")
+st.title("Roleplaying Character Creator")
+st.caption("Create Character Sheets And Explore Relationship Graphs From Local Lore.")
 
 render_character_panel()
 active_character = get_active_character()
 if active_character is None:
-    st.info("Create or open a character to edit its sheet.")
-
+    st.info("Create Or Open A Character To Edit Its Sheet.")

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from model_harness import ModelConfig
 from .client import chat_completion
 from .paths import CHARACTER_METADATA_DIR
-from .storage import Character, CharacterProfile, create_character, sanitize_name
+from .storage import Character, CharacterProfile, create_generated_character, sanitize_name
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,75 @@ class RandomCharacterGenerator:
         "origins": 1,
         "motivations": 2,
     }
+    DEFAULT_WORLD_BUILDING = {
+        "races": ["Human", "Elf", "Half-Elf", "Dwarf", "Halfling", "Half-Orc", "Tiefling", "Gnome"],
+        "classes": ["Fighter", "Wizard", "Rogue", "Cleric", "Ranger", "Bard", "Paladin", "Druid"],
+        "pronouns": ["she/her", "he/him", "they/them"],
+        "given_names": ["Mara", "Jory", "Orin", "Neal", "Arlen", "Mirelle", "Torvak", "Sera"],
+        "family_names": ["Voss", "Ravenmark", "Nightbloom", "Lovington", "Emberlane", "Stormglass"],
+        "origins": [
+            "a harbor district",
+            "a vanished city",
+            "a mountain hold",
+            "a border village",
+            "a river monastery",
+            "a forest shrine",
+        ],
+        "motivations": [
+            "restore a family name",
+            "protect an old friend",
+            "find a missing mentor",
+            "repay a dangerous debt",
+            "map a forgotten road",
+            "break a family curse",
+            "recover a stolen heirloom",
+            "earn enough coin to buy freedom",
+            "expose a corrupt magistrate",
+            "keep a younger sibling safe",
+            "prove a prophecy wrong",
+            "learn who betrayed their company",
+            "guard a forbidden book",
+            "win back a lost title",
+            "build a sanctuary for outcasts",
+            "avenge a ruined village",
+            "rescue a captured patron",
+            "make peace with a rival house",
+            "master a dangerous spell",
+            "retire a parent from hardship",
+            "clear a false accusation",
+            "uncover a buried lineage",
+            "protect a sacred grove",
+            "escape a criminal past",
+            "earn admission to an arcane college",
+            "find the source of strange dreams",
+            "broker peace between feuding clans",
+            "defeat a monster from childhood",
+            "redeem a failed oath",
+            "restore a burned archive",
+            "save a failing tavern",
+            "bring medicine to a remote town",
+            "recover a ship lost at sea",
+            "stop a cult from spreading",
+            "learn the truth about a parent",
+            "repay the people who sheltered them",
+            "become worthy of a legendary weapon",
+            "protect a trade route",
+            "prove kindness can survive violence",
+            "outwit a former employer",
+            "hide a secret identity",
+            "make a name without using family influence",
+            "keep a promise to the dead",
+            "restore music to a silent temple",
+            "recover memories stolen by magic",
+            "protect a village from raiders",
+            "find a cure for a magical illness",
+            "earn forgiveness from an old companion",
+            "stop a war before it starts",
+            "discover who funds the assassins",
+            "return a relic to its rightful shrine",
+            "build trust after a public failure",
+        ],
+    }
 
     def __init__(self, seed: int | None = None) -> None:
         self.random = random.Random(seed)
@@ -51,10 +120,10 @@ class RandomCharacterGenerator:
         characters = []
         for profile in self.generate_profiles(count, model_config):
             try:
-                characters.append(create_character(profile))
+                characters.append(create_generated_character(profile))
             except FileExistsError:
                 unique_profile = self.with_unique_name(profile)
-                characters.append(create_character(unique_profile))
+                characters.append(create_generated_character(unique_profile))
         return characters
 
     def generate_profile(
@@ -199,14 +268,16 @@ class RandomCharacterGenerator:
 
     @classmethod
     def load_world_building(cls) -> WorldBuildingData:
-        if not cls.WORLD_BUILDING_PATH.exists():
-            raise FileNotFoundError(f"Missing world building data: {cls.WORLD_BUILDING_PATH}")
-        payload = json.loads(cls.WORLD_BUILDING_PATH.read_text(encoding="utf-8"))
+        payload = (
+            json.loads(cls.WORLD_BUILDING_PATH.read_text(encoding="utf-8"))
+            if cls.WORLD_BUILDING_PATH.exists()
+            else cls.DEFAULT_WORLD_BUILDING
+        )
         if not isinstance(payload, dict):
             raise ValueError(f"{cls.WORLD_BUILDING_PATH} must contain a JSON object.")
 
         data: dict[str, list[str]] = {}
-        for key, minimum_count in cls.REQUIRED_WORLD_BUILDING_KEYS.items():
+        for key, minimum_count in cls.WORLD_BUILDING_KEYS.items():
             values = payload.get(key)
             if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
                 raise ValueError(f"{cls.WORLD_BUILDING_PATH} key `{key}` must be a list of strings.")

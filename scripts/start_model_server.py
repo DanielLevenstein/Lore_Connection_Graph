@@ -20,7 +20,7 @@ from model_harness.server import start_server, status
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("config", help="Path to a config/*.json model config")
+    parser.add_argument("config", help="Path to a config/model/*.json model config")
     parser.add_argument("--wait", type=int, default=0, help="Seconds to wait for the health endpoint")
     return parser.parse_args()
 

@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from .paths import CHARACTER_GRAPHS_DIR, CHARACTER_METADATA_DIR, CHARACTERS_DIR, ensure_base_dirs
+from .paths import CHARACTER_GRAPHS_DIR, CHARACTER_METADATA_DIR, CHARACTERS_DIR, GENERATED_CHARACTER_SHEETS_DIR, ensure_base_dirs
 
 
 SAFE_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_. -]+")
@@ -89,6 +89,7 @@ class CharacterProfile:
     stat_fields: dict[str, str] | None = None
     aliases: dict[str, dict[str, str]] | None = None
     knowledge_graph_fields: list[dict[str, str]] | None = None
+    source_locations: dict[str, str] | None = None
 
 
 def sanitize_name(name: str) -> str:
@@ -105,6 +106,8 @@ def list_characters() -> list[Character]:
     for path in sorted(CHARACTERS_DIR.iterdir()):
         if path.is_file() and path.suffix.lower() == ".md" and path.name != "TEMPLATE.md":
             characters.append(Character(name=path.stem, path=path))
+        elif path.is_dir() and (path / "BACKSTORY.md").exists():
+            characters.append(Character(name=path.name, path=path))
     return characters
 
 
@@ -201,10 +204,12 @@ def gender_from_pronouns(pronouns: str) -> str:
     return "non-binary"
 
 
-def create_character(profile: CharacterProfile) -> Character:
+def create_character(profile: CharacterProfile, destination_dir: Path | None = None) -> Character:
     ensure_base_dirs()
     safe_name = sanitize_name(profile.name)
-    character = Character(name=safe_name, path=CHARACTERS_DIR / f"{safe_name}.md")
+    target_dir = destination_dir or CHARACTERS_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+    character = Character(name=safe_name, path=target_dir / f"{safe_name}.md")
     if character.backstory_path.exists():
         raise FileExistsError(character.backstory_path)
     character.data_dir.mkdir(parents=True, exist_ok=False)
@@ -215,6 +220,10 @@ def create_character(profile: CharacterProfile) -> Character:
         encoding="utf-8",
     )
     return character
+
+
+def create_generated_character(profile: CharacterProfile) -> Character:
+    return create_character(profile, GENERATED_CHARACTER_SHEETS_DIR)
 
 
 def read_backstory_template() -> str:
@@ -245,6 +254,7 @@ def read_character_profile(character: Character) -> CharacterProfile:
             stat_fields=payload.get("stat_fields") or payload.get("stats"),
             aliases=payload.get("aliases"),
             knowledge_graph_fields=payload.get("knowledge_graph_fields", []),
+            source_locations=payload.get("source_locations", {}),
         )
         if markdown_profile:
             return merge_profiles(stored_profile, markdown_profile)
@@ -274,9 +284,14 @@ def read_character_sheet(character: Character) -> CharacterProfile | None:
     title = markdown_title(text) or character.name
     stats_section = section_content(sections, "character stats")
     summary_section = section_content(sections, "character summary")
+    title_summary = title_preamble(text)
     stat_items = parse_stats_table_items(stats_section)
     stats = stats_dict_from_items(stat_items)
     summary, details = split_summary_and_details(summary_section)
+    summary_source = "character_summary_section"
+    if not summary.strip() and title_summary.strip():
+        summary = title_summary.strip()
+        summary_source = "title_preamble"
     details = append_custom_stat_details(details, stat_items)
     connections_section = section_content(sections, "character connections") or markdown_subsection(
         text, "Character Connections"
@@ -308,6 +323,7 @@ def read_character_sheet(character: Character) -> CharacterProfile | None:
         stat_fields=stat_fields,
         aliases=aliases,
         knowledge_graph_fields=knowledge_graph_fields,
+        source_locations={"summary": summary_source},
     )
 
 
@@ -338,6 +354,7 @@ def merge_profiles(stored: CharacterProfile, sheet: CharacterProfile) -> Charact
         stat_fields=sheet.stat_fields or stored.stat_fields,
         aliases=merge_aliases(stored.aliases, sheet.aliases),
         knowledge_graph_fields=sheet.knowledge_graph_fields or stored.knowledge_graph_fields or [],
+        source_locations={**(stored.source_locations or {}), **(sheet.source_locations or {})},
     )
 
 
@@ -354,6 +371,15 @@ def markdown_sections(text: str) -> dict[str, str]:
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         sections[match.group(1).strip().lower()] = text[start:end].strip()
     return sections
+
+
+def title_preamble(text: str) -> str:
+    title = re.search(r"^#\s+.+?\s*$", text, re.MULTILINE)
+    if not title:
+        return ""
+    next_section = re.search(r"^##\s+.+?\s*$", text[title.end() :], re.MULTILINE)
+    end = title.end() + next_section.start() if next_section else len(text)
+    return text[title.end() : end].strip()
 
 
 def section_content(sections: dict[str, str], heading: str) -> str:
@@ -730,6 +756,7 @@ def enrich_profile(profile: CharacterProfile) -> CharacterProfile:
         stat_fields=profile.stat_fields or stats,
         aliases=profile.aliases or {},
         knowledge_graph_fields=profile.knowledge_graph_fields or [],
+        source_locations=profile.source_locations or {},
     )
 
 
@@ -773,17 +800,22 @@ def update_existing_backstory(
         updated = replace_section(updated, "Character Stats", render_updated_stats_table(text, current_profile, profile))
     if current_profile.backstory.strip() != profile.backstory.strip():
         updated = replace_section(updated, "Character Backstory", profile.backstory.strip())
+    summary_location = (profile.source_locations or {}).get("summary")
+    summary_handled = False
+    if summary_location == "title_preamble" and current_profile.summary.strip() != profile.summary.strip():
+        updated = replace_title_preamble(updated, profile.summary.strip())
+        summary_handled = True
     desired_details = remove_detail_fields(profile.details.strip() or default_details(profile), {"pronouns"})
     desired_details = append_custom_stat_details(
         desired_details,
         parse_stats_table_items(section_content(markdown_sections(updated), "character stats")),
     )
     if (
-        current_profile.summary.strip() != profile.summary.strip()
+        (current_profile.summary.strip() != profile.summary.strip() and not summary_handled)
         or current_profile.details.strip() != desired_details.strip()
         or details_section_needs_custom_stats(updated)
     ):
-        summary = profile.summary.strip()
+        summary = "" if summary_location == "title_preamble" else profile.summary.strip()
         content = f"{summary}\n\n### Character Details\n\n{desired_details}".strip()
         updated = replace_section(updated, "Character Summary", content)
     return updated
@@ -871,6 +903,16 @@ def stat_value_for(
 
 def replace_markdown_title(text: str, title: str) -> str:
     return re.sub(r"^#\s+.+?\s*$", f"# {title}", text, count=1, flags=re.MULTILINE)
+
+
+def replace_title_preamble(text: str, summary: str) -> str:
+    title = re.search(r"^#\s+.+?\s*$", text, re.MULTILINE)
+    if not title:
+        return text
+    next_section = re.search(r"^##\s+.+?\s*$", text[title.end() :], re.MULTILINE)
+    end = title.end() + next_section.start() if next_section else len(text)
+    replacement = f"\n\n{summary.strip()}\n\n" if summary.strip() else "\n\n"
+    return f"{text[: title.end()]}{replacement}{text[end:].lstrip()}"
 
 
 def replace_section(text: str, heading: str, content: str) -> str:

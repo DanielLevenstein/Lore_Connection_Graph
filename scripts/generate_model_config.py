@@ -261,7 +261,7 @@ def build_config(args: argparse.Namespace) -> dict:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("model", help="Hugging Face repo ID or URL, such as owner/model-name")
-    parser.add_argument("--config-dir", default="config", help="Directory to write JSON configs into")
+    parser.add_argument("--config-dir", default="config/model", help="Directory to write JSON configs into")
     parser.add_argument("--name", help="Display name and output filename stem")
     parser.add_argument("--api-base-url", default=DEFAULT_API_BASE_URL, help="Local OpenAI-compatible API base URL")
     parser.add_argument("--size", help="Parameter size label, such as 8B or 13B")

@@ -16,7 +16,7 @@ from model_harness.models import _read_config
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("config", help="Path to a config/*.json model config")
+    parser.add_argument("config", help="Path to a config/model/*.json model config")
     parser.add_argument("--filename", help="Exact artifact filename to download")
     return parser.parse_args()
 
