@@ -32,6 +32,8 @@ from local_chatbot.storage import (
     create_character,
     create_place,
     default_details,
+    delete_character_profile,
+    delete_place_profile,
     list_places,
     list_characters,
     read_place_profile,
@@ -44,6 +46,7 @@ from local_chatbot.storage import (
 )
 from local_chatbot.session_notes import (
     import_discord_session_notes_text,
+    delete_session_note,
     list_session_notes,
     read_session_note,
     read_session_note_body,
@@ -600,7 +603,7 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
         character_class="",
         backstory="",
     )
-    with st.form(key_prefix, clear_on_submit=True):
+    with st.form(key_prefix):
         name = st.text_input("Name", value=draft_profile.name, placeholder="Mara Voss", key=f"{key_prefix}_name")
         name_cols = st.columns(2)
         first_name = name_cols[0].text_input(
@@ -706,9 +709,29 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
             else:
                 if key_prefix == "graph_pending_character":
                     st.session_state.pop("pending_character_profile", None)
+                clear_character_creator_state(key_prefix)
                 set_active_character(character)
                 st.success(f"Created {character.name}.")
                 st.rerun()
+
+
+def clear_character_creator_state(key_prefix: str) -> None:
+    for field in (
+        "name",
+        "first_name",
+        "family_name",
+        "level",
+        "race",
+        "class",
+        "pronouns",
+        "backstory",
+        "summary",
+        "drives",
+        "alliances",
+        "enemies",
+        "details",
+    ):
+        st.session_state.pop(f"{key_prefix}_{field}", None)
 
 
 def render_place_creator() -> None:
@@ -722,7 +745,7 @@ def render_place_creator() -> None:
 
 def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | None = None) -> None:
     draft_profile = draft_profile or PlaceProfile(name="", place_type="", summary="")
-    with st.form(key_prefix, clear_on_submit=True):
+    with st.form(key_prefix):
         name = st.text_input("Name", value=draft_profile.name, placeholder="Royal Tittles", key=f"{key_prefix}_name")
         place_type = st.text_input("Type", value=draft_profile.place_type, placeholder="Tavern", key=f"{key_prefix}_type")
         summary = st.text_area(
@@ -762,13 +785,22 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
             else:
                 if key_prefix == "graph_pending_place":
                     st.session_state.pop("pending_place_profile", None)
+                clear_place_creator_state(key_prefix)
                 set_active_place(place)
                 st.success(f"Created {name.strip()}.")
                 st.rerun()
 
 
+def clear_place_creator_state(key_prefix: str) -> None:
+    for field in ("name", "type", "summary", "details", "connections"):
+        st.session_state.pop(f"{key_prefix}_{field}", None)
+
+
 def render_place_panel() -> None:
     st.title("Places")
+    place_panel_status = st.session_state.pop("place_panel_status", "")
+    if place_panel_status:
+        st.success(place_panel_status)
     places = list_places()
     if places:
         display_names = [display_place_name(place) for place in places]
@@ -813,11 +845,18 @@ def render_place_info(place: Place) -> None:
                 value=render_list_field(profile.connections),
                 height=96,
             )
-            action_cols = st.columns(2)
+            action_cols = st.columns(3)
             save_requested = action_cols[0].form_submit_button("Save Place", icon=":material/save:")
-            undo_requested = action_cols[1].form_submit_button("Undo Changes", icon=":material/undo:")
+            delete_requested = action_cols[1].form_submit_button("Delete Place", icon=":material/delete_forever:")
+            undo_requested = action_cols[2].form_submit_button("Undo Changes", icon=":material/undo:")
             if undo_requested:
                 undo_place_changes(place)
+            if delete_requested:
+                delete_place_profile(place)
+                st.session_state.pop(f"place_undo_{place.name}", None)
+                st.session_state.pop("active_place", None)
+                st.session_state["place_panel_status"] = "Place Deleted."
+                st.rerun()
             if save_requested:
                 if not all([name.strip(), place_type.strip(), summary.strip()]):
                     st.error("Complete Name, Type, And Summary.")
@@ -948,11 +987,21 @@ def render_session_note_editor(path) -> None:
                 value=note_body,
                 height=220,
             )
-            action_cols = st.columns(2)
+            action_cols = st.columns(3)
             save_requested = action_cols[0].form_submit_button("Save Session Note", icon=":material/save:")
-            undo_requested = action_cols[1].form_submit_button("Undo Changes", icon=":material/undo:")
+            delete_requested = action_cols[1].form_submit_button(
+                "Delete Session Note",
+                icon=":material/delete_forever:",
+            )
+            undo_requested = action_cols[2].form_submit_button("Undo Changes", icon=":material/undo:")
             if undo_requested:
                 undo_session_notes_changes()
+            if delete_requested:
+                push_session_notes_undo()
+                delete_session_note(path)
+                st.session_state.pop("active_session_note", None)
+                st.session_state["session_notes_status"] = "Session Note Deleted."
+                st.rerun()
             if save_requested:
                 if not body.strip():
                     st.error("Add Session Note Details Before Saving.")
@@ -965,6 +1014,9 @@ def render_session_note_editor(path) -> None:
 
 def render_character_panel() -> None:
     st.title("Characters")
+    character_panel_status = st.session_state.pop("character_panel_status", "")
+    if character_panel_status:
+        st.success(character_panel_status)
     characters = list_characters()
     if characters:
         display_names = [display_character_name(character) for character in characters]
@@ -1051,7 +1103,7 @@ def render_character_editor(character: Character) -> None:
                 enemies = detail_cols[2].text_area("Enemies", value=render_list_field(profile.enemies), height=96)
                 details_value = profile.details or default_details(profile)
                 details = st.text_area("Character Details", value=details_value, height=120)
-            action_cols = st.columns(5)
+            action_cols = st.columns(6 if graph_rewrites_enabled() else 3)
             save_requested = action_cols[0].form_submit_button("Save Character", icon=":material/save:")
             populate_summary = False
             repopulate_summary = False
@@ -1060,11 +1112,26 @@ def render_character_editor(character: Character) -> None:
                 populate_summary = action_cols[1].form_submit_button("Populate Summary", icon=":material/auto_awesome:")
                 repopulate_summary = action_cols[2].form_submit_button("Repopulate Summary", icon=":material/sync:")
                 rewrite_backstory = action_cols[3].form_submit_button("Rewrite Backstory", icon=":material/edit_note:")
-            undo_requested = action_cols[4].form_submit_button("Undo Changes", icon=":material/undo:")
+                delete_col = action_cols[4]
+                undo_col = action_cols[5]
+            else:
+                delete_col = action_cols[1]
+                undo_col = action_cols[2]
+            delete_requested = delete_col.form_submit_button("Delete Character", icon=":material/delete_forever:")
+            undo_requested = undo_col.form_submit_button("Undo Changes", icon=":material/undo:")
             if undo_requested:
                 undo_character_changes(character)
+            if delete_requested:
+                delete_character_profile(character)
+                st.session_state.pop(f"character_undo_{character.name}", None)
+                st.session_state.pop("active_character", None)
+                st.session_state.pop("messages", None)
+                st.session_state.pop("chatlog_path", None)
+                st.session_state["character_panel_status"] = "Character Deleted."
+                st.rerun()
             if save_requested or populate_summary or repopulate_summary or rewrite_backstory:
                 submitted_details = details.strip()
+
                 if not profile.details.strip() and submitted_details == default_details(profile).strip():
                     submitted_details = ""
                 next_summary = summary.strip()
@@ -1117,7 +1184,6 @@ def render_character_editor(character: Character) -> None:
                 write_character_profile(character, updated)
                 st.session_state[f"character_status_{character.name}"] = "Character Saved."
                 st.rerun()
-
 
 def section_label(label: str, profile: CharacterProfile, section: str) -> str:
     generated = {value.lower() for value in profile.auto_generated_sections or []}

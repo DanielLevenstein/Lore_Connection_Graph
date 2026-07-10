@@ -351,6 +351,97 @@ def test_ui_creates_loads_and_undoes_session_notes(isolated_character_app):
     assert "brass map" not in note_path.read_text(encoding="utf-8")
 
 
+def test_create_validation_preserves_entered_fields(isolated_character_app):
+    app_url, _docs_lore_dir, _characters_dir, _places_dir, _session_notes_dir, _data_dir = isolated_character_app
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
+        expand_section(page, "Create Character")
+        fill_textbox(page, "Name", "Keeps Draft")
+        fill_textbox(page, "Race", "Human")
+        fill_textbox(page, "Class", "Bard")
+        page.get_by_role("button", name="person_add Create Character").click()
+        expect(page.get_by_text("Complete Name, Race, Class, And Backstory.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("textbox", name="Name", exact=True).first).to_have_value("Keeps Draft")
+        expect(page.get_by_role("textbox", name="Race", exact=True).first).to_have_value("Human")
+        expect(page.get_by_role("textbox", name="Class", exact=True).first).to_have_value("Bard")
+
+        open_tab(page, "Places")
+        expand_section(page, "Create Place")
+        fill_textbox(page, "Name", "Draft Hall")
+        fill_textbox(page, "Type", "Library")
+        page.get_by_role("button", name="add_location_alt Create Place").click()
+        expect(page.get_by_text("Complete Name, Type, And Summary.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("textbox", name="Name", exact=True).first).to_have_value("Draft Hall")
+        expect(page.get_by_role("textbox", name="Type", exact=True).first).to_have_value("Library")
+
+        open_tab(page, "Session Notes")
+        ensure_session_notes_open(page)
+        page.get_by_role("textbox", name="Title").fill("Draft Session")
+        page.get_by_role("button", name="note_add Save Session Notes").click()
+        expect(page.get_by_text("Add Session Notes Before Saving.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("textbox", name="Title")).to_have_value("Draft Session")
+        browser.close()
+
+
+def test_ui_deletes_character_place_and_session_note_files(isolated_character_app):
+    app_url, _docs_lore_dir, characters_dir, places_dir, session_notes_dir, _data_dir = isolated_character_app
+    character_path = characters_dir / "Delete Me.md"
+    place_path = places_dir / "Delete Hall.md"
+    note_path = session_notes_dir / "2026-07-10_Session_Notes.md"
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
+        expand_section(page, "Create Character")
+        fill_textbox(page, "Name", "Delete Me")
+        fill_textbox(page, "First Name", "Delete")
+        fill_textbox(page, "Family Name", "Me")
+        fill_textbox(page, "Level", "1")
+        fill_textbox(page, "Race", "Human")
+        fill_textbox(page, "Class", "Commoner")
+        fill_textbox(page, "Pronouns", "they/them")
+        page.get_by_role("textbox", name="Backstory", exact=True).fill("A temporary character for deletion.")
+        page.get_by_role("textbox", name="Summary", exact=True).fill("Temporary.")
+        page.get_by_role("button", name="person_add Create Character").click()
+        expect(page.get_by_role("heading", name="Delete Me", exact=True)).to_be_visible(timeout=10000)
+        ensure_character_editor_open(page)
+        page.get_by_role("button", name="delete_forever Delete Character").click()
+        expect(page.get_by_text("Character Deleted.")).to_be_visible(timeout=10000)
+
+        open_tab(page, "Places")
+        expand_section(page, "Create Place")
+        fill_textbox(page, "Name", "Delete Hall")
+        fill_textbox(page, "Type", "Guildhall")
+        page.get_by_role("textbox", name="Summary", exact=True).fill("A temporary place for deletion.")
+        page.get_by_role("button", name="add_location_alt Create Place").click()
+        expect(page.get_by_role("heading", name="Delete Hall", exact=True)).to_be_visible(timeout=10000)
+        ensure_place_editor_open(page)
+        page.get_by_role("button", name="delete_forever Delete Place").click()
+        expect(page.get_by_text("Place Deleted.")).to_be_visible(timeout=10000)
+
+        open_tab(page, "Session Notes")
+        ensure_session_notes_open(page)
+        page.get_by_role("textbox", name="Session Notes").fill("2026-07-10\nA temporary note for deletion.")
+        page.get_by_role("button", name="note_add Save Session Notes").click()
+        expect(page.get_by_role("heading", name="2026-07-10 - Session Notes", exact=True)).to_be_visible(timeout=10000)
+        ensure_session_note_editor_open(page)
+        page.get_by_role("button", name="delete_forever Delete Session Note").click()
+        expect(page.get_by_text("Session Note Deleted.")).to_be_visible(timeout=10000)
+        browser.close()
+
+    assert not character_path.exists()
+    assert not place_path.exists()
+    assert not note_path.exists()
+
+
 def test_ui_creates_character_from_combined_graph_and_loads_it(isolated_character_app):
     app_url, _docs_lore_dir, characters_dir, _places_dir, _session_notes_dir, _data_dir = isolated_character_app
     original_files = {path.name for path in characters_dir.glob("*.md")}

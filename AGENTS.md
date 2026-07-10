@@ -11,3 +11,8 @@
 ## Task Management
 - When a task is finished, add a Completed section to the TODO.md file. 
 - When finishing a section, check TODO.md for the next task.
+
+## Application Screenshots
+- Add an application screenshot to docs/screenshots before committing code.
+- Name the screenshot based on the UI page you are modifying.
+- Compare the current version to the previous one before updating.

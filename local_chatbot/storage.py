@@ -1,5 +1,6 @@
 import re
 import json
+import shutil
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -203,6 +204,10 @@ def read_place_profile(place: Place) -> PlaceProfile:
 
 def write_place_profile(place: Place, profile: PlaceProfile) -> None:
     place.path.write_text(render_place(profile), encoding="utf-8")
+
+
+def delete_place_profile(place: Place) -> None:
+    place.path.unlink(missing_ok=True)
 
 
 def render_backstory(profile: CharacterProfile) -> str:
@@ -1090,6 +1095,14 @@ def write_character_profile(character: Character, profile: CharacterProfile) -> 
     else:
         character.backstory_path.write_text(render_backstory(profile), encoding="utf-8")
     regenerate_character_graph(character)
+
+def delete_character_profile(character: Character) -> None:
+    if character.path.is_dir():
+        shutil.rmtree(character.path, ignore_errors=True)
+    else:
+        character.backstory_path.unlink(missing_ok=True)
+    shutil.rmtree(character.data_dir, ignore_errors=True)
+    character.graph_path.unlink(missing_ok=True)
 
 
 def enrich_profile(profile: CharacterProfile) -> CharacterProfile:

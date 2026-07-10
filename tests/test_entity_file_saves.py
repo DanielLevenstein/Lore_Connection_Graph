@@ -7,6 +7,8 @@ from local_chatbot.storage import (
     PlaceProfile,
     create_character,
     create_place,
+    delete_character_profile,
+    delete_place_profile,
     read_character_profile,
     read_place_profile,
     write_character_profile,
@@ -69,6 +71,35 @@ def test_character_file_save_round_trips_updated_fields(tmp_path, monkeypatch):
     assert "| Della | 6 | Gnome | Rogue | she/her |" in text
 
 
+def test_character_delete_removes_sheet_metadata_and_graph(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "CHARACTERS_DIR", tmp_path / "docs" / "lore" / "character_sheets")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
+    monkeypatch.setattr(storage, "CHARACTER_GRAPHS_DIR", tmp_path / "data" / "character_graph")
+    monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
+
+    character = create_character(
+        CharacterProfile(
+            name="Della Moor",
+            pronouns="she/her",
+            level="5",
+            race="Gnome",
+            character_class="Rogue",
+            backstory="Della maps locked doors beneath the old city.",
+            summary="Della is a careful scout.",
+        )
+    )
+    character.profile_path.parent.mkdir(parents=True, exist_ok=True)
+    character.profile_path.write_text("{}", encoding="utf-8")
+    character.graph_path.parent.mkdir(parents=True, exist_ok=True)
+    character.graph_path.write_text("{}", encoding="utf-8")
+
+    delete_character_profile(character)
+
+    assert not character.backstory_path.exists()
+    assert not character.data_dir.exists()
+    assert not character.graph_path.exists()
+
+
 def test_place_file_save_round_trips_updated_fields(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "PLACES_DIR", tmp_path / "docs" / "lore" / "places")
 
@@ -104,6 +135,22 @@ def test_place_file_save_round_trips_updated_fields(tmp_path, monkeypatch):
     assert reloaded.connections == ["Della Moor: Stores maps", "Jory Ravenmark: Buys charts"]
 
 
+def test_place_delete_removes_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "PLACES_DIR", tmp_path / "docs" / "lore" / "places")
+
+    place = create_place(
+        PlaceProfile(
+            name="Brindle Hall",
+            place_type="Guildhall",
+            summary="A narrow guildhall where maps are traded.",
+        )
+    )
+
+    delete_place_profile(place)
+
+    assert not place.path.exists()
+
+
 def test_session_note_file_save_overwrites_and_reloads_by_date(tmp_path, monkeypatch):
     monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
 
@@ -137,3 +184,15 @@ def test_session_note_file_save_overwrites_and_reloads_by_date(tmp_path, monkeyp
     )
     assert session_notes.read_session_note_title(second_save[0].path) == "Silver Key"
     assert session_notes.read_session_note_body(second_save[0].path) == "The party kept better notes."
+
+
+def test_session_note_delete_removes_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+    saved = session_notes.save_session_notes(
+        "2026-07-10\nThe party found a silver key.",
+        today=date(2026, 7, 10),
+    )
+
+    session_notes.delete_session_note(saved[0].path)
+
+    assert not saved[0].path.exists()

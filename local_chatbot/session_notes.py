@@ -319,6 +319,10 @@ def write_session_note(path: Path, body: str, title: str = "") -> SessionNote:
     return SessionNote(note_date=note_date, body=body.strip(), path=path, title=title.strip())
 
 
+def delete_session_note(path: Path) -> None:
+    path.unlink(missing_ok=True)
+
+
 def render_session_note(note_date: date, body: str, title: str = "") -> str:
     title_suffix = f" - {title.strip()}" if title.strip() else ""
     return f"# Session Notes - {note_date.isoformat()}{title_suffix}\n\n{body.strip()}\n"
