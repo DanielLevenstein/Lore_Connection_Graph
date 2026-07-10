@@ -1,5 +1,4 @@
 import os
-import requests
 import streamlit as st
 
 from character_graph.combined_graph import (
@@ -23,7 +22,6 @@ from local_chatbot.storage import (
     Character,
     CharacterProfile,
     PlaceProfile,
-    append_chatlog,
     append_character_connections,
     character_family_name,
     character_first_name,
@@ -638,7 +636,6 @@ def render_character_info(character: Character, model_config=None) -> None:
     render_character_editor(character)
     render_relationship_graph(character)
 
-# active_model = render_sidebar()
 
 st.title("Roleplaying Character Creator")
 st.caption("Create Character Sheets And Explore Relationship Graphs From Local Lore.")

@@ -2,6 +2,18 @@
 
 Build a local Python app for creating roleplaying character sheets, maintaining lore files, and viewing relationship graphs derived from those files.
 
+## App Consistency
+- Update button labels and headings to make all words start with an uppercase letter. 
+- Support characters with first name only.
+- Update the config directory so model configs are stored under config/model.
+- Change the root level characters directory to docs/lore/character_sheets
+  - Support both character_name/BACKSTORY.md and character_name.md format
+  - Add a stub folder for places in docs/lore/places
+- Move lore files in the data directory to data/lore/character_sheets/*
+- Support storing summary as a standalone section or under the character name. Keep track of where the data came from when saving character.
+- Save auto-generated characters to data/lore/character_sheets/character_name.md by default and let the player move them to the main characters folder manually.
+  - make the docs/lore folder the source of truth for what characters and places are currently available. 
+
 ## Storage
 
 - Authored lore is stored in `docs/lore`.
