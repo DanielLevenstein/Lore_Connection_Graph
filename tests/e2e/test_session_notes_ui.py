@@ -87,8 +87,9 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
         page = browser.new_page(viewport={"width": 1280, "height": 1000})
         page.goto(app_url, wait_until="networkidle")
 
-        expect(page.get_by_role("heading", name="Session Notes")).to_be_visible(timeout=10000)
-        page.get_by_text("Lore Memory", exact=True).click()
+        page.get_by_role("tab", name="Session Notes", exact=True).click()
+        expect(page.get_by_role("heading", name="Session Notes", exact=True)).to_be_visible(timeout=10000)
+        page.get_by_text("Capture Session Notes", exact=True).click()
         page.get_by_role("textbox", name="Session Notes").fill(
             "2026-07-10\n"
             "The party found a silver key.\n\n"
@@ -97,11 +98,65 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
         )
         page.get_by_role("button", name="note_add Save Session Notes").click()
         expect(page.get_by_text("Saved 2 Session Note Files.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="2026-07-10 - Session Notes", exact=True)).to_be_visible(timeout=10000)
         browser.close()
 
-    first = notes_dir / "session_notes_2026-07-10.md"
-    second = notes_dir / "session_notes_2026-07-11.md"
+    first = notes_dir / "2026-07-10_Session_Notes.md"
+    second = notes_dir / "2026-07-11_Session_Notes.md"
     assert first.exists()
     assert second.exists()
     assert "silver key" in first.read_text(encoding="utf-8")
     assert "lighthouse door" in second.read_text(encoding="utf-8")
+
+
+def test_ui_imports_discord_session_notes_with_markdown_and_date_field(isolated_session_notes_app):
+    app_url, docs_lore_dir = isolated_session_notes_app
+    notes_dir = docs_lore_dir / "session_notes"
+    import_file = docs_lore_dir / "discord_import.md"
+    import_file.write_text(
+        """Sean [OOZE], Server Tag: OOZEOOZE — 7/10/26, 11:36 PMFriday, July 10, 2026 at 11:36 PM
+Session 12:
+
+## Scene Notes
+
+- Found a **silver key**
+- Met `Jory`
+
+| Clue | Status |
+| ---- | ------ |
+| Door | Open |
+
+Session 13:
+
+## Second Scene
+
+- Preserved in the same note
+""",
+        encoding="utf-8",
+    )
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        page.get_by_role("tab", name="Session Notes", exact=True).click()
+        page.get_by_text("Import Session Notes", exact=True).first.click()
+        page.locator("input[type=file]").set_input_files(str(import_file))
+        page.get_by_label("Split Session Headings Into Separate Notes").uncheck(force=True)
+        page.get_by_role("button", name="upload_file Import Session Notes").click()
+        expect(page.get_by_text("Saved 1 Session Note File.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="2026-07-10 - Sessions 12-13", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Scene Notes", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Second Scene", exact=True)).to_be_visible(timeout=10000)
+        page.get_by_text("Edit Session Note", exact=True).click()
+        expect(page.get_by_role("textbox", name="Date")).to_have_value("2026-07-10", timeout=10000)
+        browser.close()
+
+    imported = notes_dir / "2026-07-10_Sessions_12_13.md"
+    assert imported.exists()
+    text = imported.read_text(encoding="utf-8")
+    assert "## Scene Notes" in text
+    assert "## Second Scene" in text
+    assert "- Found a **silver key**" in text
+    assert "| Clue | Status |" in text

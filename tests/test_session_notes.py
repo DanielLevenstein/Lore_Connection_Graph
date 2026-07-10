@@ -1,7 +1,13 @@
 from datetime import date
 
 import local_chatbot.session_notes as session_notes
-from local_chatbot.session_notes import date_from_line, save_session_notes, split_session_notes
+from local_chatbot.session_notes import (
+    date_from_line,
+    import_discord_session_notes,
+    save_session_notes,
+    split_discord_session_notes,
+    split_session_notes,
+)
 
 
 def test_undated_session_notes_save_to_current_date(tmp_path, monkeypatch):
@@ -10,11 +16,71 @@ def test_undated_session_notes_save_to_current_date(tmp_path, monkeypatch):
     saved = save_session_notes("The party found a sealed brass door.", today=date(2026, 7, 10))
 
     assert len(saved) == 1
-    assert saved[0].path == tmp_path / "docs" / "lore" / "session_notes" / "session_notes_2026-07-10.md"
+    assert saved[0].path == tmp_path / "docs" / "lore" / "session_notes" / "2026-07-10_Session_Notes.md"
+    assert saved[0].title == "Session Notes"
     assert saved[0].path.read_text(encoding="utf-8") == (
-        "# Session Notes - 2026-07-10\n\n"
+        "# Session Notes - 2026-07-10 - Session Notes\n\n"
         "The party found a sealed brass door.\n"
     )
+
+
+def test_manual_session_notes_can_use_optional_title(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    saved = save_session_notes("2026-07-10\nThe party found a sealed brass door.", title="Silver Key")
+
+    assert len(saved) == 1
+    assert saved[0].path.name == "2026-07-10_Silver_Key.md"
+    assert saved[0].title == "Silver Key"
+    assert saved[0].path.read_text(encoding="utf-8").startswith("# Session Notes - 2026-07-10 - Silver Key")
+
+
+def test_session_notes_preserve_markdown_body(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    markdown_body = """2026-07-10
+## Scene Notes
+
+- Found a **silver key**
+- Met `Jory`
+
+| Clue | Status |
+| ---- | ------ |
+| Door | Open |"""
+
+    saved = save_session_notes(markdown_body, title="Silver Key")
+
+    assert session_notes.read_session_note_body(saved[0].path) == markdown_body
+    assert "## Scene Notes" in saved[0].path.read_text(encoding="utf-8")
+    assert "| Clue | Status |" in saved[0].path.read_text(encoding="utf-8")
+
+
+def test_legacy_session_note_body_only_strips_date_heading(tmp_path):
+    legacy = tmp_path / "session_notes_2026-07-10.md"
+    legacy.write_text("##2026-07-10\n\n## Scene Notes\n\n- Found a **silver key**\n", encoding="utf-8")
+
+    assert session_notes.read_session_note_body(legacy) == "## Scene Notes\n\n- Found a **silver key**"
+
+
+def test_manual_session_notes_split_multiple_session_titles_on_same_date(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    saved = save_session_notes(
+        """2026-07-10
+Session 1:
+
+The party found a sealed brass door.
+
+Session 2:
+
+The party opened the door."""
+    )
+
+    assert [note.path.name for note in saved] == [
+        "2026-07-10_Session_1.md",
+        "2026-07-10_Session_2.md",
+    ]
+    assert "The party opened the door." not in saved[0].path.read_text(encoding="utf-8")
 
 
 def test_session_notes_split_iso_dates_into_calendar_files(tmp_path, monkeypatch):
@@ -93,3 +159,88 @@ The date appears after the heading.""",
     assert notes == [
         (date(2026, 7, 10), "Campaign memory\n\n2026-07-10\nThe date appears after the heading.")
     ]
+
+
+def test_discord_export_splits_dates_and_removes_export_noise():
+    notes = split_discord_session_notes(
+        """Sean [OOZE], Server Tag: OOZEOOZE — 2/19/23, 11:36 PMSunday, February 19, 2023 at 11:36 PM
+Session 1:
+
+The party awoke.
+:thumbsup:
+Click to react
+Add Reaction
+Reply
+Forward
+More
+February 20, 2023
+
+Sean [OOZE], Server Tag: OOZEOOZE — 2/20/23, 12:01 AMMonday, February 20, 2023 at 12:01 AM
+The party found a piano. (edited)Thursday, August 3, 2023 at 1:55 AM
+[12:02 AM]Monday, February 20, 2023 at 12:02 AM
+The piano was on fire.
+"""
+    )
+
+    assert notes == [
+        (date(2023, 2, 19), "Session 1", "Session 1:\n\nThe party awoke."),
+        (date(2023, 2, 20), "Session Notes", "The party found a piano.\n\nThe piano was on fire."),
+    ]
+
+
+def test_discord_export_splits_multiple_sessions_on_same_date(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+    source = tmp_path / "DISCORD.md"
+    source.write_text(
+        """August 3, 2023
+
+Sean [OOZE], Server Tag: OOZEOOZE — 8/3/23, 2:41 AMThursday, August 3, 2023 at 2:41 AM
+Session 2:
+
+The party met Delia.
+
+Sean [OOZE], Server Tag: OOZEOOZE — 8/3/23, 3:22 AMThursday, August 3, 2023 at 3:22 AM
+Session 3:
+
+The party met Morningstar.
+""",
+        encoding="utf-8",
+    )
+
+    notes = import_discord_session_notes(source)
+
+    assert [note.title for note in notes] == ["Session 2", "Session 3"]
+    assert [note.path.name for note in notes] == [
+        "2023-08-03_Session_2.md",
+        "2023-08-03_Session_3.md",
+    ]
+    assert "The party met Delia." in notes[0].path.read_text(encoding="utf-8")
+    assert "The party met Morningstar." not in notes[0].path.read_text(encoding="utf-8")
+
+
+def test_discord_export_can_keep_multiple_sessions_in_one_note(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+    source = tmp_path / "DISCORD.md"
+    source.write_text(
+        """August 3, 2023
+
+Sean [OOZE], Server Tag: OOZEOOZE — 8/3/23, 2:41 AMThursday, August 3, 2023 at 2:41 AM
+Session 2:
+
+The party met Delia.
+
+Sean [OOZE], Server Tag: OOZEOOZE — 8/3/23, 3:22 AMThursday, August 3, 2023 at 3:22 AM
+Session 3:
+
+The party met Morningstar.
+""",
+        encoding="utf-8",
+    )
+
+    notes = import_discord_session_notes(source, split_sessions=False)
+
+    assert len(notes) == 1
+    assert notes[0].title == "Sessions 2-3"
+    assert notes[0].path.name == "2023-08-03_Sessions_2_3.md"
+    assert "The party met Delia." in notes[0].path.read_text(encoding="utf-8")
+    assert "The party met Morningstar." in notes[0].path.read_text(encoding="utf-8")

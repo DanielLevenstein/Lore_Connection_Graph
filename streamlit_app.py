@@ -24,6 +24,7 @@ from model_harness.environment import ensure_base_dirs
 from local_chatbot.storage import (
     Character,
     CharacterProfile,
+    Place,
     PlaceProfile,
     append_character_connections,
     character_family_name,
@@ -33,16 +34,23 @@ from local_chatbot.storage import (
     default_details,
     list_places,
     list_characters,
+    read_place_profile,
     read_character_profile,
     read_text,
     regenerate_character_graph,
     start_chatlog,
     write_character_profile,
+    write_place_profile,
 )
 from local_chatbot.session_notes import (
+    import_discord_session_notes_text,
     list_session_notes,
     read_session_note,
+    read_session_note_body,
+    read_session_note_title,
     save_session_notes,
+    session_note_date_from_path,
+    write_session_note,
 )
 from local_chatbot.paths import DOCS_LORE_DIR
 
@@ -88,9 +96,45 @@ def get_active_character() -> Character | None:
     return next((character for character in list_characters() if character.name == name), None)
 
 
+def set_active_place(place: Place) -> None:
+    st.session_state.active_place = place.name
+
+
+def get_active_place() -> Place | None:
+    name = st.session_state.get("active_place")
+    if not name:
+        return None
+    return next((place for place in list_places() if place.name == name), None)
+
+
+def set_active_session_note(path) -> None:
+    st.session_state.active_session_note = path.name
+
+
+def get_active_session_note():
+    name = st.session_state.get("active_session_note")
+    if not name:
+        return None
+    return next((path for path in list_session_notes() if path.name == name), None)
+
+
 def display_character_name(character: Character) -> str:
     profile = read_character_profile(character)
     return clean_display_name(profile.name or character.name)
+
+
+def display_place_name(place: Place) -> str:
+    profile = read_place_profile(place)
+    return clean_display_name(profile.name or place.name)
+
+
+def display_session_note_name(path) -> str:
+    try:
+        note_date = session_note_date_from_path(path).isoformat()
+    except ValueError:
+        return path.stem.replace("session_notes_", "").replace("_", " ")
+    title = read_session_note_title(path)
+    return f"{note_date} - {title}" if title else note_date
 
 
 def clean_display_name(name: str) -> str:
@@ -251,7 +295,51 @@ def undo_character_changes(character: Character) -> None:
     character.backstory_path.write_text(previous.rstrip() + "\n", encoding="utf-8")
     st.session_state[key] = snapshots
     regenerate_character_graph(character)
-    st.success("Character Changes Undone.")
+    st.session_state[f"character_status_{character.name}"] = "Character Changes Undone."
+    st.rerun()
+
+
+def push_place_undo(place: Place) -> None:
+    key = f"place_undo_{place.name}"
+    snapshots = st.session_state.setdefault(key, [])
+    snapshots.append(read_text(place.path))
+    st.session_state[key] = snapshots[-20:]
+
+
+def undo_place_changes(place: Place) -> None:
+    key = f"place_undo_{place.name}"
+    snapshots = st.session_state.get(key, [])
+    if not snapshots:
+        st.warning("No Place Changes To Undo.")
+        return
+    previous = snapshots.pop()
+    place.path.write_text(previous.rstrip() + "\n", encoding="utf-8")
+    st.session_state[key] = snapshots
+    st.session_state[f"place_status_{place.name}"] = "Place Changes Undone."
+    st.rerun()
+
+
+def push_session_notes_undo() -> None:
+    snapshots = st.session_state.setdefault("session_notes_undo", [])
+    snapshots.append({path.name: read_session_note(path) for path in list_session_notes()})
+    st.session_state["session_notes_undo"] = snapshots[-20:]
+
+
+def undo_session_notes_changes() -> None:
+    snapshots = st.session_state.get("session_notes_undo", [])
+    if not snapshots:
+        st.warning("No Session Note Changes To Undo.")
+        return
+    previous = snapshots.pop()
+    current_paths = {path.name: path for path in list_session_notes()}
+    for name, path in current_paths.items():
+        if name not in previous:
+            path.unlink(missing_ok=True)
+    for path in current_paths.values():
+        if path.name in previous:
+            path.write_text(previous[path.name].rstrip() + "\n", encoding="utf-8")
+    st.session_state["session_notes_undo"] = snapshots
+    st.session_state["session_notes_status"] = "Session Note Changes Undone."
     st.rerun()
 
 
@@ -658,7 +746,7 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
                 st.error("Complete Name, Type, And Summary.")
                 return
             try:
-                create_place(
+                place = create_place(
                     PlaceProfile(
                         name=name.strip(),
                         place_type=place_type.strip(),
@@ -674,42 +762,205 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
             else:
                 if key_prefix == "graph_pending_place":
                     st.session_state.pop("pending_place_profile", None)
+                set_active_place(place)
                 st.success(f"Created {name.strip()}.")
                 st.rerun()
 
 
+def render_place_panel() -> None:
+    st.title("Places")
+    places = list_places()
+    if places:
+        display_names = [display_place_name(place) for place in places]
+        current = st.session_state.get("active_place", places[0].name)
+        current_index = next((index for index, place in enumerate(places) if place.name == current), 0)
+        selected_place_label = st.selectbox(
+            "Existing Places",
+            display_names,
+            index=current_index,
+            key="main_existing_place",
+        )
+        selected_place = places[display_names.index(selected_place_label)]
+        if st.button("Open Place", icon=":material/location_on:", key="main_open_place"):
+            set_active_place(selected_place)
+            st.rerun()
+        if "active_place" not in st.session_state:
+            set_active_place(selected_place)
+    else:
+        st.info("Create Your First Place To Begin.")
+
+    active_place = get_active_place()
+    if active_place:
+        render_place_info(active_place)
+
+    render_place_creator()
+
+
+def render_place_info(place: Place) -> None:
+    profile = read_place_profile(place)
+    st.subheader(display_place_name(place))
+    with st.expander("Edit Place", expanded=False):
+        place_message = st.session_state.pop(f"place_status_{place.name}", "")
+        if place_message:
+            st.success(place_message)
+        with st.form(f"edit_place_{place.name}"):
+            name = st.text_input("Name", value=profile.name, disabled=True)
+            place_type = st.text_input("Type", value=profile.place_type)
+            summary = st.text_area("Summary", value=profile.summary, height=96)
+            details = st.text_area("Place Details", value=profile.details, height=120)
+            connections = st.text_area(
+                "Place Connections",
+                value=render_list_field(profile.connections),
+                height=96,
+            )
+            action_cols = st.columns(2)
+            save_requested = action_cols[0].form_submit_button("Save Place", icon=":material/save:")
+            undo_requested = action_cols[1].form_submit_button("Undo Changes", icon=":material/undo:")
+            if undo_requested:
+                undo_place_changes(place)
+            if save_requested:
+                if not all([name.strip(), place_type.strip(), summary.strip()]):
+                    st.error("Complete Name, Type, And Summary.")
+                    return
+                push_place_undo(place)
+                write_place_profile(
+                    place,
+                    PlaceProfile(
+                        name=profile.name,
+                        place_type=place_type.strip(),
+                        summary=summary.strip(),
+                        details=details.strip(),
+                        connections=parse_list_field(connections),
+                    ),
+                )
+                st.session_state[f"place_status_{place.name}"] = "Place Saved."
+                st.rerun()
+
+
 def render_session_notes() -> None:
-    st.subheader("Session Notes")
-    with st.expander("Lore Memory", expanded=False):
+    st.title("Session Notes")
+    saved_count = st.session_state.pop("session_notes_saved_count", 0)
+    if saved_count:
+        st.success(f"Saved {saved_count} Session Note File{'s' if saved_count != 1 else ''}.")
+    session_notes_status = st.session_state.pop("session_notes_status", "")
+    if session_notes_status:
+        st.success(session_notes_status)
+
+    note_files = list_session_notes()
+    if note_files:
+        display_names = [display_session_note_name(path) for path in note_files]
+        current = st.session_state.get("active_session_note", note_files[0].name)
+        current_index = next((index for index, path in enumerate(note_files) if path.name == current), 0)
+        selected_note_label = st.selectbox(
+            "Existing Session Notes",
+            display_names,
+            index=current_index,
+            key="main_existing_session_note",
+        )
+        selected_note = note_files[display_names.index(selected_note_label)]
+        if st.button("Open Session Note", icon=":material/event_note:", key="main_open_session_note"):
+            set_active_session_note(selected_note)
+            st.rerun()
+        if "active_session_note" not in st.session_state:
+            set_active_session_note(selected_note)
+    else:
+        st.info("Create Your First Session Note To Begin.")
+
+    active_note = get_active_session_note()
+    if active_note:
+        render_session_note_editor(active_note)
+
+    st.subheader("New Session Notes")
+    with st.expander("Import Session Notes", expanded=False):
+        uploaded_notes = st.file_uploader(
+            "Discord Markdown Export",
+            type=["md", "txt"],
+            key="session_notes_import",
+        )
+        split_import_sessions = st.checkbox(
+            "Split Session Headings Into Separate Notes",
+            value=True,
+            key="split_import_session_headings",
+        )
+        if st.button("Import Session Notes", icon=":material/upload_file:", key="import_session_notes"):
+            if uploaded_notes is None:
+                st.error("Choose A Markdown Export Before Importing.")
+                return
+            try:
+                import_text = uploaded_notes.getvalue().decode("utf-8")
+            except UnicodeDecodeError:
+                st.error("Import File Must Be UTF-8 Text.")
+                return
+            push_session_notes_undo()
+            imported = import_discord_session_notes_text(import_text, split_sessions=split_import_sessions)
+            if not imported:
+                st.error("No Dated Session Notes Were Found In The Import.")
+                return
+            st.session_state["session_notes_saved_count"] = len(imported)
+            set_active_session_note(imported[0].path)
+            st.rerun()
+
+    with st.expander("Capture Session Notes", expanded=False):
         if st.session_state.pop("clear_session_notes_draft", False):
             st.session_state["session_notes_draft"] = ""
-        saved_count = st.session_state.pop("session_notes_saved_count", 0)
-        if saved_count:
-            st.success(f"Saved {saved_count} Session Note File{'s' if saved_count != 1 else ''}.")
+            st.session_state["session_notes_title"] = ""
+        title = st.text_input(
+            "Title",
+            placeholder="Optional session title",
+            key="session_notes_title",
+        )
         notes = st.text_area(
             "Session Notes",
             height=180,
-            placeholder="Write campaign memory here. Include dates to split notes into dated files.",
+            placeholder="Write campaign memory in Markdown. Include dates to split notes into dated files.",
             key="session_notes_draft",
         )
-        if st.button("Save Session Notes", icon=":material/note_add:", key="save_session_notes"):
+        action_cols = st.columns(2)
+        if action_cols[0].button("Save Session Notes", icon=":material/note_add:", key="save_session_notes"):
             if not notes.strip():
                 st.error("Add Session Notes Before Saving.")
                 return
-            saved = save_session_notes(notes)
+            push_session_notes_undo()
+            saved = save_session_notes(notes, title=title)
             st.session_state["session_notes_saved_count"] = len(saved)
+            if saved:
+                set_active_session_note(saved[0].path)
             st.session_state["clear_session_notes_draft"] = True
             st.rerun()
+        if action_cols[1].button("Undo Changes", icon=":material/undo:", key="undo_session_notes"):
+            undo_session_notes_changes()
 
-        note_files = list_session_notes()
-        if note_files:
-            selected = st.selectbox(
-                "Saved Session Notes",
-                [path.name for path in note_files],
-                key="saved_session_notes",
+
+def render_session_note_editor(path) -> None:
+    note_date = session_note_date_from_path(path).isoformat()
+    note_title = read_session_note_title(path)
+    note_label = display_session_note_name(path)
+    note_body = read_session_note_body(path)
+    st.subheader(note_label)
+    if note_body:
+        st.markdown(note_body)
+    with st.expander("Edit Session Note", expanded=False):
+        with st.form(f"edit_session_note_{path.name}"):
+            st.text_input("Date", value=note_date, disabled=True)
+            title = st.text_input("Title", value=note_title, placeholder="Optional session title")
+            body = st.text_area(
+                "Session Note",
+                value=note_body,
+                height=220,
             )
-            selected_path = next(path for path in note_files if path.name == selected)
-            st.markdown(read_session_note(selected_path))
+            action_cols = st.columns(2)
+            save_requested = action_cols[0].form_submit_button("Save Session Note", icon=":material/save:")
+            undo_requested = action_cols[1].form_submit_button("Undo Changes", icon=":material/undo:")
+            if undo_requested:
+                undo_session_notes_changes()
+            if save_requested:
+                if not body.strip():
+                    st.error("Add Session Note Details Before Saving.")
+                    return
+                push_session_notes_undo()
+                write_session_note(path, body, title)
+                st.session_state["session_notes_status"] = "Session Note Saved."
+                st.rerun()
 
 
 def render_character_panel() -> None:
@@ -750,6 +1001,9 @@ def render_character_panel() -> None:
 def render_character_editor(character: Character) -> None:
     profile = read_character_profile(character)
     with st.expander("Edit Character", expanded=False):
+        character_message = st.session_state.pop(f"character_status_{character.name}", "")
+        if character_message:
+            st.success(character_message)
         with st.form(f"edit_character_{character.name}"):
             st.text_input("Name", value=profile.name, disabled=True)
             name_cols = st.columns(2)
@@ -861,7 +1115,7 @@ def render_character_editor(character: Character) -> None:
                 )
                 push_character_undo(character)
                 write_character_profile(character, updated)
-                st.success("Character Saved.")
+                st.session_state[f"character_status_{character.name}"] = "Character Saved."
                 st.rerun()
 
 
@@ -892,11 +1146,18 @@ def render_character_info(character: Character, model_config=None) -> None:
 st.title("Roleplaying Character Creator")
 st.caption("Create Character Sheets And Explore Relationship Graphs From Local Lore.")
 
-render_combined_character_graph()
-render_character_panel()
-active_character = get_active_character()
-if active_character is None:
-    st.info("Create Or Open A Character To Edit Its Sheet.")
+characters_tab, places_tab, session_notes_tab = st.tabs(["Characters", "Places", "Session Notes"])
 
-render_place_creator()
-render_session_notes()
+with characters_tab:
+    render_character_panel()
+    active_character = get_active_character()
+    if active_character is None:
+        st.info("Create Or Open A Character To Edit Its Sheet.")
+
+with places_tab:
+    render_place_panel()
+
+with session_notes_tab:
+    render_session_notes()
+
+render_combined_character_graph()

@@ -179,6 +179,32 @@ def create_place(profile: PlaceProfile) -> Place:
     return place
 
 
+def read_place_profile(place: Place) -> PlaceProfile:
+    text = read_text(place.path)
+    if not text.strip():
+        return PlaceProfile(name=place.name, place_type="", summary="")
+    sections = markdown_sections(text)
+    stats = parse_stats_table(section_content(sections, "place stats"))
+    summary = section_content(sections, "place summary")
+    details = section_content(sections, "place details")
+    connections = [
+        line.lstrip("-").strip()
+        for line in section_content(sections, "place connections").splitlines()
+        if line.strip().startswith("-")
+    ]
+    return PlaceProfile(
+        name=markdown_title(text) or stats.get("name", place.name),
+        place_type=stats.get("type", ""),
+        summary=summary,
+        details=details,
+        connections=connections,
+    )
+
+
+def write_place_profile(place: Place, profile: PlaceProfile) -> None:
+    place.path.write_text(render_place(profile), encoding="utf-8")
+
+
 def render_backstory(profile: CharacterProfile) -> str:
     summary = profile.summary.strip() or default_summary(profile)
     stats = character_stats(profile)

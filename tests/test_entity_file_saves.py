@@ -1,0 +1,139 @@
+from datetime import date
+
+import local_chatbot.session_notes as session_notes
+import local_chatbot.storage as storage
+from local_chatbot.storage import (
+    CharacterProfile,
+    PlaceProfile,
+    create_character,
+    create_place,
+    read_character_profile,
+    read_place_profile,
+    write_character_profile,
+    write_place_profile,
+)
+
+
+def test_character_file_save_round_trips_updated_fields(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "CHARACTERS_DIR", tmp_path / "docs" / "lore" / "character_sheets")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
+    monkeypatch.setattr(storage, "CHARACTER_GRAPHS_DIR", tmp_path / "data" / "character_graph")
+    monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
+
+    character = create_character(
+        CharacterProfile(
+            name="Della Moor",
+            pronouns="she/her",
+            level="5",
+            race="Gnome",
+            character_class="Rogue",
+            backstory="Della maps locked doors beneath the old city.",
+            first_name="Della",
+            family_name="Moor",
+            summary="Della is a careful scout.",
+            drives=["Find the sunken archive"],
+            alliances=["Brindle Hall"],
+            enemies=["The Brass Knife"],
+        )
+    )
+
+    first_read = read_character_profile(character)
+    assert first_read.name == "Della Moor"
+    assert first_read.summary == "Della is a careful scout."
+    assert first_read.drives == ["Find the sunken archive"]
+
+    write_character_profile(
+        character,
+        CharacterProfile(
+            name="Della Moor",
+            pronouns="she/her",
+            level="6",
+            race="Gnome",
+            character_class="Rogue",
+            backstory="Della maps locked doors beneath the old city and marks every hinge.",
+            first_name="Della",
+            family_name="Moor",
+            summary="Della is a careful scout with brass lockpicks.",
+            drives=["Find the sunken archive", "Protect Brindle Hall"],
+            alliances=["Brindle Hall"],
+            enemies=["The Brass Knife"],
+        ),
+    )
+
+    reloaded = read_character_profile(character)
+    text = character.backstory_path.read_text(encoding="utf-8")
+    assert reloaded.level == "6"
+    assert reloaded.backstory == "Della maps locked doors beneath the old city and marks every hinge."
+    assert reloaded.summary == "Della is a careful scout with brass lockpicks."
+    assert reloaded.drives == ["Find the sunken archive", "Protect Brindle Hall"]
+    assert "| Della | 6 | Gnome | Rogue | she/her |" in text
+
+
+def test_place_file_save_round_trips_updated_fields(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "PLACES_DIR", tmp_path / "docs" / "lore" / "places")
+
+    place = create_place(
+        PlaceProfile(
+            name="Brindle Hall",
+            place_type="Guildhall",
+            summary="A narrow guildhall where maps are traded.",
+            details="Lanterns burn blue near the archives.",
+            connections=["Della Moor: Stores maps"],
+        )
+    )
+
+    first_read = read_place_profile(place)
+    assert first_read.name == "Brindle Hall"
+    assert first_read.connections == ["Della Moor: Stores maps"]
+
+    write_place_profile(
+        place,
+        PlaceProfile(
+            name="Brindle Hall",
+            place_type="Guildhall",
+            summary="A crowded guildhall where maps are traded.",
+            details="Lanterns burn green after midnight.",
+            connections=["Della Moor: Stores maps", "Jory Ravenmark: Buys charts"],
+        ),
+    )
+
+    reloaded = read_place_profile(place)
+    assert reloaded.place_type == "Guildhall"
+    assert reloaded.summary == "A crowded guildhall where maps are traded."
+    assert reloaded.details == "Lanterns burn green after midnight."
+    assert reloaded.connections == ["Della Moor: Stores maps", "Jory Ravenmark: Buys charts"]
+
+
+def test_session_note_file_save_overwrites_and_reloads_by_date(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    first_save = session_notes.save_session_notes(
+        "2026-07-10\nThe party found a silver key.",
+        today=date(2026, 7, 10),
+    )
+    second_save = session_notes.save_session_notes(
+        "2026-07-10\nThe party found a silver key and a brass map.",
+        today=date(2026, 7, 10),
+    )
+
+    assert first_save[0].path == second_save[0].path
+    assert session_notes.list_session_notes() == [second_save[0].path]
+    assert second_save[0].path.name == "2026-07-10_Session_Notes.md"
+    assert session_notes.read_session_note(second_save[0].path) == (
+        "# Session Notes - 2026-07-10 - Session Notes\n\n"
+        "2026-07-10\n"
+        "The party found a silver key and a brass map.\n"
+    )
+    assert session_notes.read_session_note_body(second_save[0].path) == (
+        "2026-07-10\n"
+        "The party found a silver key and a brass map."
+    )
+
+    session_notes.write_session_note(second_save[0].path, "The party kept better notes.", "Silver Key")
+
+    assert session_notes.read_session_note(second_save[0].path) == (
+        "# Session Notes - 2026-07-10 - Silver Key\n\n"
+        "The party kept better notes.\n"
+    )
+    assert session_notes.read_session_note_title(second_save[0].path) == "Silver Key"
+    assert session_notes.read_session_note_body(second_save[0].path) == "The party kept better notes."
