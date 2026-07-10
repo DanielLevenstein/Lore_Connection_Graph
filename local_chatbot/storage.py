@@ -4,7 +4,14 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from .paths import CHARACTER_GRAPHS_DIR, CHARACTER_METADATA_DIR, CHARACTERS_DIR, GENERATED_CHARACTER_SHEETS_DIR, ensure_base_dirs
+from .paths import (
+    CHARACTER_GRAPHS_DIR,
+    CHARACTER_METADATA_DIR,
+    CHARACTERS_DIR,
+    GENERATED_CHARACTER_SHEETS_DIR,
+    PLACES_DIR,
+    ensure_base_dirs,
+)
 
 
 SAFE_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_. -]+")
@@ -33,6 +40,7 @@ DEFAULT_SECTION_HEADINGS = [
     "Character Summary",
     "Character Connections",
 ]
+AUTO_GENERATED_MARKER = "Auto Generated"
 HONORIFIC_TOKENS = {"ms", "miss", "mr", "mrs", "mx", "dr"}
 
 
@@ -69,6 +77,21 @@ class Character:
 
 
 @dataclass(frozen=True)
+class Place:
+    name: str
+    path: Path
+
+
+@dataclass(frozen=True)
+class PlaceProfile:
+    name: str
+    place_type: str
+    summary: str
+    details: str = ""
+    connections: list[str] | None = None
+
+
+@dataclass(frozen=True)
 class CharacterProfile:
     name: str
     pronouns: str
@@ -90,6 +113,7 @@ class CharacterProfile:
     aliases: dict[str, dict[str, str]] | None = None
     knowledge_graph_fields: list[dict[str, str]] | None = None
     source_locations: dict[str, str] | None = None
+    auto_generated_sections: list[str] | None = None
 
 
 def sanitize_name(name: str) -> str:
@@ -111,21 +135,68 @@ def list_characters() -> list[Character]:
     return characters
 
 
+def list_places() -> list[Place]:
+    ensure_base_dirs()
+    return [
+        Place(name=path.stem, path=path)
+        for path in sorted(PLACES_DIR.glob("*.md"))
+        if path.name != "PLACE_TEMPLATE.md"
+    ]
+
+
+def render_place(profile: PlaceProfile) -> str:
+    connections = "\n".join(f"- {value}" for value in profile.connections or [] if value.strip())
+    connection_section = f"\n\n## Place Connections\n\n{connections}" if connections else ""
+    details = profile.details.strip()
+    details_section = f"\n\n## Place Details\n\n{details}" if details else ""
+    return (
+        f"# {profile.name}\n\n"
+        "## Place Stats\n\n"
+        "| Name | Type |\n"
+        "| ---- | ---- |\n"
+        f"| {profile.name} | {profile.place_type} |\n\n"
+        "## Place Summary\n\n"
+        f"{profile.summary.strip()}"
+        f"{details_section}"
+        f"{connection_section}\n"
+    )
+
+
+def create_place(profile: PlaceProfile) -> Place:
+    ensure_base_dirs()
+    PLACES_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = sanitize_name(profile.name)
+    place = Place(name=safe_name, path=PLACES_DIR / f"{safe_name}.md")
+    if place.path.exists():
+        raise FileExistsError(place.path)
+    place.path.write_text(render_place(profile), encoding="utf-8")
+    return place
+
+
 def render_backstory(profile: CharacterProfile) -> str:
     summary = profile.summary.strip() or default_summary(profile)
     stats = character_stats(profile)
     details = profile.details.strip() or default_details(profile)
     stats_table = render_stats_table(stats)
     details_section = f"\n\n### Character Details\n\n{details}\n" if details else "\n"
+    backstory_heading = section_heading("Character Backstory", profile)
+    summary_heading = section_heading("Character Summary", profile)
     return (
         f"# {profile.name}\n\n"
         "## Character Stats\n\n"
         f"{stats_table}\n\n"
-        "## Character Backstory\n\n"
+        f"## {backstory_heading}\n\n"
         f"{profile.backstory.strip()}\n\n"
-        "## Character Summary\n\n"
+        f"## {summary_heading}\n\n"
         f"{summary}{details_section}"
     )
+
+
+def section_heading(heading: str, profile: CharacterProfile) -> str:
+    generated = {compact_label(value) for value in profile.auto_generated_sections or []}
+    if compact_label(heading) in generated:
+        return f"{heading} ({AUTO_GENERATED_MARKER})"
+    return heading
 
 
 def character_stats(profile: CharacterProfile) -> list[tuple[str, str]]:
@@ -255,6 +326,7 @@ def read_character_profile(character: Character) -> CharacterProfile:
             aliases=payload.get("aliases"),
             knowledge_graph_fields=payload.get("knowledge_graph_fields", []),
             source_locations=payload.get("source_locations", {}),
+            auto_generated_sections=payload.get("auto_generated_sections", []),
         )
         if markdown_profile:
             return merge_profiles(stored_profile, markdown_profile)
@@ -281,6 +353,7 @@ def read_character_sheet(character: Character) -> CharacterProfile | None:
     if not text.strip():
         return None
     sections = markdown_sections(text)
+    raw_sections = raw_markdown_section_headings(text)
     title = markdown_title(text) or character.name
     stats_section = section_content(sections, "character stats")
     summary_section = section_content(sections, "character summary")
@@ -324,6 +397,7 @@ def read_character_sheet(character: Character) -> CharacterProfile | None:
         aliases=aliases,
         knowledge_graph_fields=knowledge_graph_fields,
         source_locations={"summary": summary_source},
+        auto_generated_sections=auto_generated_sections(raw_sections),
     )
 
 
@@ -355,6 +429,7 @@ def merge_profiles(stored: CharacterProfile, sheet: CharacterProfile) -> Charact
         aliases=merge_aliases(stored.aliases, sheet.aliases),
         knowledge_graph_fields=sheet.knowledge_graph_fields or stored.knowledge_graph_fields or [],
         source_locations={**(stored.source_locations or {}), **(sheet.source_locations or {})},
+        auto_generated_sections=sheet.auto_generated_sections or stored.auto_generated_sections or [],
     )
 
 
@@ -369,7 +444,26 @@ def markdown_sections(text: str) -> dict[str, str]:
     for index, match in enumerate(matches):
         start = match.end()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        sections[match.group(1).strip().lower()] = text[start:end].strip()
+        sections[canonical_section_key(match.group(1))] = text[start:end].strip()
+    return sections
+
+
+def raw_markdown_section_headings(text: str) -> list[str]:
+    return [match.group(1).strip() for match in re.finditer(r"^##\s+(.+?)\s*$", text, re.MULTILINE)]
+
+
+def canonical_section_key(heading: str) -> str:
+    return re.sub(r"\s*\(auto generated\)\s*$", "", heading.strip(), flags=re.IGNORECASE).lower()
+
+
+def auto_generated_sections(headings: list[str]) -> list[str]:
+    sections: list[str] = []
+    for heading in headings:
+        if AUTO_GENERATED_MARKER.lower() not in heading.lower():
+            continue
+        canonical = default_section_heading(canonical_section_key(heading))
+        if canonical:
+            sections.append(canonical)
     return sections
 
 
@@ -757,6 +851,7 @@ def enrich_profile(profile: CharacterProfile) -> CharacterProfile:
         aliases=profile.aliases or {},
         knowledge_graph_fields=profile.knowledge_graph_fields or [],
         source_locations=profile.source_locations or {},
+        auto_generated_sections=profile.auto_generated_sections or [],
     )
 
 
@@ -818,7 +913,7 @@ def update_existing_backstory(
         summary = "" if summary_location == "title_preamble" else profile.summary.strip()
         content = f"{summary}\n\n### Character Details\n\n{desired_details}".strip()
         updated = replace_section(updated, "Character Summary", content)
-    return updated
+    return mark_auto_generated_headings(updated, profile)
 
 
 def details_section_needs_custom_stats(text: str) -> bool:
@@ -916,13 +1011,39 @@ def replace_title_preamble(text: str, summary: str) -> str:
 
 
 def replace_section(text: str, heading: str, content: str) -> str:
-    pattern = re.compile(rf"(^##\s+{re.escape(heading)}\s*$)(.*?)(?=^##\s+|\Z)", re.MULTILINE | re.DOTALL)
+    pattern = re.compile(
+        rf"(^##\s+{re.escape(heading)}(?:\s+\({AUTO_GENERATED_MARKER}\))?\s*$)(.*?)(?=^##\s+|\Z)",
+        re.IGNORECASE | re.MULTILINE | re.DOTALL,
+    )
     match = pattern.search(text)
     if not match:
         suffix = "" if text.endswith("\n") else "\n"
         return f"{text}{suffix}\n## {heading}\n\n{content.strip()}\n"
     replacement = f"{match.group(1)}\n\n{content.strip()}\n"
     return f"{text[: match.start()]}{replacement}{text[match.end():]}"
+
+
+def mark_auto_generated_headings(text: str, profile: CharacterProfile) -> str:
+    generated = {compact_label(value) for value in profile.auto_generated_sections or []}
+    updated = text
+    for heading in ("Character Backstory", "Character Summary"):
+        wants_marker = compact_label(heading) in generated
+        marked = f"{heading} ({AUTO_GENERATED_MARKER})"
+        if wants_marker:
+            updated = re.sub(
+                rf"^##\s+{re.escape(heading)}(?:\s+\({AUTO_GENERATED_MARKER}\))?\s*$",
+                f"## {marked}",
+                updated,
+                flags=re.IGNORECASE | re.MULTILINE,
+            )
+        else:
+            updated = re.sub(
+                rf"^##\s+{re.escape(marked)}\s*$",
+                f"## {heading}",
+                updated,
+                flags=re.IGNORECASE | re.MULTILINE,
+            )
+    return updated
 
 
 def regenerate_character_graph(character: Character) -> None:

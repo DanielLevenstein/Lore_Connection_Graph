@@ -5,7 +5,16 @@ from pathlib import Path
 import local_chatbot.storage as storage
 from local_chatbot.character_generator import RandomCharacterGenerator
 from local_chatbot.paths import CHARACTER_METADATA_DIR, CHARACTERS_DIR, ROOT_DIR
-from local_chatbot.storage import Character, CharacterProfile, create_character, read_character_profile, render_backstory
+from local_chatbot.storage import (
+    Character,
+    CharacterProfile,
+    PlaceProfile,
+    create_character,
+    create_generated_character,
+    create_place,
+    read_character_profile,
+    render_backstory,
+)
 
 
 def test_render_backstory_matches_character_template_shape():
@@ -67,6 +76,24 @@ def test_render_backstory_omits_blank_stat_columns():
     assert "Level" not in render_backstory(profile)
     assert "Class" not in render_backstory(profile)
     assert "Pronouns" not in render_backstory(profile)
+
+
+def test_render_backstory_marks_auto_generated_sections():
+    profile = CharacterProfile(
+        name="Mara Voss",
+        pronouns="",
+        level="",
+        race="Elf",
+        character_class="Wizard",
+        backstory="Mara keeps a silver key.",
+        summary="Mara is careful.",
+        auto_generated_sections=["Character Summary", "Character Backstory"],
+    )
+
+    markdown = render_backstory(profile)
+
+    assert "## Character Backstory (Auto Generated)" in markdown
+    assert "## Character Summary (Auto Generated)" in markdown
 
 
 def test_random_generator_produces_template_ready_profile():
@@ -135,6 +162,33 @@ Allies:
     assert profile.origin == "a handwritten city"
     assert profile.drives == ["preserve the records"]
     assert profile.alliances == ["The Silver Index"]
+
+
+def test_read_character_profile_supports_title_preamble_summary(tmp_path):
+    character_path = tmp_path / "Mara Voss.md"
+    character = Character(name="Mara Voss", path=character_path)
+    character.backstory_path.write_text(
+        """# Mara Voss
+
+Mara is summarized directly below the title.
+
+## Character Stats
+
+| Name | Race |
+| ---- | ---- |
+| Mara | Elf |
+
+## Character Backstory
+
+Manual backstory text.
+""",
+        encoding="utf-8",
+    )
+
+    profile = read_character_profile(character)
+
+    assert profile.summary == "Mara is summarized directly below the title."
+    assert profile.source_locations == {"summary": "title_preamble"}
 
 
 def test_read_character_profile_does_not_restore_removed_stats_from_json(tmp_path, monkeypatch):
@@ -349,6 +403,46 @@ def test_create_character_keeps_only_sheet_in_docs_lore_character_sheets(tmp_pat
     assert character.memory_path.exists()
     assert character.chatlogs_dir == tmp_path / "data" / "lore" / "character_sheets" / "Mara Voss" / "chatlogs"
     assert character.chatlogs_dir.exists()
+
+
+def test_create_generated_character_writes_to_data_lore_character_sheets(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
+    monkeypatch.setattr(storage, "GENERATED_CHARACTER_SHEETS_DIR", tmp_path / "data" / "lore" / "character_sheets")
+
+    character = create_generated_character(
+        CharacterProfile(
+            name="Mara Voss",
+            pronouns="she/her",
+            level="3",
+            race="Elf",
+            character_class="Wizard",
+            backstory="Generated backstory.",
+            summary="Generated summary.",
+        )
+    )
+
+    assert character.path == tmp_path / "data" / "lore" / "character_sheets" / "Mara Voss.md"
+    assert character.backstory_path.exists()
+
+
+def test_create_place_writes_docs_lore_place_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "PLACES_DIR", tmp_path / "docs" / "lore" / "places")
+
+    place = create_place(
+        PlaceProfile(
+            name="Royal Tittles",
+            place_type="Tavern",
+            summary="A dockside tavern.",
+            details="Private rooms upstairs.",
+            connections=["Neal Lovington: Performs here"],
+        )
+    )
+
+    text = place.path.read_text(encoding="utf-8")
+    assert place.path == tmp_path / "docs" / "lore" / "places" / "Royal Tittles.md"
+    assert "## Place Summary" in text
+    assert "- Neal Lovington: Performs here" in text
 
 
 def test_title_name_wins_when_stats_name_is_honorific_and_family_name(tmp_path, monkeypatch):

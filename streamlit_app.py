@@ -20,11 +20,14 @@ from model_harness.environment import ensure_base_dirs
 from local_chatbot.storage import (
     Character,
     CharacterProfile,
+    PlaceProfile,
     append_chatlog,
     character_family_name,
     character_first_name,
     create_character,
+    create_place,
     default_details,
+    list_places,
     list_characters,
     read_character_profile,
     read_text,
@@ -142,6 +145,69 @@ def parse_list_field(value: str) -> list[str]:
 
 def render_list_field(values: list[str] | None) -> str:
     return "\n".join(values or [])
+
+
+def graph_generated_summary(character: Character, profile: CharacterProfile) -> str:
+    graph = load_graph(character.graph_path)
+    if graph is None:
+        raise ValueError("No Character Graph Is Available. Regenerate The Graph First.")
+    primary = graph.characters.get(graph.primary_character.id)
+    traits = ", ".join(primary.traits[:3]) if primary and primary.traits else ""
+    motivations = ", ".join(primary.motivations[:2]) if primary and primary.motivations else ""
+    places = ", ".join(place.name for place in list(graph.places.values())[:2])
+    relationships = [
+        graph.characters[edge.target].name
+        for edge in graph.relationships
+        if edge.target in graph.characters and edge.target != graph.primary_character.id
+    ][:2]
+    pieces = [f"{profile.first_name or character_first_name(profile.name) or profile.name}"]
+    descriptor = " is"
+    if traits:
+        descriptor += f" {traits}"
+    role = " ".join(value for value in [profile.race, profile.character_class] if value).strip()
+    if role:
+        descriptor += f" a {role}"
+    pieces.append(descriptor)
+    if places:
+        pieces.append(f" tied to {places}")
+    if relationships:
+        pieces.append(f" and connected to {', '.join(relationships)}")
+    if motivations:
+        pieces.append(f", driven to {motivations}")
+    return "".join(pieces).strip() + "."
+
+
+def graph_generated_backstory(character: Character, profile: CharacterProfile) -> str:
+    graph = load_graph(character.graph_path)
+    if graph is None:
+        raise ValueError("No Character Graph Is Available. Regenerate The Graph First.")
+    name = profile.first_name or character_first_name(profile.name) or profile.name
+    places = [place.name for place in graph.places.values()]
+    relationships = [
+        graph.characters[edge.target].name
+        for edge in graph.relationships
+        if edge.target in graph.characters and edge.target != graph.primary_character.id
+    ]
+    attributes = [attribute.value for attribute in graph.attributes.values() if attribute.value]
+    first = f"{name} carries a history shaped by {', '.join(attributes[:3]) or 'unsettled origins'}."
+    second = (
+        f"Their path keeps crossing {', '.join(relationships[:3])}."
+        if relationships
+        else "Their closest relationships are still waiting to be written."
+    )
+    third = (
+        f"Places such as {', '.join(places[:3])} keep pulling the story back into motion."
+        if places
+        else "The places that matter most to them have not yet been named."
+    )
+    return "\n\n".join([first, second, third])
+
+
+def mark_auto_generated(profile: CharacterProfile, section: str) -> list[str]:
+    sections = list(profile.auto_generated_sections or [])
+    if section not in sections:
+        sections.append(section)
+    return sections
 
 
 def render_relationship_graph(character: Character) -> None:
@@ -284,6 +350,52 @@ def render_character_creator(key_prefix: str = "new_character") -> None:
                 st.rerun()
 
 
+def render_place_creator() -> None:
+    st.title("Add Place")
+    places = list_places()
+    if places:
+        st.caption(f"{len(places)} Place Files Available.")
+    with st.expander("Create Place", expanded=False):
+        with st.form("new_place", clear_on_submit=True):
+            name = st.text_input("Name", placeholder="Royal Tittles", key="place_name")
+            place_type = st.text_input("Type", placeholder="Tavern", key="place_type")
+            summary = st.text_area(
+                "Summary",
+                placeholder="A dockside tavern where private bargains sound like songs.",
+                height=96,
+                key="place_summary",
+            )
+            details = st.text_area("Place Details", height=120, key="place_details")
+            connections = st.text_area(
+                "Place Connections",
+                placeholder="Neal Lovington: Performs Here",
+                height=96,
+                key="place_connections",
+            )
+            submitted = st.form_submit_button("Create Place", icon=":material/add_location_alt:")
+            if submitted:
+                if not all([name.strip(), place_type.strip(), summary.strip()]):
+                    st.error("Complete Name, Type, And Summary.")
+                    return
+                try:
+                    create_place(
+                        PlaceProfile(
+                            name=name.strip(),
+                            place_type=place_type.strip(),
+                            summary=summary.strip(),
+                            details=details.strip(),
+                            connections=parse_list_field(connections),
+                        )
+                    )
+                except FileExistsError:
+                    st.error("A Place With That Name Already Exists.")
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    st.success(f"Created {name.strip()}.")
+                    st.rerun()
+
+
 def render_character_panel() -> None:
     st.subheader("Characters")
     characters = list_characters()
@@ -341,20 +453,41 @@ def render_character_editor(character: Character) -> None:
                 enemies = detail_cols[2].text_area("Enemies", value=render_list_field(profile.enemies), height=96)
                 details_value = profile.details or default_details(profile)
                 details = st.text_area("Character Details", value=details_value, height=120)
-            if st.form_submit_button("Save Character", icon=":material/save:"):
+            action_cols = st.columns(4)
+            save_requested = action_cols[0].form_submit_button("Save Character", icon=":material/save:")
+            populate_summary = action_cols[1].form_submit_button("Populate Summary", icon=":material/auto_awesome:")
+            repopulate_summary = action_cols[2].form_submit_button("Repopulate Summary", icon=":material/sync:")
+            rewrite_backstory = action_cols[3].form_submit_button("Rewrite Backstory", icon=":material/edit_note:")
+            if save_requested or populate_summary or repopulate_summary or rewrite_backstory:
                 submitted_details = details.strip()
                 if not profile.details.strip() and submitted_details == default_details(profile).strip():
                     submitted_details = ""
+                next_summary = summary.strip()
+                next_backstory = backstory.strip()
+                auto_generated_sections = list(profile.auto_generated_sections or [])
+                try:
+                    if populate_summary and not next_summary:
+                        next_summary = graph_generated_summary(character, profile)
+                        auto_generated_sections = mark_auto_generated(profile, "Character Summary")
+                    elif repopulate_summary:
+                        next_summary = graph_generated_summary(character, profile)
+                        auto_generated_sections = mark_auto_generated(profile, "Character Summary")
+                    elif rewrite_backstory:
+                        next_backstory = graph_generated_backstory(character, profile)
+                        auto_generated_sections = mark_auto_generated(profile, "Character Backstory")
+                except ValueError as exc:
+                    st.error(str(exc))
+                    return
                 updated = CharacterProfile(
                     name=profile.name,
                     pronouns=pronouns.strip(),
                     level=level.strip(),
                     race=race.strip(),
                     character_class=character_class.strip(),
-                    backstory=backstory.strip(),
+                    backstory=next_backstory,
                     first_name=first_name.strip(),
                     family_name=family_name.strip(),
-                    summary=summary.strip(),
+                    summary=next_summary,
                     motivations=profile.motivations,
                     drives=parse_list_field(drives),
                     alliances=parse_list_field(alliances),
@@ -365,6 +498,8 @@ def render_character_editor(character: Character) -> None:
                     stat_fields=profile.stat_fields,
                     aliases=profile.aliases,
                     knowledge_graph_fields=profile.knowledge_graph_fields,
+                    source_locations=profile.source_locations,
+                    auto_generated_sections=auto_generated_sections,
                 )
                 write_character_profile(character, updated)
                 st.success("Character Saved.")
@@ -395,6 +530,7 @@ st.title("Roleplaying Character Creator")
 st.caption("Create Character Sheets And Explore Relationship Graphs From Local Lore.")
 
 render_character_panel()
+render_place_creator()
 active_character = get_active_character()
 if active_character is None:
     st.info("Create Or Open A Character To Edit Its Sheet.")

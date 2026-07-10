@@ -49,9 +49,9 @@ def markdown_title(path: Path) -> str:
 
 @pytest.fixture()
 def isolated_character_app(tmp_path):
-    characters_dir = tmp_path / "characters"
+    characters_dir = tmp_path / "docs" / "lore" / "character_sheets"
     data_dir = tmp_path / "data"
-    shutil.copytree(ROOT_DIR / "characters", characters_dir)
+    shutil.copytree(ROOT_DIR / "docs" / "lore" / "character_sheets", characters_dir)
     data_dir.mkdir()
 
     env = os.environ.copy()
@@ -90,12 +90,12 @@ def select_character(page, character_label: str, index: int) -> None:
         page.get_by_role("combobox", name="Existing Characters").click()
         page.keyboard.press("ArrowDown")
         page.keyboard.press("Enter")
-    page.get_by_role("button", name="Open character").click()
+    page.get_by_role("button", name="Open Character").click()
     expect(page.get_by_role("heading", name=character_label, exact=True)).to_be_visible(timeout=10000)
 
 
 def wait_for_profile_write(data_dir: Path, character_file: Path, timeout: int = 10) -> None:
-    profile_path = data_dir / "characters" / character_file.stem / "PROFILE.json"
+    profile_path = data_dir / "lore" / "character_sheets" / character_file.stem / "PROFILE.json"
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if profile_path.exists():
@@ -105,7 +105,7 @@ def wait_for_profile_write(data_dir: Path, character_file: Path, timeout: int = 
 
 
 def save_open_character(page, data_dir: Path, character_file: Path) -> None:
-    save_button = page.get_by_role("button", name="save Save character")
+    save_button = page.get_by_role("button", name="save Save Character")
     if not save_button.is_visible():
         page.get_by_text("Edit Character", exact=True).click()
     expect(save_button).to_be_visible(timeout=10000)
