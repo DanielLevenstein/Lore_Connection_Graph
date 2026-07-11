@@ -98,7 +98,7 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
             "The party opened the lighthouse door."
         )
         page.get_by_role("button", name="note_add Save Session Notes").click()
-        expect(page.get_by_text("Saved 2 Session Note.")).to_be_visible(timeout=10000)
+        expect(page.get_by_text("Saved 2 Session Note Files.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
         page.get_by_text("Edit Session Note", exact=True).click()
         expect(page.get_by_role("textbox", name="Date")).to_have_count(0)
@@ -118,7 +118,7 @@ def test_ui_imports_discord_session_notes_with_markdown_and_date_field(isolated_
     notes_dir = docs_lore_dir / "session_notes"
     import_file = docs_lore_dir / "discord_import.md"
     import_file.write_text(
-        """Sean [OOZE], Server Tag: OOZEOOZE — 7/10/26, 11:36 PMFriday, July 10, 2026 at 11:36 PM
+        """John [OOZE], Server Tag: OOZEOOZE — 7/10/26, 11:36 PMFriday, July 10, 2026 at 11:36 PM
 Session 12:
 
 ## Scene Notes
@@ -150,7 +150,7 @@ Session 13:
         page.get_by_label("Use Detected Dates As RP Calendar Dates").focus()
         page.keyboard.press("Space")
         page.get_by_role("button", name="upload_file Import Notes").click()
-        expect(page.get_by_text("Saved 2 Session Note.")).to_be_visible(timeout=10000)
+        expect(page.get_by_text("Saved 2 Session Note Files.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Session 12", exact=True)).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Scene Notes", exact=True)).to_be_visible(timeout=10000)
         page.get_by_text("Edit Session Note", exact=True).click()

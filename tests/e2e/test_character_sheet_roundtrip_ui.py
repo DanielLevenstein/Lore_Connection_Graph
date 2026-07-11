@@ -101,10 +101,14 @@ def select_character(page, character_label: str, index: int) -> None:
     combobox = page.get_by_role("combobox", name="Existing Characters")
     combobox.scroll_into_view_if_needed()
     combobox.click()
-    page.keyboard.press("Home")
-    for _ in range(index):
-        page.keyboard.press("ArrowDown")
-    page.keyboard.press("Enter")
+    option = page.get_by_role("option", name=character_label, exact=True)
+    if option.count():
+        option.click()
+    else:
+        page.keyboard.press("Home")
+        for _ in range(index):
+            page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
     page.get_by_role("button", name="Open Character").click()
     expect(page.get_by_role("heading", name=character_label, exact=True)).to_be_visible(timeout=10000)
 
@@ -123,11 +127,16 @@ def save_open_character(page, data_dir: Path, character_file: Path) -> None:
     save_button = page.get_by_role("button", name="save Save Character").first
     if not save_button.is_visible():
         page.get_by_text("Edit Character", exact=True).click()
-        save_button = page.get_by_role("button", name="save Save Character").first
     expect(save_button).to_be_visible(timeout=10000)
-    save_button = page.get_by_role("button", name="save Save Character").first
-    save_button.scroll_into_view_if_needed()
-    save_button.click(force=True)
+    click_button_with_retry(page, "save Save Character")
+    for button_name in ("library_books Keep Both", "Keep Both"):
+        keep_both = page.get_by_role("button", name=button_name)
+        try:
+            expect(keep_both).to_be_visible(timeout=2000)
+        except AssertionError:
+            continue
+        keep_both.click(force=True)
+        break
     wait_for_profile_write(data_dir, character_file)
 
 
@@ -180,8 +189,25 @@ def click_form_button_by_save_button(page, save_button_name: str, target_button_
     page.get_by_role("button", name=target_button_name).first.click(force=True)
 
 
+def click_button_with_retry(page, button_name: str, index: int = 0, attempts: int = 3) -> None:
+    last_error = None
+    for _ in range(attempts):
+        button = page.get_by_role("button", name=button_name).nth(index)
+        try:
+            expect(button).to_be_visible(timeout=5000)
+            button.click(force=True)
+            return
+        except Exception as exc:
+            last_error = exc
+            page.wait_for_timeout(300)
+    raise last_error
+
+
 def click_place_undo_button(page) -> None:
-    click_form_button_by_save_button(page, "save Save Place", "undo Undo Changes")
+    editor = page.locator("[data-testid=stExpander]").filter(has_text="Edit Place").first
+    undo_button = editor.get_by_role("button", name="undo Undo Changes")
+    expect(undo_button).to_be_visible(timeout=10000)
+    undo_button.evaluate("element => element.click()")
 
 
 def test_ui_save_preserves_sheet_values_and_normalizes_details(isolated_character_app):
@@ -335,6 +361,10 @@ def test_ui_creates_loads_and_undoes_place_changes(isolated_character_app):
         page.get_by_role("textbox", name="Place Markdown", exact=True).fill("# Brindle Hall\n\nA ruined guildhall after the fire.")
         page.get_by_role("button", name="save Save Place").click(force=True)
         expect(page.get_by_text("Place Saved.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("textbox", name="Place Markdown", exact=True)).to_have_value(
+            "# Brindle Hall\n\nA ruined guildhall after the fire.",
+            timeout=10000,
+        )
 
         ensure_place_editor_open(page)
         click_place_undo_button(page)

@@ -230,7 +230,7 @@ The date appears after the heading.""",
 
 def test_discord_export_splits_dates_and_removes_export_noise():
     notes = split_discord_session_notes(
-        """Sean [OOZE], Server Tag: OOZEOOZE — 2/19/23, 11:36 PMSunday, February 19, 2023 at 11:36 PM
+        """Jane Smith [OOZE], Server Tag: OOZEOOZE — 2/19/23, 11:36 PMSunday, February 19, 2023 at 11:36 PM
 Session 1:
 
 The party awoke.
@@ -242,7 +242,7 @@ Forward
 More
 February 20, 2023
 
-Sean [OOZE], Server Tag: OOZEOOZE — 2/20/23, 12:01 AMMonday, February 20, 2023 at 12:01 AM
+John Smith [OOZE], Server Tag: OOZEOOZE — 2/20/23, 12:01 AMMonday, February 20, 2023 at 12:01 AM
 The party found a piano. (edited)Thursday, August 3, 2023 at 1:55 AM
 [12:02 AM]Monday, February 20, 2023 at 12:02 AM
 The piano was on fire.
@@ -261,15 +261,15 @@ def test_discord_export_splits_multiple_sessions_on_same_date(tmp_path, monkeypa
     source.write_text(
         """August 3, 2023
 
-Sean [OOZE], Server Tag: OOZEOOZE — 8/3/23, 2:41 AMThursday, August 3, 2023 at 2:41 AM
+Jory Smith [OOZE], Server Tag: OOZEOOZE — 8/3/23, 2:41 AMThursday, August 3, 2023 at 2:41 AM
 Session 2:
 
-The party met Delia.
+The party met Lilith
 
-Sean [OOZE], Server Tag: OOZEOOZE — 8/3/23, 3:22 AMThursday, August 3, 2023 at 3:22 AM
+Fred Smith [OOZE], Server Tag: OOZEOOZE — 8/3/23, 3:22 AMThursday, August 3, 2023 at 3:22 AM
 Session 3:
 
-The party met Morningstar.
+The party met Lucifer.
 """,
         encoding="utf-8",
     )
@@ -281,8 +281,8 @@ The party met Morningstar.
         "2023-08-03_Session_2.md",
         "2023-08-03_Session_3.md",
     ]
-    assert "The party met Delia." in notes[0].path.read_text(encoding="utf-8")
-    assert "The party met Morningstar." not in notes[0].path.read_text(encoding="utf-8")
+    assert "The party met Lilith" in notes[0].path.read_text(encoding="utf-8")
+    assert "The party met Lucifer." not in notes[0].path.read_text(encoding="utf-8")
 
 
 def test_discord_export_can_keep_multiple_sessions_in_one_note(tmp_path, monkeypatch):
@@ -291,15 +291,15 @@ def test_discord_export_can_keep_multiple_sessions_in_one_note(tmp_path, monkeyp
     source.write_text(
         """August 3, 2023
 
-Sean [OOZE], Server Tag: OOZEOOZE — 8/3/23, 2:41 AMThursday, August 3, 2023 at 2:41 AM
+Bob Roth [OOZE], Server Tag: OOZEOOZE — 8/3/23, 2:41 AMThursday, August 3, 2023 at 2:41 AM
 Session 2:
 
-The party met Delia.
+The party met Lilith
 
-Sean [OOZE], Server Tag: OOZEOOZE — 8/3/23, 3:22 AMThursday, August 3, 2023 at 3:22 AM
+Mary Jones [OOZE], Server Tag: OOZEOOZE — 8/3/23, 3:22 AMThursday, August 3, 2023 at 3:22 AM
 Session 3:
 
-The party met Morningstar.
+The party met Lucifer.
 """,
         encoding="utf-8",
     )
@@ -309,5 +309,5 @@ The party met Morningstar.
     assert len(notes) == 1
     assert notes[0].title == "Sessions 2-3"
     assert notes[0].path.name == "2023-08-03_Sessions_2_3.md"
-    assert "The party met Delia." in notes[0].path.read_text(encoding="utf-8")
-    assert "The party met Morningstar." in notes[0].path.read_text(encoding="utf-8")
+    assert "The party met Lilith" in notes[0].path.read_text(encoding="utf-8")
+    assert "The party met Lucifer." in notes[0].path.read_text(encoding="utf-8")
