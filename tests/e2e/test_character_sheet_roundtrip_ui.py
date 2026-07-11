@@ -8,7 +8,7 @@ import pytest
 import requests
 from playwright.sync_api import expect, sync_playwright
 
-from local_chatbot.storage import Character, Place, read_character_profile, read_place_profile
+from local_chatbot.storage import Character, read_character_profile
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -181,11 +181,7 @@ def click_form_button_by_save_button(page, save_button_name: str, target_button_
 
 
 def click_place_undo_button(page) -> None:
-    save_button = page.get_by_role("button", name="save Save Place")
-    save_button.scroll_into_view_if_needed()
-    box = save_button.bounding_box()
-    assert box is not None
-    page.mouse.click(box["x"] + (box["width"] * 2.5), box["y"] + (box["height"] / 2))
+    click_form_button_by_save_button(page, "save Save Place", "undo Undo Changes")
 
 
 def test_ui_save_preserves_sheet_values_and_normalizes_details(isolated_character_app):
@@ -318,23 +314,25 @@ def test_ui_creates_loads_and_undoes_place_changes(isolated_character_app):
         expect(page.get_by_role("heading", name="Places")).to_be_visible(timeout=10000)
         expand_section(page, "Create Place")
         fill_textbox(page, "Name", "Brindle Hall")
-        fill_textbox(page, "Type", "Guildhall")
-        page.get_by_role("textbox", name="Summary", exact=True).fill("A narrow guildhall where maps are traded.")
-        page.get_by_role("textbox", name="Place Details", exact=True).fill("Lanterns burn blue near the archives.")
-        page.get_by_role("textbox", name="Place Connections", exact=True).fill("Della Moor: Stores maps")
+        page.get_by_role("textbox", name="Place Markdown", exact=True).fill(
+            "# Brindle Hall\n\nA narrow guildhall where maps are traded.\n\n## Notes\n\nLanterns burn blue near the archives."
+        )
         page.get_by_role("button", name="add_location_alt Create Place").click()
-        expect(page.get_by_role("heading", name="Brindle Hall", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Brindle Hall", exact=True).last).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Notes", exact=True)).to_be_visible(timeout=10000)
 
         page.get_by_role("combobox", name="Existing Places").click()
         page.get_by_role("option", name="Brindle Hall", exact=True).click()
         page.get_by_role("button", name="location_on Open Place").click()
         ensure_place_editor_open(page)
-        page.get_by_role("textbox", name="Summary", exact=True).fill("A crowded guildhall where maps are traded.")
+        page.get_by_role("textbox", name="Place Markdown", exact=True).fill(
+            "# Brindle Hall\n\nA crowded guildhall where maps are traded.\n\n## Notes\n\nLanterns burn blue near the archives."
+        )
         page.get_by_role("button", name="save Save Place").click(force=True)
         expect(page.get_by_text("Place Saved.")).to_be_visible(timeout=10000)
 
         ensure_place_editor_open(page)
-        page.get_by_role("textbox", name="Summary", exact=True).fill("A ruined guildhall after the fire.")
+        page.get_by_role("textbox", name="Place Markdown", exact=True).fill("# Brindle Hall\n\nA ruined guildhall after the fire.")
         page.get_by_role("button", name="save Save Place").click(force=True)
         expect(page.get_by_text("Place Saved.")).to_be_visible(timeout=10000)
 
@@ -342,20 +340,18 @@ def test_ui_creates_loads_and_undoes_place_changes(isolated_character_app):
         click_place_undo_button(page)
         expect(page.get_by_text("Place Changes Undone.")).to_be_visible(timeout=10000)
         ensure_place_editor_open(page)
-        expect(page.get_by_role("textbox", name="Summary", exact=True)).to_have_value(
-            "A crowded guildhall where maps are traded.",
+        expect(page.get_by_role("textbox", name="Place Markdown", exact=True)).to_have_value(
+            "# Brindle Hall\n\nA crowded guildhall where maps are traded.\n\n## Notes\n\nLanterns burn blue near the archives.",
             timeout=10000,
         )
         click_place_undo_button(page)
         expect(page.get_by_text("Place Changes Undone.")).to_be_visible(timeout=10000)
         browser.close()
 
-    profile = read_place_profile(Place(name="Brindle Hall", path=place_path))
-    assert profile.name == "Brindle Hall"
-    assert profile.place_type == "Guildhall"
-    assert profile.summary == "A narrow guildhall where maps are traded."
-    assert profile.details == "Lanterns burn blue near the archives."
-    assert profile.connections == ["Della Moor: Stores maps"]
+    text = place_path.read_text(encoding="utf-8")
+    assert text.startswith("# Brindle Hall")
+    assert "A narrow guildhall where maps are traded." in text
+    assert "## Notes" in text
 
 
 def test_ui_creates_loads_and_undoes_session_notes(isolated_character_app):
@@ -433,11 +429,9 @@ def test_create_validation_preserves_entered_fields(isolated_character_app):
         open_tab(page, "Places")
         expand_section(page, "Create Place")
         fill_textbox(page, "Name", "Draft Hall")
-        fill_textbox(page, "Type", "Library")
         page.get_by_role("button", name="add_location_alt Create Place").click()
-        expect(page.get_by_text("Complete Name, Type, And Summary.")).to_be_visible(timeout=10000)
+        expect(page.get_by_text("Complete Name And Place Markdown.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("textbox", name="Name", exact=True).first).to_have_value("Draft Hall")
-        expect(page.get_by_role("textbox", name="Type", exact=True).first).to_have_value("Library")
 
         open_tab(page, "Session Notes")
         ensure_session_notes_open(page)
@@ -479,10 +473,9 @@ def test_ui_deletes_character_place_and_session_note_files(isolated_character_ap
         open_tab(page, "Places")
         expand_section(page, "Create Place")
         fill_textbox(page, "Name", "Delete Hall")
-        fill_textbox(page, "Type", "Guildhall")
-        page.get_by_role("textbox", name="Summary", exact=True).fill("A temporary place for deletion.")
+        page.get_by_role("textbox", name="Place Markdown", exact=True).fill("# Delete Hall\n\nA temporary place for deletion.")
         page.get_by_role("button", name="add_location_alt Create Place").click()
-        expect(page.get_by_role("heading", name="Delete Hall", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Delete Hall", exact=True).last).to_be_visible(timeout=10000)
         ensure_place_editor_open(page)
         page.get_by_role("button", name="delete_forever Delete Place").click()
         expect(page.get_by_text("Place Deleted.")).to_be_visible(timeout=10000)

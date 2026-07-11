@@ -4,6 +4,7 @@ import local_chatbot.session_notes as session_notes
 from local_chatbot.session_notes import (
     date_from_line,
     import_discord_session_notes,
+    import_lore_document_text,
     save_session_notes,
     split_discord_session_notes,
     split_session_notes,
@@ -53,6 +54,37 @@ def test_session_notes_preserve_markdown_body(tmp_path, monkeypatch):
     assert session_notes.read_session_note_body(saved[0].path) == markdown_body
     assert "## Scene Notes" in saved[0].path.read_text(encoding="utf-8")
     assert "| Clue | Status |" in saved[0].path.read_text(encoding="utf-8")
+
+
+def test_freeform_lore_import_preserves_undated_markdown_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    imported = import_lore_document_text(
+        """# Time Turning
+
+Date and Time values in the days of yore are a fuzzy concept.
+
+## The Nighbloom Family
+
+Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College.
+""",
+        title="Atlantia Lore",
+    )
+
+    assert imported.note_date is None
+    assert imported.path.name == "Atlantia_Lore.md"
+    assert imported.path.read_text(encoding="utf-8").startswith("# Time Turning\n\nDate and Time")
+    assert session_notes.list_session_notes() == [imported.path]
+
+
+def test_freeform_lore_import_uses_unique_markdown_paths(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    first = import_lore_document_text("# Time Turning", title="Atlantia Lore")
+    second = import_lore_document_text("# Time Turning", title="Atlantia Lore")
+
+    assert first.path.name == "Atlantia_Lore.md"
+    assert second.path.name == "Atlantia_Lore_2.md"
 
 
 def test_legacy_session_note_body_only_strips_date_heading(tmp_path):

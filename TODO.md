@@ -3,11 +3,6 @@
 - Do not commit changes until testing for each section is complete.
 - If no testing section is present, add one to the TODO and commit it with the feature commit. 
 
-## Semantic Aware Model
-- Install semantic informed model locally for character rewrites and knowledge graph summary sections.
-- Ensure the model selected is able to extract people and place names from existing source data successfully.
-- Select a second visual inspection model to validate the generated UI from each page against the requirements. 
-
 ## Freeform Lore Markdown Import
 We need the ability to import session notes about people, places or things without having to follow a specific Markdown file format.
 I have written a document titled Atlanaia_Lore.md which fills in some of the missing details from the existing character sheets.
@@ -20,4 +15,17 @@ The solution for both problems is the same to let the Markdown files just exist 
 In fact, there is no structural reason for places and session notes not to share the exact same code behind the scenes. Let the schema drift as needed. 
 If session dates exist, extract them but ask the user if they want to include any earth dates in their RP universe.
 
-## 
+### References
+docs/screenshots/Atlantia_Lore.png
+docs/screenshots/Time_Turning.png
+tests/fixtures/session_notes/Atlantia_Lore.md
+tests/fixtures/places/Atlantia_Lore.md
+
+### Testing
+- `.venv/bin/python -m pytest tests/test_session_notes.py tests/test_entity_file_saves.py`
+- `.venv/bin/python -m pytest tests/e2e/test_session_notes_ui.py tests/e2e/test_character_sheet_roundtrip_ui.py`
+
+## Completed
+- Freeform lore Markdown import can preserve undated Markdown files without forcing calendar dates.
+- Places now use a raw Markdown create/edit/view flow instead of structured place fields.
+- Added `docs/screenshots/places_markdown.png` for the updated Places page.

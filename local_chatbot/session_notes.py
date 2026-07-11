@@ -49,7 +49,7 @@ MONTHS = {
 
 @dataclass(frozen=True)
 class SessionNote:
-    note_date: date
+    note_date: date | None
     body: str
     path: Path
     title: str = ""
@@ -62,6 +62,29 @@ def session_note_path(note_date: date, title: str = "") -> Path:
 def safe_session_note_title(title: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9]+", "_", title.strip()).strip("_")
     return cleaned or "Session_Notes"
+
+
+def lore_document_path(title: str) -> Path:
+    return unique_markdown_path(SESSION_NOTES_DIR / f"{safe_session_note_title(title)}.md")
+
+
+def unique_markdown_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+    for index in range(2, 1000):
+        candidate = path.with_name(f"{path.stem}_{index}{path.suffix}")
+        if not candidate.exists():
+            return candidate
+    raise FileExistsError(path)
+
+
+def import_lore_document_text(text: str, title: str = "") -> SessionNote:
+    SESSION_NOTES_DIR.mkdir(parents=True, exist_ok=True)
+    inferred_title = title.strip() or markdown_title(text) or "Lore Document"
+    path = lore_document_path(inferred_title)
+    body = text.strip()
+    path.write_text(f"{body}\n", encoding="utf-8")
+    return SessionNote(note_date=None, body=body, path=path, title=inferred_title)
 
 
 def split_session_notes(text: str, today: date | None = None) -> list[tuple[date, str]]:
@@ -263,10 +286,18 @@ def list_session_notes() -> list[Path]:
         [
             path
             for path in SESSION_NOTES_DIR.glob("*.md")
-            if path.name != "DISCORD.md" and has_session_note_date(path)
+            if path.name != "DISCORD.md" and "TEMPLATE" not in path.name.upper()
         ],
+        key=session_note_sort_key,
         reverse=True,
     )
+
+
+def session_note_sort_key(path: Path) -> tuple[int, date, str]:
+    try:
+        return (1, session_note_date_from_path(path), path.name.lower())
+    except ValueError:
+        return (0, date.min, path.name.lower())
 
 
 def has_session_note_date(path: Path) -> bool:
@@ -306,6 +337,14 @@ def read_session_note_title(path: Path) -> str:
     return ""
 
 
+def markdown_title(text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            return stripped.lstrip("#").strip()
+    return ""
+
+
 def session_note_date_from_path(path: Path) -> date:
     match = re.search(r"(?P<year>20\d{2})-(?P<month>\d{1,2})-(?P<day>\d{1,2})", path.stem)
     if not match:
@@ -317,6 +356,12 @@ def write_session_note(path: Path, body: str, title: str = "") -> SessionNote:
     note_date = session_note_date_from_path(path)
     path.write_text(render_session_note(note_date, body, title), encoding="utf-8")
     return SessionNote(note_date=note_date, body=body.strip(), path=path, title=title.strip())
+
+
+def write_lore_document(path: Path, body: str) -> SessionNote:
+    title = markdown_title(body) or path.stem.replace("_", " ")
+    path.write_text(f"{body.strip()}\n", encoding="utf-8")
+    return SessionNote(note_date=None, body=body.strip(), path=path, title=title)
 
 
 def delete_session_note(path: Path) -> None:

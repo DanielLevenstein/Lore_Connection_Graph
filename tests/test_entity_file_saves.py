@@ -7,11 +7,13 @@ from local_chatbot.storage import (
     PlaceProfile,
     create_character,
     create_place,
+    create_place_markdown,
     delete_character_profile,
     delete_place_profile,
     read_character_profile,
     read_place_profile,
     write_character_profile,
+    write_place_markdown,
     write_place_profile,
 )
 
@@ -133,6 +135,30 @@ def test_place_file_save_round_trips_updated_fields(tmp_path, monkeypatch):
     assert reloaded.summary == "A crowded guildhall where maps are traded."
     assert reloaded.details == "Lanterns burn green after midnight."
     assert reloaded.connections == ["Della Moor: Stores maps", "Jory Ravenmark: Buys charts"]
+
+
+def test_place_markdown_save_round_trips_freeform_headings(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "PLACES_DIR", tmp_path / "docs" / "lore" / "places")
+
+    place = create_place_markdown(
+        "Atlantia",
+        """# Atlantia
+
+# Time Turning
+
+Date and Time values in the days of yore are a fuzzy concept.
+
+## The Nighbloom Family
+
+Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College.
+""",
+    )
+
+    assert place.path.read_text(encoding="utf-8").startswith("# Atlantia\n\n# Time Turning")
+
+    write_place_markdown(place, "# Atlantia\n\n## The Ravenmark Family\n\nJory still believes the sea took her father.")
+
+    assert "## The Ravenmark Family" in place.path.read_text(encoding="utf-8")
 
 
 def test_place_delete_removes_file(tmp_path, monkeypatch):

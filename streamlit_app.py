@@ -32,13 +32,13 @@ from local_chatbot.storage import (
     character_family_name,
     character_first_name,
     create_character,
-    create_place,
+    create_place_markdown,
     default_details,
     delete_character_profile,
     delete_place_profile,
     list_places,
     list_characters,
-    read_place_profile,
+    read_place_markdown,
     read_character_profile,
     read_text,
     regenerate_character_graph,
@@ -46,13 +46,14 @@ from local_chatbot.storage import (
     start_chatlog,
     write_character_connections,
     write_character_profile,
-    write_place_profile,
+    write_place_markdown,
 )
 from local_chatbot.character_rewrites import (
     graph_generated_backstory as build_graph_generated_backstory,
     graph_generated_summary as build_graph_generated_summary,
 )
 from local_chatbot.session_notes import (
+    import_lore_document_text,
     import_discord_session_notes_text,
     delete_session_note,
     list_session_notes,
@@ -61,6 +62,7 @@ from local_chatbot.session_notes import (
     read_session_note_title,
     save_session_notes,
     session_note_date_from_path,
+    write_lore_document,
     write_session_note,
 )
 from local_chatbot.paths import DOCS_LORE_DIR
@@ -137,17 +139,25 @@ def display_character_name(character: Character) -> str:
 
 
 def display_place_name(place: Place) -> str:
-    profile = read_place_profile(place)
-    return clean_display_name(profile.name or place.name)
+    return clean_display_name(markdown_document_title(read_place_markdown(place)) or place.name)
 
 
 def display_session_note_name(path) -> str:
     try:
         note_date = session_note_date_from_path(path).isoformat()
     except ValueError:
-        return path.stem.replace("session_notes_", "").replace("_", " ")
+        title = markdown_document_title(read_session_note(path))
+        return clean_display_name(title or path.stem.replace("session_notes_", "").replace("_", " "))
     title = read_session_note_title(path)
     return f"{note_date} - {title}" if title else note_date
+
+
+def markdown_document_title(text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            return stripped.lstrip("#").strip()
+    return ""
 
 
 def clean_display_name(name: str) -> str:
@@ -835,37 +845,20 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
     draft_profile = draft_profile or PlaceProfile(name="", place_type="", summary="")
     with st.form(key_prefix):
         name = st.text_input("Name", value=draft_profile.name, placeholder="Royal Tittles", key=f"{key_prefix}_name")
-        place_type = st.text_input("Type", value=draft_profile.place_type, placeholder="Tavern", key=f"{key_prefix}_type")
-        summary = st.text_area(
-            "Summary",
-            value=draft_profile.summary,
-            placeholder="A dockside tavern where private bargains sound like songs.",
-            height=96,
-            key=f"{key_prefix}_summary",
-        )
-        details = st.text_area("Place Details", value=draft_profile.details, height=120, key=f"{key_prefix}_details")
-        connections = st.text_area(
-            "Place Connections",
-            value=render_list_field(draft_profile.connections),
-            placeholder="Neal Lovington: Performs Here",
-            height=96,
-            key=f"{key_prefix}_connections",
+        markdown = st.text_area(
+            "Place Markdown",
+            value=draft_place_markdown(draft_profile),
+            placeholder="# Royal Tittles\n\nA dockside tavern where private bargains sound like songs.",
+            height=220,
+            key=f"{key_prefix}_markdown",
         )
         submitted = st.form_submit_button("Create Place", icon=":material/add_location_alt:")
         if submitted:
-            if not all([name.strip(), place_type.strip(), summary.strip()]):
-                st.error("Complete Name, Type, And Summary.")
+            if not all([name.strip(), markdown.strip()]):
+                st.error("Complete Name And Place Markdown.")
                 return
             try:
-                place = create_place(
-                    PlaceProfile(
-                        name=name.strip(),
-                        place_type=place_type.strip(),
-                        summary=summary.strip(),
-                        details=details.strip(),
-                        connections=parse_list_field(connections),
-                    )
-                )
+                place = create_place_markdown(name.strip(), markdown.strip())
             except FileExistsError:
                 st.error("A Place With That Name Already Exists.")
             except ValueError as exc:
@@ -880,8 +873,29 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
 
 
 def clear_place_creator_state(key_prefix: str) -> None:
-    for field in ("name", "type", "summary", "details", "connections"):
+    for field in ("name", "markdown"):
         st.session_state.pop(f"{key_prefix}_{field}", None)
+
+
+def draft_place_markdown(draft_profile: PlaceProfile) -> str:
+    if not any(
+        [
+            draft_profile.name.strip(),
+            draft_profile.summary.strip(),
+            draft_profile.details.strip(),
+            draft_profile.connections,
+        ]
+    ):
+        return ""
+    lines = [f"# {draft_profile.name.strip()}"]
+    if draft_profile.summary.strip():
+        lines.extend(["", draft_profile.summary.strip()])
+    if draft_profile.details.strip():
+        lines.extend(["", draft_profile.details.strip()])
+    if draft_profile.connections:
+        lines.extend(["", "## Place Connections", ""])
+        lines.extend(f"- {connection}" for connection in draft_profile.connections if connection.strip())
+    return "\n".join(lines)
 
 
 def render_place_panel() -> None:
@@ -917,22 +931,18 @@ def render_place_panel() -> None:
 
 
 def render_place_info(place: Place) -> None:
-    profile = read_place_profile(place)
-    st.subheader(display_place_name(place))
+    markdown = read_place_markdown(place).strip()
+    if markdown:
+        st.markdown(markdown)
+    else:
+        st.subheader(display_place_name(place))
     with st.expander("Edit Place", expanded=False):
         place_message = st.session_state.pop(f"place_status_{place.name}", "")
         if place_message:
             st.success(place_message)
         with st.form(f"edit_place_{place.name}"):
-            name = st.text_input("Name", value=profile.name, disabled=True)
-            place_type = st.text_input("Type", value=profile.place_type)
-            summary = st.text_area("Summary", value=profile.summary, height=96)
-            details = st.text_area("Place Details", value=profile.details, height=120)
-            connections = st.text_area(
-                "Place Connections",
-                value=render_list_field(profile.connections),
-                height=96,
-            )
+            st.text_input("Name", value=display_place_name(place), disabled=True)
+            body = st.text_area("Place Markdown", value=markdown, height=260)
             action_cols = st.columns(3)
             save_requested = action_cols[0].form_submit_button("Save Place", icon=":material/save:")
             delete_requested = action_cols[1].form_submit_button("Delete Place", icon=":material/delete_forever:")
@@ -946,20 +956,11 @@ def render_place_info(place: Place) -> None:
                 st.session_state["place_panel_status"] = "Place Deleted."
                 st.rerun()
             if save_requested:
-                if not all([name.strip(), place_type.strip(), summary.strip()]):
-                    st.error("Complete Name, Type, And Summary.")
+                if not body.strip():
+                    st.error("Add Place Markdown Before Saving.")
                     return
                 push_place_undo(place)
-                write_place_profile(
-                    place,
-                    PlaceProfile(
-                        name=profile.name,
-                        place_type=place_type.strip(),
-                        summary=summary.strip(),
-                        details=details.strip(),
-                        connections=parse_list_field(connections),
-                    ),
-                )
+                write_place_markdown(place, body)
                 st.session_state[f"place_status_{place.name}"] = "Place Saved."
                 st.rerun()
 
@@ -998,6 +999,42 @@ def render_session_notes() -> None:
         render_session_note_editor(active_note)
 
     st.subheader("New Session Notes")
+    with st.expander("Import Lore Markdown", expanded=False):
+        uploaded_lore = st.file_uploader(
+            "Markdown Lore File",
+            type=["md", "txt"],
+            key="lore_markdown_import",
+        )
+        include_detected_dates = st.checkbox(
+            "Use Detected Dates As RP Calendar Dates",
+            value=False,
+            key="include_lore_import_dates",
+        )
+        if st.button("Import Lore Markdown", icon=":material/upload_file:", key="import_lore_markdown"):
+            if uploaded_lore is None:
+                st.error("Choose A Markdown Lore File Before Importing.")
+                return
+            try:
+                import_text = uploaded_lore.getvalue().decode("utf-8")
+            except UnicodeDecodeError:
+                st.error("Import File Must Be UTF-8 Text.")
+                return
+            if not import_text.strip():
+                st.error("Import File Must Include Markdown Text.")
+                return
+            push_session_notes_undo()
+            import_title = os.path.splitext(uploaded_lore.name)[0]
+            if include_detected_dates:
+                imported = save_session_notes(import_text, title=import_title)
+                st.session_state["session_notes_saved_count"] = len(imported)
+                if imported:
+                    set_active_session_note(imported[0].path)
+            else:
+                imported_note = import_lore_document_text(import_text, title=import_title)
+                st.session_state["session_notes_saved_count"] = 1
+                set_active_session_note(imported_note.path)
+            st.rerun()
+
     with st.expander("Import Session Notes", expanded=False):
         uploaded_notes = st.file_uploader(
             "Discord Markdown Export",
@@ -1059,19 +1096,24 @@ def render_session_notes() -> None:
 
 
 def render_session_note_editor(path) -> None:
-    note_date = session_note_date_from_path(path).isoformat()
-    note_title = read_session_note_title(path)
     note_label = display_session_note_name(path)
-    note_body = read_session_note_body(path)
+    try:
+        note_date = session_note_date_from_path(path).isoformat()
+    except ValueError:
+        note_date = ""
+    note_title = read_session_note_title(path) if note_date else ""
+    note_body = read_session_note_body(path) if note_date else read_session_note(path).strip()
     st.subheader(note_label)
     if note_body:
         st.markdown(note_body)
-    with st.expander("Edit Session Note", expanded=False):
+    expander_label = "Edit Session Note" if note_date else "Edit Lore Document"
+    with st.expander(expander_label, expanded=False):
         with st.form(f"edit_session_note_{path.name}"):
-            st.text_input("Date", value=note_date, disabled=True)
-            title = st.text_input("Title", value=note_title, placeholder="Optional session title")
+            if note_date:
+                st.text_input("Date", value=note_date, disabled=True)
+                title = st.text_input("Title", value=note_title, placeholder="Optional session title")
             body = st.text_area(
-                "Session Note",
+                "Session Note" if note_date else "Lore Document",
                 value=note_body,
                 height=220,
             )
@@ -1092,11 +1134,15 @@ def render_session_note_editor(path) -> None:
                 st.rerun()
             if save_requested:
                 if not body.strip():
-                    st.error("Add Session Note Details Before Saving.")
+                    st.error("Add Markdown Details Before Saving.")
                     return
                 push_session_notes_undo()
-                write_session_note(path, body, title)
-                st.session_state["session_notes_status"] = "Session Note Saved."
+                if note_date:
+                    write_session_note(path, body, title)
+                    st.session_state["session_notes_status"] = "Session Note Saved."
+                else:
+                    write_lore_document(path, body)
+                    st.session_state["session_notes_status"] = "Lore Document Saved."
                 st.rerun()
 
 
@@ -1127,7 +1173,7 @@ def render_character_panel() -> None:
             set_active_character(selected_character)
     else:
             st.info("Create Your First Character To Begin.")
-    # When a character is opened show it here before the create character section.
+    # When a character is opened, show it here before the create character section.
     if "active_character" in st.session_state:
         character = get_active_character()
         if character:
