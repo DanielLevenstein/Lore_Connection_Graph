@@ -10,6 +10,8 @@ from local_chatbot.storage import (
     create_place_markdown,
     delete_character_profile,
     delete_place_profile,
+    import_external_character_sheet,
+    list_external_character_sheets,
     read_character_profile,
     read_place_profile,
     write_character_profile,
@@ -100,6 +102,19 @@ def test_character_delete_removes_sheet_metadata_and_graph(tmp_path, monkeypatch
     assert not character.backstory_path.exists()
     assert not character.data_dir.exists()
     assert not character.graph_path.exists()
+
+
+def test_external_character_sheet_import_saves_pdf_or_image_as_is(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "CHARACTERS_DIR", tmp_path / "docs" / "lore" / "character_sheets")
+
+    first = import_external_character_sheet("della sheet.pdf", b"%PDF-1.4 raw bytes", display_name="Della Moor")
+    second = import_external_character_sheet("della sheet.pdf", b"%PDF-1.4 second copy", display_name="Della Moor")
+
+    assert first.path == tmp_path / "docs" / "lore" / "character_sheets" / "external" / "Della Moor.pdf"
+    assert first.path.read_bytes() == b"%PDF-1.4 raw bytes"
+    assert second.path.name == "Della Moor_2.pdf"
+    assert second.path.read_bytes() == b"%PDF-1.4 second copy"
+    assert [sheet.path.name for sheet in list_external_character_sheets()] == ["Della Moor.pdf", "Della Moor_2.pdf"]
 
 
 def test_place_file_save_round_trips_updated_fields(tmp_path, monkeypatch):
