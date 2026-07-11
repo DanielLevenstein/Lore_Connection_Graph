@@ -161,7 +161,7 @@ def ensure_session_notes_open(page) -> None:
 
 
 def ensure_session_note_editor_open(page) -> None:
-    save_button = page.get_by_role("button", name="Save Session Note")
+    save_button = page.get_by_role("button", name="save Save Session Note")
     if not save_button.is_visible():
         page.get_by_text("Edit Session Note", exact=True).click()
     expect(save_button).to_be_visible(timeout=10000)
@@ -346,6 +346,11 @@ def test_ui_creates_loads_and_undoes_place_changes(isolated_character_app):
         )
         click_place_undo_button(page)
         expect(page.get_by_text("Place Changes Undone.")).to_be_visible(timeout=10000)
+        ensure_place_editor_open(page)
+        expect(page.get_by_role("textbox", name="Place Markdown", exact=True)).to_have_value(
+            "# Brindle Hall\n\nA narrow guildhall where maps are traded.\n\n## Notes\n\nLanterns burn blue near the archives.",
+            timeout=10000,
+        )
         browser.close()
 
     text = place_path.read_text(encoding="utf-8")
@@ -364,15 +369,15 @@ def test_ui_creates_loads_and_undoes_session_notes(isolated_character_app):
         page.goto(app_url, wait_until="networkidle")
 
         open_tab(page, "Session Notes")
-        expect(page.get_by_role("heading", name="Session Notes", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
         ensure_session_notes_open(page)
         page.get_by_role("textbox", name="Session Notes").fill("2026-07-10\nThe party found a silver key.")
         page.get_by_role("button", name="note_add Save Session Notes").click()
         expect(page.get_by_text("Saved 1 Session Note File.")).to_be_visible(timeout=10000)
-        expect(page.get_by_role("heading", name="2026-07-10 - Session Notes", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
 
         page.get_by_role("combobox", name="Existing Session Notes").click()
-        page.get_by_role("option", name="2026-07-10 - Session Notes", exact=True).click()
+        page.get_by_role("option", name="Session Notes", exact=True).click()
         page.get_by_role("button", name="event_note Open Session Note").click()
         open_tab(page, "Session Notes")
         expect(page.locator("p").filter(has_text="The party found a silver key.")).to_be_visible(timeout=10000)
@@ -382,7 +387,7 @@ def test_ui_creates_loads_and_undoes_session_notes(isolated_character_app):
         page.get_by_role("button", name="Save Session Note").click()
         open_tab(page, "Session Notes")
         expect(page.get_by_text("Session Note Saved.")).to_be_visible(timeout=10000)
-        expect(page.get_by_role("heading", name="2026-07-10 - Silver Key", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Silver Key", exact=True)).to_be_visible(timeout=10000)
         expect(page.locator("p").filter(has_text="The party found a silver key and a brass map.")).to_be_visible(timeout=10000)
 
         ensure_session_note_editor_open(page)
@@ -484,7 +489,7 @@ def test_ui_deletes_character_place_and_session_note_files(isolated_character_ap
         ensure_session_notes_open(page)
         page.get_by_role("textbox", name="Session Notes").fill("2026-07-10\nA temporary note for deletion.")
         page.get_by_role("button", name="note_add Save Session Notes").click()
-        expect(page.get_by_role("heading", name="2026-07-10 - Session Notes", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
         ensure_session_note_editor_open(page)
         page.get_by_role("button", name="delete_forever Delete Session Note").click()
         expect(page.get_by_text("Session Note Deleted.")).to_be_visible(timeout=10000)

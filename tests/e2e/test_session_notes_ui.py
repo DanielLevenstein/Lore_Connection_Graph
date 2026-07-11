@@ -88,7 +88,7 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
         page.goto(app_url, wait_until="networkidle")
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
-        expect(page.get_by_role("heading", name="Session Notes", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
         page.get_by_text("Add Session Note", exact=True).click()
         page.get_by_role("textbox", name="Session Notes").fill(
             "2026-07-10\n"
@@ -98,7 +98,10 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
         )
         page.get_by_role("button", name="note_add Save Session Notes").click()
         expect(page.get_by_text("Saved 2 Session Note Files.")).to_be_visible(timeout=10000)
-        expect(page.get_by_role("heading", name="2026-07-10 - Session Notes", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
+        page.get_by_text("Edit Session Note", exact=True).click()
+        expect(page.get_by_role("textbox", name="Date")).to_have_count(0)
+        expect(page.get_by_role("textbox", name="Title")).to_be_visible(timeout=10000)
         browser.close()
 
     first = notes_dir / "2026-07-10_Session_Notes.md"
@@ -141,14 +144,16 @@ Session 13:
         page.goto(app_url, wait_until="networkidle")
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
-        page.get_by_text("Import Session Notes", exact=True).first.click()
-        page.get_by_label("Discord Markdown Export").locator("input[type=file]").set_input_files(str(import_file))
-        page.get_by_role("button", name="upload_file Import Session Notes").click()
+        page.get_by_text("Import Markdown", exact=True).first.click()
+        page.get_by_label("Markdown File").locator("input[type=file]").set_input_files(str(import_file))
+        page.get_by_label("Use Detected Dates As RP Calendar Dates").focus()
+        page.keyboard.press("Space")
+        page.get_by_role("button", name="upload_file Import Markdown").click()
         expect(page.get_by_text("Saved 2 Session Note Files.")).to_be_visible(timeout=10000)
-        expect(page.get_by_role("heading", name="2026-07-10 - Session 12", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Session 12", exact=True)).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Scene Notes", exact=True)).to_be_visible(timeout=10000)
         page.get_by_text("Edit Session Note", exact=True).click()
-        expect(page.get_by_role("textbox", name="Date")).to_have_value("2026-07-10", timeout=10000)
+        expect(page.get_by_role("textbox", name="Date")).to_have_count(0)
         browser.close()
 
     first = notes_dir / "2026-07-10_Session_12.md"
@@ -173,12 +178,15 @@ def test_ui_imports_freeform_lore_markdown_without_requiring_dates(isolated_sess
         page.goto(app_url, wait_until="networkidle")
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
-        page.get_by_text("Import Lore Markdown", exact=True).first.click()
-        page.get_by_label("Markdown Lore File").locator("input[type=file]").set_input_files(str(import_file))
-        page.get_by_role("button", name="upload_file Import Lore Markdown").click()
+        page.get_by_text("Import Markdown", exact=True).first.click()
+        page.get_by_label("Markdown File").locator("input[type=file]").set_input_files(str(import_file))
+        page.get_by_label("Use Detected Dates As RP Calendar Dates").focus()
+        page.keyboard.press("Space")
+        expect(page.get_by_label("Use Detected Dates As RP Calendar Dates")).to_be_checked(timeout=10000)
+        page.get_by_role("button", name="upload_file Import Markdown").click()
         expect(page.get_by_text("Saved 1 Session Note File.")).to_be_visible(timeout=10000)
-        expect(page.get_by_role("heading", name="Atlantia", exact=True).last).to_be_visible(timeout=10000)
-        expect(page.get_by_text("The Nighbloom Family", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Atlantia Lore", exact=True)).to_have_count(1)
+        expect(page.get_by_role("heading", name="Town Overview", exact=True)).to_be_visible(timeout=10000)
         page.get_by_text("Edit Lore Document", exact=True).click()
         expect(page.get_by_role("textbox", name="Lore Document")).to_contain_text("Sunstone Mage College")
         browser.close()
@@ -186,5 +194,32 @@ def test_ui_imports_freeform_lore_markdown_without_requiring_dates(isolated_sess
     imported = notes_dir / "Atlantia_Lore.md"
     assert imported.exists()
     text = imported.read_text(encoding="utf-8")
-    assert text.startswith("# Atlantia")
-    assert "## The Ravenmark Family" in text
+    assert text.startswith("# Atlantia Lore")
+    assert "## The Harbor" in text
+
+
+def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
+    app_url, docs_lore_dir = isolated_session_notes_app
+    characters_dir = docs_lore_dir / "character_sheets"
+    places_dir = docs_lore_dir / "places"
+    notes_dir = docs_lore_dir / "session_notes"
+    fixture_dir = ROOT_DIR / "tests" / "fixtures"
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        page.get_by_role("tab", name="Session Notes", exact=True).click()
+        page.get_by_text("Import Lore Directory", exact=True).first.click()
+        source_directory = page.get_by_role("textbox", name="Source Directory")
+        expect(source_directory).to_have_value(str(docs_lore_dir), timeout=10000)
+        source_directory.fill(str(fixture_dir))
+        page.get_by_role("button", name="folder_copy Import Lore Directory").click()
+        expect(page.get_by_text("Imported 6 Lore Files")).to_be_visible(timeout=10000)
+        browser.close()
+
+    assert (characters_dir / "Jory_Ravenmark.md").exists()
+    assert (places_dir / "Atlantia_Lore.md").exists()
+    assert (notes_dir / "Family_Tree.md").exists()
+    assert (notes_dir / "Time_Turning.md").exists()

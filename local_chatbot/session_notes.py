@@ -87,6 +87,27 @@ def import_lore_document_text(text: str, title: str = "") -> SessionNote:
     return SessionNote(note_date=None, body=body, path=path, title=inferred_title)
 
 
+def import_markdown_text(
+    text: str,
+    title: str = "",
+    include_detected_dates: bool = False,
+    split_sessions: bool = True,
+    today: date | None = None,
+) -> list[SessionNote]:
+    if include_detected_dates:
+        imported = import_discord_session_notes_text(text, split_sessions=split_sessions)
+        if imported:
+            return imported
+        if text_has_session_dates(text, today):
+            return save_session_notes(text, today=today, title=title)
+    return [import_lore_document_text(text, title=title)]
+
+
+def text_has_session_dates(text: str, today: date | None = None) -> bool:
+    default_year = (today or date.today()).year
+    return any(date_from_line(line, default_year) for line in text.splitlines())
+
+
 def split_session_notes(text: str, today: date | None = None) -> list[tuple[date, str]]:
     today = today or date.today()
     lines = text.strip().splitlines()

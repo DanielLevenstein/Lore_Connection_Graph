@@ -5,6 +5,7 @@ from local_chatbot.session_notes import (
     date_from_line,
     import_discord_session_notes,
     import_lore_document_text,
+    import_markdown_text,
     save_session_notes,
     split_discord_session_notes,
     split_session_notes,
@@ -85,6 +86,40 @@ def test_freeform_lore_import_uses_unique_markdown_paths(tmp_path, monkeypatch):
 
     assert first.path.name == "Atlantia_Lore.md"
     assert second.path.name == "Atlantia_Lore_2.md"
+
+
+def test_markdown_import_with_date_detection_preserves_undated_lore(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    imported = import_markdown_text(
+        """# Atlantia Lore
+
+## The Nighbloom Family
+
+Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College.
+""",
+        title="Atlantia_Lore",
+        include_detected_dates=True,
+    )
+
+    assert len(imported) == 1
+    assert imported[0].note_date is None
+    assert imported[0].path.name == "Atlantia_Lore.md"
+    assert imported[0].path.read_text(encoding="utf-8").startswith("# Atlantia Lore")
+
+
+def test_markdown_import_with_date_detection_saves_detected_dates(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    imported = import_markdown_text(
+        "2026-07-10\nThe party found a sealed brass door.",
+        title="Silver Key",
+        include_detected_dates=True,
+        today=date(2026, 7, 12),
+    )
+
+    assert imported[0].note_date == date(2026, 7, 10)
+    assert imported[0].path.name == "2026-07-10_Silver_Key.md"
 
 
 def test_legacy_session_note_body_only_strips_date_heading(tmp_path):

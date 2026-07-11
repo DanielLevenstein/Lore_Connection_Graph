@@ -1,0 +1,44 @@
+from pathlib import Path
+
+import local_chatbot.lore_import as lore_import
+from local_chatbot.lore_import import import_lore_directory
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+FIXTURES_DIR = ROOT_DIR / "tests" / "fixtures"
+
+
+def test_import_lore_directory_copies_fixture_subdirectories(tmp_path, monkeypatch):
+    characters_dir = tmp_path / "docs" / "lore" / "character_sheets"
+    places_dir = tmp_path / "docs" / "lore" / "places"
+    session_notes_dir = tmp_path / "docs" / "lore" / "session_notes"
+    monkeypatch.setattr(lore_import, "CHARACTERS_DIR", characters_dir)
+    monkeypatch.setattr(lore_import, "PLACES_DIR", places_dir)
+    monkeypatch.setattr(lore_import, "SESSION_NOTES_DIR", session_notes_dir)
+    monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
+
+    summary = import_lore_directory(FIXTURES_DIR)
+
+    assert summary.characters == 3
+    assert summary.places == 1
+    assert summary.session_notes == 2
+    assert (characters_dir / "Jory_Ravenmark.md").exists()
+    assert (places_dir / "Atlantia_Lore.md").exists()
+    assert (session_notes_dir / "Family_Tree.md").exists()
+    assert (session_notes_dir / "Time_Turning.md").exists()
+
+
+def test_import_lore_directory_can_skip_existing_files(tmp_path, monkeypatch):
+    places_dir = tmp_path / "docs" / "lore" / "places"
+    places_dir.mkdir(parents=True)
+    existing = places_dir / "Atlantia_Lore.md"
+    existing.write_text("# Existing Atlantia\n", encoding="utf-8")
+    monkeypatch.setattr(lore_import, "CHARACTERS_DIR", tmp_path / "docs" / "lore" / "character_sheets")
+    monkeypatch.setattr(lore_import, "PLACES_DIR", places_dir)
+    monkeypatch.setattr(lore_import, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+    monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
+
+    summary = import_lore_directory(FIXTURES_DIR, overwrite=False)
+
+    assert summary.places == 0
+    assert existing.read_text(encoding="utf-8") == "# Existing Atlantia\n"
