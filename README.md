@@ -2,18 +2,25 @@
 
 A local Streamlit app for creating tabletop character sheets, organizing campaign lore, and visualizing relationships as knowledge graphs.
 
-The app treats authored markdown in `docs/lore` as the source of truth. Character sheets can be edited through the UI, places can be created as lore files, and derived graph JSON can be regenerated from the markdown whenever needed.
+The app treats authored markdown in `docs/lore` as the source of truth. Character sheets can be edited through the UI, places can be created as lore files, and derived graph JSON can be regenerated from the Markdown whenever needed.
 
 `docs/lore/` is intentionally ignored by git so each player can keep their own campaign data out of the repository. Templates and parsing rules are committed under `docs/`; test lore examples live under `tests/fixtures`.
 
 ## What It Does
 
 - Create and edit character sheets with stats, backstory, summary, details, and character connections.
-- Support both `docs/lore/character_sheets/Name.md` and `docs/lore/character_sheets/Name/BACKSTORY.md`.
-- Create place lore files in `docs/lore/places`.
+- Extracts session notes with date and session title info from either Markdown or raw text files.
 - Build per-character knowledge graphs from character sheets.
-- Use graph data to explicitly populate summaries or rewrite backstories when the player clicks a generation button.
-- Keep generated drafts and runtime metadata under ignored `data/` folders.
+- Use graph data to explicitly populate summaries or rewrite backstories when desired.
+
+### Highlights
+
+- Import session notes from raw text or markdown file.
+- Extract the knowledge graph from the character backstory.
+- Suggest wording updates for character summary and backstory to improve writing legibility.
+- All your data is stored locally on your machine.
+- The AI model will never overwrite human edits to your character files.
+- Character creator does not enforce a specific character schema or stats system.
 
 ## Setup
 
@@ -23,6 +30,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
+
+## Project Screenshots
 
 ## Project Layout
 
