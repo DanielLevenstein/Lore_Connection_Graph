@@ -1,3 +1,4 @@
+import os
 from datetime import date
 
 import local_chatbot.session_notes as session_notes
@@ -52,7 +53,7 @@ def test_session_notes_preserve_markdown_body(tmp_path, monkeypatch):
 
     saved = save_session_notes(markdown_body, title="Silver Key")
 
-    assert session_notes.read_session_note_body(saved[0].path) == markdown_body
+    assert session_notes.read_session_note_body(saved[0].path) == markdown_body.replace("2026-07-10", "## 2026-07-10")
     assert "## Scene Notes" in saved[0].path.read_text(encoding="utf-8")
     assert "| Clue | Status |" in saved[0].path.read_text(encoding="utf-8")
 
@@ -179,8 +180,8 @@ Found the second key.""",
     )
 
     assert notes == [
-        (date(2026, 7, 9), "7/9\nOpened the old archive."),
-        (date(2026, 7, 10), "7/10\nFound the second key."),
+        (date(2026, 7, 9), "## 7/9\nOpened the old archive."),
+        (date(2026, 7, 10), "## 7/10\nFound the second key."),
     ]
 
 
@@ -209,8 +210,8 @@ Follow-up note.""",
     )
 
     assert notes == [
-        (date(2026, 7, 10), "2026-07-10\nFirst note.\n\n2026-07-10\nFollow-up note."),
-        (date(2026, 7, 11), "2026-07-11\nMiddle note."),
+        (date(2026, 7, 10), "## 2026-07-10\nFirst note.\n\n## 2026-07-10\nFollow-up note."),
+        (date(2026, 7, 11), "## 2026-07-11\nMiddle note."),
     ]
 
 
@@ -224,8 +225,61 @@ The date appears after the heading.""",
     )
 
     assert notes == [
-        (date(2026, 7, 10), "Campaign memory\n\n2026-07-10\nThe date appears after the heading.")
+        (date(2026, 7, 10), "Campaign memory\n\n## 2026-07-10\nThe date appears after the heading.")
     ]
+
+
+def test_markdown_import_sorts_same_date_sessions_by_heading_order(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    imported = import_markdown_text(
+        """2026-07-10
+Session 12:
+
+The party found a silver key.
+
+Session 13:
+
+The party opened the lighthouse door.""",
+        include_detected_dates=True,
+    )
+
+    assert [note.path.name for note in imported] == [
+        "2026-07-10_Session_12.md",
+        "2026-07-10_Session_13.md",
+    ]
+    assert [path.name for path in session_notes.list_session_notes()] == [
+        "2026-07-10_Session_12.md",
+        "2026-07-10_Session_13.md",
+    ]
+
+
+def test_imported_lore_without_session_date_sorts_by_import_date(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    first = import_markdown_text("# First Lore", title="First Lore")[0]
+    second = import_markdown_text("# Second Lore", title="Second Lore")[0]
+    os.utime(first.path, (100, 100))
+    os.utime(second.path, (200, 200))
+
+    assert session_notes.list_session_notes() == [second.path, first.path]
+
+
+def test_session_notes_can_use_editable_campaign_date_text(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    saved = save_session_notes(
+        "The party waited for the moon gate.",
+        title="Moon Gate",
+        session_date="Third Moon 17",
+    )
+
+    assert saved[0].note_date == "Third Moon 17"
+    assert saved[0].path.name == "Third_Moon_17_Moon_Gate.md"
+    assert session_notes.read_session_note_date_text(saved[0].path) == "Third Moon 17"
+    assert session_notes.read_session_note(saved[0].path).startswith(
+        "# Session Notes - Third Moon 17 - Moon Gate"
+    )
 
 
 def test_discord_export_splits_dates_and_removes_export_noise():

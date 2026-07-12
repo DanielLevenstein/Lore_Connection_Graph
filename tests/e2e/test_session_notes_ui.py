@@ -90,7 +90,7 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
         expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
-        page.get_by_text("Add Session Note", exact=True).click()
+        page.get_by_text("Add Or Import Session Note", exact=True).click()
         page.get_by_role("textbox", name="Session Notes").fill(
             "2026-07-10\n"
             "The party found a silver key.\n\n"
@@ -101,7 +101,7 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
         expect(page.get_by_text("Saved 2 Session Note Files.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
         page.get_by_text("Edit Session Note", exact=True).click()
-        expect(page.get_by_role("textbox", name="Date")).to_have_count(0)
+        expect(page.get_by_role("textbox", name="Session Date")).to_have_value("2026-07-10", timeout=10000)
         expect(page.get_by_role("textbox", name="Title")).to_be_visible(timeout=10000)
         browser.close()
 
@@ -109,7 +109,9 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
     second = notes_dir / "2026-07-11_Session_Notes.md"
     assert first.exists()
     assert second.exists()
+    assert "## 2026-07-10" in first.read_text(encoding="utf-8")
     assert "silver key" in first.read_text(encoding="utf-8")
+    assert "## 2026-07-11" in second.read_text(encoding="utf-8")
     assert "lighthouse door" in second.read_text(encoding="utf-8")
 
 
@@ -168,16 +170,14 @@ Session 13:
         page.goto(app_url, wait_until="networkidle")
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
-        page.get_by_text("Import File", exact=True).first.click()
+        page.get_by_text("Add Or Import Session Note", exact=True).click()
         page.get_by_label("File", exact=True).locator("input[type=file]").set_input_files(str(import_file))
-        page.get_by_label("Use Detected Dates As RP Calendar Dates").focus()
-        page.keyboard.press("Space")
-        page.get_by_role("button", name="upload_file Import Notes").click()
+        page.get_by_role("button", name="note_add Save Session Notes").click()
         expect(page.get_by_text("Saved 2 Session Note Files.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Session 12", exact=True)).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Scene Notes", exact=True)).to_be_visible(timeout=10000)
         page.get_by_text("Edit Session Note", exact=True).click()
-        expect(page.get_by_role("textbox", name="Date")).to_have_count(0)
+        expect(page.get_by_role("textbox", name="Session Date")).to_have_value("2026-07-10", timeout=10000)
         browser.close()
 
     first = notes_dir / "2026-07-10_Session_12.md"
@@ -202,13 +202,11 @@ def test_ui_imports_freeform_lore_markdown_without_requiring_dates(isolated_sess
         page.goto(app_url, wait_until="networkidle")
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
-        page.get_by_text("Import File", exact=True).first.click()
+        page.get_by_text("Add Or Import Session Note", exact=True).click()
         page.get_by_label("File", exact=True).locator("input[type=file]").set_input_files(str(import_file))
         page.get_by_role("textbox", name="Imported File Name").fill("Imported Atlantia.md")
-        page.get_by_label("Use Detected Dates As RP Calendar Dates").focus()
-        page.keyboard.press("Space")
         expect(page.get_by_label("Use Detected Dates As RP Calendar Dates")).to_be_checked(timeout=10000)
-        page.get_by_role("button", name="upload_file Import Notes").click()
+        page.get_by_role("button", name="note_add Save Session Notes").click()
         expect(page.get_by_text("Saved 1 Session Note File.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Atlantia Lore", exact=True)).to_have_count(1)
         expect(page.get_by_role("heading", name="Town Overview", exact=True)).to_be_visible(timeout=10000)

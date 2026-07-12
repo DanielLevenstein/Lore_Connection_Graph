@@ -165,7 +165,7 @@ def ensure_place_editor_open(page) -> None:
 def ensure_session_notes_open(page) -> None:
     save_button = page.get_by_role("button", name="note_add Save Session Notes")
     if not save_button.is_visible():
-        page.get_by_text("Add Session Note", exact=True).click()
+        page.get_by_text("Add Or Import Session Note", exact=True).click()
     expect(save_button).to_be_visible(timeout=10000)
 
 
@@ -473,10 +473,10 @@ def test_create_validation_preserves_entered_fields(isolated_character_app):
 
         open_tab(page, "Session Notes")
         ensure_session_notes_open(page)
-        page.get_by_role("textbox", name="Title").fill("Draft Session")
+        page.get_by_role("textbox", name="Imported File Name").fill("Draft Session")
         page.get_by_role("button", name="note_add Save Session Notes").click()
         expect(page.get_by_text("Add Session Notes Before Saving.")).to_be_visible(timeout=10000)
-        expect(page.get_by_role("textbox", name="Title")).to_have_value("Draft Session")
+        expect(page.get_by_role("textbox", name="Imported File Name")).to_have_value("Draft Session")
         browser.close()
 
 

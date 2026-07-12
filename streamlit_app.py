@@ -1,6 +1,7 @@
-import os
 from dataclasses import replace
+from datetime import date
 from pathlib import Path
+import os
 
 import streamlit as st
 
@@ -61,9 +62,8 @@ from local_chatbot.session_notes import (
     list_session_notes,
     read_session_note,
     read_session_note_body,
+    read_session_note_date_text,
     read_session_note_title,
-    save_session_notes,
-    session_note_date_from_path,
     write_lore_document,
     write_session_note,
 )
@@ -151,9 +151,8 @@ def display_place_option(place: Place) -> str:
 
 
 def display_session_note_name(path, show_dates: bool = False) -> str:
-    try:
-        note_date = session_note_date_from_path(path).isoformat()
-    except ValueError:
+    note_date = read_session_note_date_text(path)
+    if not note_date:
         title = markdown_document_title(read_session_note(path))
         return clean_display_name(title or path.stem.replace("session_notes_", "").replace("_", " "))
     title = read_session_note_title(path)
@@ -1106,60 +1105,35 @@ def render_session_notes() -> None:
         render_session_note_editor(active_note, show_dates=show_dates)
 
     st.subheader("New Session Notes")
-    with st.expander("Import File", expanded=False):
+    with st.expander("Add Or Import Session Note", expanded=False):
+        if st.session_state.pop("clear_session_notes_draft", False):
+            st.session_state["session_notes_draft"] = ""
+            st.session_state["session_notes_session_date"] = ""
+            st.session_state["markdown_import_source_name"] = ""
         uploaded_notes = st.file_uploader(
             "File",
             type=["md", "txt"],
             key="markdown_import",
         )
-        imported_file_name = st.text_input(
+        title = st.text_input(
             "Imported File Name",
-            value="",
-            placeholder=uploaded_notes.name if uploaded_notes is not None else "Optional source filename",
+            placeholder=uploaded_notes.name if uploaded_notes is not None else "Optional title or source filename",
             key="markdown_import_source_name",
+        )
+        session_date = st.text_input(
+            "Session Date",
+            placeholder=f"Optional campaign date, e.g. {date.today().isoformat()} or Third Moon 17",
+            key="session_notes_session_date",
         )
         include_detected_dates = st.checkbox(
             "Use Detected Dates As RP Calendar Dates",
-            value=False,
+            value=True,
             key="include_markdown_import_dates",
         )
         split_import_sessions = st.checkbox(
             "Split Session Headings Into Separate Notes",
             value=True,
             key="split_markdown_import_session_headings",
-        )
-        if st.button("Import Notes", icon=":material/upload_file:", key="import_markdown"):
-            if uploaded_notes is None:
-                st.error("Choose A Markdown File Before Importing.")
-                return
-            try:
-                import_text = uploaded_notes.getvalue().decode("utf-8")
-            except UnicodeDecodeError:
-                st.error("Import File Must Be UTF-8 Text.")
-                return
-            if not import_text.strip():
-                st.error("Import File Must Include Markdown Text.")
-                return
-            push_session_notes_undo()
-            import_title = os.path.splitext(imported_file_name.strip() or uploaded_notes.name)[0]
-            imported = import_markdown_text(
-                import_text,
-                title=import_title,
-                include_detected_dates=include_detected_dates,
-                split_sessions=split_import_sessions,
-            )
-            st.session_state["session_notes_saved_count"] = len(imported)
-            set_active_session_note(imported[0].path)
-            st.rerun()
-
-    with st.expander("Add Session Note", expanded=False):
-        if st.session_state.pop("clear_session_notes_draft", False):
-            st.session_state["session_notes_draft"] = ""
-            st.session_state["session_notes_title"] = ""
-        title = st.text_input(
-            "Title",
-            placeholder="Optional session title",
-            key="session_notes_title",
         )
         notes = st.text_area(
             "Session Notes",
@@ -1169,11 +1143,24 @@ def render_session_notes() -> None:
         )
         action_cols = st.columns(2)
         if action_cols[0].button("Save Session Notes", icon=":material/note_add:", key="save_session_notes"):
+            source_name = title.strip() or (uploaded_notes.name if uploaded_notes is not None else "")
+            if uploaded_notes is not None:
+                try:
+                    notes = uploaded_notes.getvalue().decode("utf-8")
+                except UnicodeDecodeError:
+                    st.error("Import File Must Be UTF-8 Text.")
+                    return
             if not notes.strip():
                 st.error("Add Session Notes Before Saving.")
                 return
             push_session_notes_undo()
-            saved = save_session_notes(notes, title=title)
+            saved = import_markdown_text(
+                notes,
+                title=os.path.splitext(source_name)[0],
+                include_detected_dates=include_detected_dates,
+                split_sessions=split_import_sessions,
+                session_date=session_date,
+            )
             st.session_state["session_notes_saved_count"] = len(saved)
             if saved:
                 set_active_session_note(saved[0].path)
@@ -1185,10 +1172,7 @@ def render_session_notes() -> None:
 
 def render_session_note_editor(path, show_dates: bool = False) -> None:
     note_label = display_session_note_name(path, show_dates=show_dates)
-    try:
-        note_date = session_note_date_from_path(path).isoformat()
-    except ValueError:
-        note_date = ""
+    note_date = read_session_note_date_text(path)
     note_title = read_session_note_title(path) if note_date else ""
     note_body = read_session_note_body(path) if note_date else read_session_note(path).strip()
     if markdown_document_title(note_body) != note_label:
@@ -1199,15 +1183,13 @@ def render_session_note_editor(path, show_dates: bool = False) -> None:
     with st.expander(expander_label, expanded=False):
         editor_revision = st.session_state.get(f"session_note_editor_revision_{path.name}", 0)
         with st.form(f"edit_session_note_{path.name}"):
-            if note_date and show_dates:
-                st.text_input("Date", value=note_date, disabled=True)
-                title = st.text_input(
-                    "Title",
-                    value=note_title,
-                    placeholder="Optional session title",
-                    key=f"session_note_title_{path.name}_{editor_revision}",
+            if note_date:
+                session_date = st.text_input(
+                    "Session Date",
+                    value=note_date,
+                    placeholder="Campaign date",
+                    key=f"session_note_date_{path.name}_{editor_revision}",
                 )
-            elif note_date:
                 title = st.text_input(
                     "Title",
                     value=note_title,
@@ -1242,7 +1224,7 @@ def render_session_note_editor(path, show_dates: bool = False) -> None:
                     return
                 push_session_notes_undo()
                 if note_date:
-                    write_session_note(path, body, title)
+                    write_session_note(path, body, title, session_date=session_date)
                     st.session_state["session_notes_status"] = "Session Note Saved."
                 else:
                     write_lore_document(path, body)
