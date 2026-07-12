@@ -4,7 +4,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .paths import CHARACTERS_DIR, PLACES_DIR, SESSION_NOTES_DIR, ensure_base_dirs
+from .paths import CHARACTERS_DIR, DOCS_LORE_DIR, GENERATED_LORE_DIR, PLACES_DIR, SESSION_NOTES_DIR, ensure_base_dirs
 
 
 @dataclass(frozen=True)
@@ -57,6 +57,35 @@ def import_lore_directory(source_dir: Path, overwrite: bool = True) -> LoreImpor
         places=counts["places"],
         session_notes=counts["session_notes"],
     )
+
+
+def clear_local_lore() -> LoreImportSummary:
+    ensure_base_dirs()
+    summary = LoreImportSummary(
+        characters=count_files(CHARACTERS_DIR),
+        places=count_files(PLACES_DIR),
+        session_notes=count_files(SESSION_NOTES_DIR),
+    )
+    for lore_dir in (DOCS_LORE_DIR, GENERATED_LORE_DIR):
+        clear_directory_contents(lore_dir)
+    ensure_base_dirs()
+    return summary
+
+
+def count_files(directory: Path) -> int:
+    if not directory.exists():
+        return 0
+    return sum(1 for path in directory.rglob("*") if path.is_file())
+
+
+def clear_directory_contents(directory: Path) -> None:
+    if not directory.exists():
+        return
+    for path in directory.iterdir():
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
 
 
 def lore_markdown_files(source_dir: Path) -> list[Path]:

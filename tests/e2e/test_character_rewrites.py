@@ -27,8 +27,9 @@ def test_orin_graph_generated_summary_scores_better_than_original_backstory():
     generated_summary = graph_generated_summary(graph, profile)
     source_context = rewrite_quality_context(graph, profile)
     required_terms = rewrite_required_terms(graph, profile)
+    original_backstory = profile.original_backstory or profile.backstory
     generated_score = semantic_rewrite_score(generated_summary, source_context, required_terms)
-    original_score = semantic_rewrite_score(profile.backstory, source_context, required_terms)
+    original_score = semantic_rewrite_score(original_backstory, source_context, required_terms)
 
     assert generated_summary.startswith("Orin is a Half-Orc Bard")
     assert "Sunstone Mage College" in generated_summary
@@ -46,8 +47,9 @@ def test_orin_graph_generated_story_scores_better_than_original_backstory():
     generated_story = graph_generated_backstory(graph, profile)
     source_context = rewrite_quality_context(graph, profile)
     required_terms = rewrite_required_terms(graph, profile)
+    original_backstory = profile.original_backstory or profile.backstory
     generated_score = semantic_rewrite_score(generated_story, source_context, required_terms)
-    original_score = semantic_rewrite_score(profile.backstory, source_context, required_terms)
+    original_score = semantic_rewrite_score(original_backstory, source_context, required_terms)
 
     assert "Sunstone Mage College" in generated_story
     assert "Orin Nightbloom's Mother" in generated_story

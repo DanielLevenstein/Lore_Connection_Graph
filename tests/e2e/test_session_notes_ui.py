@@ -113,6 +113,29 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
     assert "lighthouse door" in second.read_text(encoding="utf-8")
 
 
+def test_show_dates_preserves_session_notes_tab(isolated_session_notes_app):
+    app_url, docs_lore_dir = isolated_session_notes_app
+    notes_dir = docs_lore_dir / "session_notes"
+    notes_dir.mkdir(parents=True)
+    (notes_dir / "2026-07-10_Session_Notes.md").write_text(
+        "# Session Notes\n\nA dated note.\n",
+        encoding="utf-8",
+    )
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        session_notes_tab = page.get_by_role("tab", name="Session Notes", exact=True)
+        session_notes_tab.click()
+        expect(session_notes_tab).to_have_attribute("aria-selected", "true", timeout=10000)
+        page.get_by_label("Show Dates").focus()
+        page.keyboard.press("Space")
+        expect(session_notes_tab).to_have_attribute("aria-selected", "true", timeout=10000)
+        browser.close()
+
+
 def test_ui_imports_discord_session_notes_with_markdown_and_date_field(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
     notes_dir = docs_lore_dir / "session_notes"
@@ -227,6 +250,39 @@ def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
     assert (notes_dir / "Family_Tree.md").exists()
     assert (notes_dir / "Time_Turning.md").exists()
 
+def test_ui_bulk_lore_removal_confirms_before_cleaning_lore(isolated_session_notes_app):
+    app_url, docs_lore_dir = isolated_session_notes_app
+    data_lore_dir = docs_lore_dir.parent.parent / "data" / "lore"
+    characters_dir = docs_lore_dir / "character_sheets"
+    places_dir = docs_lore_dir / "places"
+    notes_dir = docs_lore_dir / "session_notes"
+    fixture_dir = ROOT_DIR / "tests" / "fixtures"
+    generated_draft = data_lore_dir / "character_sheets" / "Draft" / "PROFILE.json"
+    generated_draft.parent.mkdir(parents=True)
+    generated_draft.write_text("{}", encoding="utf-8")
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        page.get_by_text("Lore Import", exact=True).first.click()
+        page.get_by_role("textbox", name="Source Directory").fill(str(fixture_dir))
+        page.get_by_role("button", name="folder_copy Import Lore Directory").click()
+        expect(page.get_by_text("Imported 6 Lore Files")).to_be_visible(timeout=10000)
+        page.get_by_text("Lore Import", exact=True).first.click()
+        page.get_by_role("button", name="delete_forever Bulk Lore Removal").click()
+        expect(page.get_by_text("This operation is destructive.")).to_be_visible(timeout=10000)
+        expect(page.get_by_text("delete all local characters, places, and notes")).to_be_visible(timeout=10000)
+        page.get_by_role("button", name="delete_forever Yes, Delete Local Lore").click()
+        expect(page.get_by_text("Deleted 6 Local Lore Files")).to_be_visible(timeout=10000)
+        browser.close()
+
+    assert not (characters_dir / "Jory_Ravenmark.md").exists()
+    assert not (places_dir / "Atlantia_Lore.md").exists()
+    assert not (notes_dir / "Family_Tree.md").exists()
+    assert not (notes_dir / "Time_Turning.md").exists()
+    assert not generated_draft.exists()
 
 def test_ui_imports_external_character_sheet(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app

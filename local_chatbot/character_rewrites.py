@@ -29,10 +29,13 @@ def graph_generated_summary(graph: CharacterGraph, profile: CharacterProfile) ->
     pieces = [profile.first_name or character_first_name(profile.name) or profile.name]
     descriptor = " is"
     if traits:
-        descriptor += f" {traits}"
+        trait_text = f" who is {traits}"
+    else:
+        trait_text = ""
     role = " ".join(value for value in [profile.race, profile.character_class] if value).strip()
     if role:
         descriptor += f" a {role}"
+    descriptor += trait_text
     pieces.append(descriptor)
     if places:
         pieces.append(f" tied to {places}")

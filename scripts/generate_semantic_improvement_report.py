@@ -19,7 +19,7 @@ from local_chatbot.storage import Character, read_character_profile
 
 
 DEFAULT_CHARACTER_PATH = ROOT_DIR / "tests" / "fixtures" / "character_sheets" / "Orin_Nightbloom.md"
-DEFAULT_REPORT_PATH = ROOT_DIR / "docs" / "reports" / "semantic_improvement_orin_nightbloom.md"
+DEFAULT_REPORT_PATH = ROOT_DIR / "docs" / "reports" / "semantic_backstory_improvement.md"
 
 
 def build_report(character_path: Path = DEFAULT_CHARACTER_PATH) -> str:
@@ -29,8 +29,9 @@ def build_report(character_path: Path = DEFAULT_CHARACTER_PATH) -> str:
     generated_story = graph_generated_backstory(graph, profile)
     source_context = rewrite_quality_context(graph, profile)
     required_terms = rewrite_required_terms(graph, profile)
+    original_backstory = profile.original_backstory
     generated_score = semantic_rewrite_score(generated_story, source_context, required_terms)
-    original_score = semantic_rewrite_score(profile.backstory, source_context, required_terms)
+    original_score = semantic_rewrite_score(original_backstory, source_context, required_terms)
     delta = round(generated_score.score - original_score.score, 4)
     terms = ", ".join(required_terms)
     return (
@@ -41,10 +42,8 @@ def build_report(character_path: Path = DEFAULT_CHARACTER_PATH) -> str:
         "## Candidate\n\n"
         "### Post-Transform Story\n\n"
         f"{generated_story}\n\n"
-        "### Original Backstory Excerpt\n\n"
-        f"{profile.backstory.splitlines()[0].strip()}\n\n"
-        "## Required Concepts\n\n"
-        f"{terms}\n\n"
+        "### Original Character Backstory\n\n"
+        f"{original_backstory}\n\n"
         "## Scores\n\n"
         "| Candidate | Overall | Semantic Similarity | Concept Coverage | Concision |\n"
         "| --- | ---: | ---: | ---: | ---: |\n"

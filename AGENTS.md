@@ -16,3 +16,8 @@
 - Add an application screenshot to docs/screenshots before committing code.
 - Name the screenshot based on the UI page you are modifying.
 - Compare the current version to the previous one before updating.
+
+## Automated Testing
+
+- e2e tests for this project use playwright
+- When automated tests break, add a unique id to the button or table you are accessing.

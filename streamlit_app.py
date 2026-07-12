@@ -67,7 +67,7 @@ from local_chatbot.session_notes import (
     write_lore_document,
     write_session_note,
 )
-from local_chatbot.lore_import import import_lore_directory
+from local_chatbot.lore_import import clear_local_lore, import_lore_directory
 from local_chatbot.paths import DOCS_LORE_DIR
 
 ENABLE_CHARACTER_REWRITE = "1"
@@ -1035,7 +1035,8 @@ def render_lore_import_tools() -> None:
             value=True,
             key="lore_directory_import_overwrite",
         )
-        if st.button("Import Lore Directory", icon=":material/folder_copy:", key="import_lore_directory"):
+        action_cols = st.columns(2)
+        if action_cols[0].button("Import Lore Directory", icon=":material/folder_copy:", key="import_lore_directory"):
             try:
                 summary = import_lore_directory(Path(source_dir), overwrite=overwrite_existing)
             except FileNotFoundError:
@@ -1046,6 +1047,28 @@ def render_lore_import_tools() -> None:
                 f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
             )
             st.rerun()
+        if action_cols[1].button("Bulk Lore Removal", icon=":material/delete_forever:", key="bulk_lore_removal"):
+            render_bulk_lore_removal_warning()
+
+
+@st.dialog("Bulk Lore Removal")
+def render_bulk_lore_removal_warning() -> None:
+    st.warning(
+        "This operation is destructive. Do you want to delete all local characters, places, and notes?"
+    )
+    st.write("This will clean the configured `docs/lore` and `data/lore` directories.")
+    action_cols = st.columns(2)
+    if action_cols[0].button("Yes, Delete Local Lore", icon=":material/delete_forever:", width="stretch"):
+        summary = clear_local_lore()
+        st.session_state["lore_import_status"] = (
+            f"Deleted {summary.total} Local Lore File{'s' if summary.total != 1 else ''} "
+            f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
+        )
+        for key in ("active_character", "active_place", "active_session_note"):
+            st.session_state.pop(key, None)
+        st.rerun()
+    if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
+        st.rerun()
 
 
 def render_session_notes() -> None:
@@ -1499,7 +1522,11 @@ st.caption("Create Character Sheets And Explore Relationship Graphs From Local L
 
 render_lore_import_tools()
 
-characters_tab, places_tab, session_notes_tab = st.tabs(["Characters", "Places", "Session Notes"])
+characters_tab, places_tab, session_notes_tab = st.tabs(
+    ["Characters", "Places", "Session Notes"],
+    default=st.session_state.get("main_navigation_tab", "Characters"),
+    key="main_navigation_tab",
+)
 
 with characters_tab:
     render_character_panel()

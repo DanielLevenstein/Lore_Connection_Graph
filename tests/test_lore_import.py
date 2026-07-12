@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import local_chatbot.lore_import as lore_import
-from local_chatbot.lore_import import import_lore_directory
+from local_chatbot.lore_import import clear_local_lore, import_lore_directory
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -45,3 +45,43 @@ def test_import_lore_directory_can_skip_existing_files(tmp_path, monkeypatch):
 
     assert summary.places == 0
     assert existing.read_text(encoding="utf-8") == "# Existing Atlantia\n"
+
+
+def test_clear_local_lore_cleans_docs_and_data_lore(tmp_path, monkeypatch):
+    docs_lore_dir = tmp_path / "docs" / "lore"
+    generated_lore_dir = tmp_path / "data" / "lore"
+    characters_dir = tmp_path / "docs" / "lore" / "character_sheets"
+    places_dir = tmp_path / "docs" / "lore" / "places"
+    session_notes_dir = tmp_path / "docs" / "lore" / "session_notes"
+    generated_character_dir = generated_lore_dir / "character_sheets" / "Draft"
+    monkeypatch.setattr(lore_import, "CHARACTERS_DIR", characters_dir)
+    monkeypatch.setattr(lore_import, "DOCS_LORE_DIR", docs_lore_dir)
+    monkeypatch.setattr(lore_import, "GENERATED_LORE_DIR", generated_lore_dir)
+    monkeypatch.setattr(lore_import, "PLACES_DIR", places_dir)
+    monkeypatch.setattr(lore_import, "SESSION_NOTES_DIR", session_notes_dir)
+    monkeypatch.setattr(
+        lore_import,
+        "ensure_base_dirs",
+        lambda: [
+            path.mkdir(parents=True, exist_ok=True)
+            for path in (characters_dir, places_dir, session_notes_dir, generated_lore_dir)
+        ],
+    )
+
+    import_lore_directory(FIXTURES_DIR)
+    generated_character_dir.mkdir(parents=True)
+    (generated_character_dir / "PROFILE.json").write_text("{}", encoding="utf-8")
+
+    summary = clear_local_lore()
+
+    assert summary.characters == 3
+    assert summary.places == 1
+    assert summary.session_notes == 2
+    assert not (characters_dir / "Jory_Ravenmark.md").exists()
+    assert not (places_dir / "Atlantia_Lore.md").exists()
+    assert not (session_notes_dir / "Family_Tree.md").exists()
+    assert not (generated_character_dir / "PROFILE.json").exists()
+    assert characters_dir.exists()
+    assert places_dir.exists()
+    assert session_notes_dir.exists()
+    assert generated_lore_dir.exists()
