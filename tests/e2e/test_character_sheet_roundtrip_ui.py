@@ -544,6 +544,8 @@ def test_ui_creates_character_from_combined_graph_and_loads_it(isolated_characte
 
         expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
         page.get_by_text("Combined Knowledge Graph", exact=True).last.click()
+        expect(page.get_by_role("button", name="Regenerate All Lore Graphs")).to_have_count(0)
+        expect(page.get_by_role("button", name="Add Character Connections")).to_have_count(0)
         page.get_by_role("button", name="Create Character File").click()
         expect(page.get_by_text("Draft Character")).to_be_visible(timeout=10000)
         page.get_by_role("textbox", name="Race", exact=True).first.fill("Human")

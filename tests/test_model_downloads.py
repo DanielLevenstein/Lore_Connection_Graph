@@ -41,7 +41,7 @@ def test_selected_semantic_model_config_is_runnable_gguf():
 
     assert semantic.server["runner"] == "llama.cpp"
     assert "semantic model" in semantic.description.lower()
-    assert default_download_option(semantic)["filename"] == "Qwen2.5-3B-Instruct-Q4_K_M.gguf"
+    assert default_download_option(semantic)["filename"] == "Qwen2.5-3B-Instruct-IQ2_M.gguf"
 
 
 def test_selected_visual_inspection_model_config_is_available():

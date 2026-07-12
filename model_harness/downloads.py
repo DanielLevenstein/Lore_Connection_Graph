@@ -24,13 +24,14 @@ def default_download_option(config: ModelConfig) -> dict | None:
     wanted = config.download_size.split(" ", 1)[0]
     runnable_options = [option for option in config.download_options if is_runnable_model_option(option)]
     options = runnable_options or config.download_options
+    if wanted.upper() == wanted and any(character.isdigit() for character in wanted):
+        for option in options:
+            if option.get("quant") == wanted:
+                return option
     for preferred_quant in ("Q4_K_M", "Q4_K", "Q5_K_M", "Q5_K"):
         for option in options:
             if option.get("quant") == preferred_quant:
                 return option
-    for option in options:
-        if option.get("quant") == wanted:
-            return option
     return options[0]
 
 

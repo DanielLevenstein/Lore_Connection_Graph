@@ -6,6 +6,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = ROOT_DIR / "config"
 DATA_DIR = Path(os.environ.get("LOCAL_CHATBOT_DATA_DIR", ROOT_DIR / "data")).resolve()
 DOCS_LORE_DIR = Path(os.environ.get("LOCAL_CHATBOT_DOCS_LORE_DIR", ROOT_DIR / "docs" / "lore")).resolve()
+LORE_FIXTURES_DIR = Path(os.environ.get("LOCAL_CHATBOT_LORE_FIXTURES_DIR", ROOT_DIR / "tests" / "fixtures")).resolve()
 CHARACTERS_DIR = Path(
     os.environ.get("LOCAL_CHATBOT_CHARACTERS_DIR", DOCS_LORE_DIR / "character_sheets")
 ).resolve()

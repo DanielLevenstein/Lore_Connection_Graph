@@ -29,7 +29,6 @@ from local_chatbot.storage import (
     CharacterProfile,
     Place,
     PlaceProfile,
-    append_character_connections,
     character_family_name,
     character_first_name,
     create_character,
@@ -45,9 +44,7 @@ from local_chatbot.storage import (
     read_character_profile,
     read_text,
     regenerate_character_graph,
-    remove_character_connections,
     start_chatlog,
-    write_character_connections,
     write_character_profile,
     write_place_markdown,
 )
@@ -71,8 +68,9 @@ from local_chatbot.lore_import import clear_local_lore, import_lore_directory
 from local_chatbot.paths import DOCS_LORE_DIR
 
 ENABLE_CHARACTER_REWRITE = "1"
-ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 ENABLE_EXTERNAL_CHARACTER_IMPORT = "LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"
+MAIN_NAVIGATION_TAB_KEY = "main_navigation_tab"
+MAIN_NAVIGATION_WIDGET_KEY = "main_navigation_tab_widget"
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
 ensure_base_dirs()
@@ -106,6 +104,11 @@ def set_active_character(character: Character) -> None:
         st.session_state.active_character = character.name
         st.session_state.messages = []
         st.session_state.chatlog_path = str(start_chatlog(character))
+
+
+def set_main_navigation_tab(tab: str) -> None:
+    st.session_state[MAIN_NAVIGATION_TAB_KEY] = tab
+    st.session_state[MAIN_NAVIGATION_WIDGET_KEY] = tab
 
 
 def get_active_character() -> Character | None:
@@ -188,10 +191,6 @@ def clean_display_name(name: str) -> str:
 
 def graph_rewrites_enabled() -> bool:
     return ENABLE_CHARACTER_REWRITE
-
-
-def attribute_graph_override_enabled() -> bool:
-    return os.environ.get(ENABLE_ATTRIBUTE_GRAPH_OVERRIDE) == "1"
 
 
 def external_character_import_enabled() -> bool:
@@ -295,16 +294,22 @@ def accept_current_character_text(profile: CharacterProfile) -> CharacterProfile
 
 
 def graph_generated_summary(character: Character, profile: CharacterProfile) -> str:
-    graph = load_graph(character.graph_path)
-    if graph is None:
-        raise ValueError("No Character Graph Is Available. Regenerate The Graph First.")
+    graph = character_graph_or_regenerate(character)
     return build_graph_generated_summary(graph, profile)
 
 
-def graph_generated_backstory(character: Character, profile: CharacterProfile) -> str:
+def character_graph_or_regenerate(character: Character):
     graph = load_graph(character.graph_path)
     if graph is None:
+        regenerate_character_graph(character)
+        graph = load_graph(character.graph_path)
+    if graph is None:
         raise ValueError("No Character Graph Is Available. Regenerate The Graph First.")
+    return graph
+
+
+def graph_generated_backstory(character: Character, profile: CharacterProfile) -> str:
+    graph = character_graph_or_regenerate(character)
     return build_graph_generated_backstory(graph, profile)
 
 
@@ -466,39 +471,6 @@ def render_relationship_graph(character: Character) -> None:
         attributes_tab = st.tabs(["Attributes"])[0]
         with attributes_tab:
             st.table(evidence, hide_index=True, width="stretch")
-            if attribute_graph_override_enabled():
-                render_attribute_graph_override_editor(character, evidence)
-
-
-def render_attribute_graph_override_editor(character: Character, evidence: list[dict[str, str]]) -> None:
-    with st.expander("Override Attribute Graph", expanded=False):
-        st.caption("When a Character Connections table is present, graph regeneration uses these rows instead of inferred attributes.")
-        override_key = f"attribute_graph_override_{character.name}"
-        with st.form(f"attribute_graph_override_form_{character.name}"):
-            edited_rows = st.data_editor(
-                evidence,
-                num_rows="dynamic",
-                key=override_key,
-                column_order=("Table", "Item", "Value", "Evidence"),
-                width="stretch",
-            )
-            action_cols = st.columns(2)
-            save_override = action_cols[0].form_submit_button(
-                "Save Attribute Graph Override",
-                icon=":material/edit_note:",
-            )
-            clear_override = action_cols[1].form_submit_button(
-                "Use Extracted Graph Again",
-                icon=":material/auto_awesome:",
-            )
-        if save_override:
-            write_character_connections(character, edited_rows, manual_override=True)
-            st.success("Attribute Graph Override Saved.")
-            st.rerun()
-        if clear_override:
-            remove_character_connections(character)
-            st.success("Attribute Graph Override Cleared.")
-            st.rerun()
 
 
 def attribute_graph_display_rows(profile: CharacterProfile) -> list[dict[str, str]]:
@@ -532,19 +504,6 @@ def render_combined_character_graph() -> None:
     place_sources = [(compact(place.name), place.name, str(place.path)) for place in places]
     with st.expander("Combined Knowledge Graph", expanded=False):
         render_pending_lore_drafts()
-        if st.button("Regenerate All Lore Graphs", icon=":material/sync:", key="regen_all_lore_graphs"):
-            failures = []
-            for character in characters:
-                try:
-                    regenerate_character_graph(character)
-                except (OSError, ValueError) as exc:
-                    failures.append(f"{display_character_name(character)}: {exc}")
-            if failures:
-                st.error("Could Not Regenerate Every Lore Graph. " + " ".join(failures))
-            else:
-                st.success("All Lore Graphs Regenerated.")
-                st.rerun()
-
         if not graphs and not place_sources:
             st.info("Add Character Or Place Lore To See The Combined Graph.")
             return
@@ -554,7 +513,6 @@ def render_combined_character_graph() -> None:
         character_nodes = [node for node in combined.characters.values() if node.node_type == "character"]
         character_tabs = st.tabs([node.name for node in character_nodes] or ["Lore"])
         primary_ids = {compact(character.name) for character in characters}
-        characters_by_id = {compact(character.name): character for character in characters}
         for tab, node in zip(character_tabs, character_nodes):
             with tab:
                 character_id = node.id
@@ -576,15 +534,6 @@ def render_combined_character_graph() -> None:
                 if scoped_detail_rows:
                     st.subheader("Character Graph Details")
                     st.table(scoped_detail_rows, hide_index=True, width="stretch")
-                if st.button(
-                    "Add Character Connections",
-                    icon=":material/account_tree:",
-                    key=f"append_connections_{character_id}",
-                    disabled=character_id not in characters_by_id,
-                ):
-                    append_character_connections(characters_by_id[character_id], connection_rows_for_character(combined, character_id))
-                    st.success("Character Connections Added.")
-                    st.rerun()
 
         secondary_characters = [
             node
@@ -708,34 +657,6 @@ def render_pending_lore_drafts() -> None:
         render_place_creator_form("graph_pending_place", st.session_state.pending_place_profile)
 
 
-def connection_rows_for_character(combined, character_id: str) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
-    for edge in combined.edges:
-        source = combined.characters.get(edge.source)
-        target = combined.characters.get(edge.target)
-        if not source or not target:
-            continue
-        if compact(source.name) == character_id:
-            rows.append(
-                {
-                    "Source": "Character Sheet",
-                    "Relationship": edge.relationship_label,
-                    "Name": target.name,
-                    "Evidence": " ".join(edge.evidence),
-                }
-            )
-        elif compact(target.name) == character_id:
-            rows.append(
-                {
-                    "Source": "Place" if source.node_type == "place" else "Character Sheet",
-                    "Relationship": edge.relationship_label,
-                    "Name": source.name,
-                    "Evidence": " ".join(edge.evidence),
-                }
-            )
-    return rows
-
-
 def render_character_creator(key_prefix: str = "new_character", draft_profile: CharacterProfile | None = None) -> None:
     draft_profile = draft_profile or CharacterProfile(
         name="",
@@ -821,7 +742,12 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
                 key=f"{key_prefix}_details",
             )
 
-        submitted = st.form_submit_button("Create Character", icon=":material/person_add:")
+        submitted = st.form_submit_button(
+            "Create Character",
+            icon=":material/person_add:",
+            on_click=set_main_navigation_tab,
+            args=("Characters",),
+        )
         if submitted:
             if not all([name.strip(), race.strip(), character_class.strip(), backstory.strip()]):
                 st.error("Complete Name, Race, Class, And Backstory.")
@@ -896,7 +822,12 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
             height=220,
             key=f"{key_prefix}_markdown",
         )
-        submitted = st.form_submit_button("Create Place", icon=":material/add_location_alt:")
+        submitted = st.form_submit_button(
+            "Create Place",
+            icon=":material/add_location_alt:",
+            on_click=set_main_navigation_tab,
+            args=("Places",),
+        )
         if submitted:
             if not all([name.strip(), markdown.strip()]):
                 st.error("Complete Name And Place Markdown.")
@@ -959,7 +890,13 @@ def render_place_panel() -> None:
             key="main_existing_place",
         )
         selected_place = places[display_names.index(selected_place_label)]
-        if st.button("Open Place", icon=":material/location_on:", key="main_open_place"):
+        if st.button(
+            "Open Place",
+            icon=":material/location_on:",
+            key="main_open_place",
+            on_click=set_main_navigation_tab,
+            args=("Places",),
+        ):
             set_active_place(selected_place)
             st.rerun()
         if "active_place" not in st.session_state:
@@ -994,9 +931,24 @@ def render_place_info(place: Place) -> None:
                 key=f"place_markdown_{place.name}_{editor_revision}",
             )
             action_cols = st.columns(3)
-            save_requested = action_cols[0].form_submit_button("Save Place", icon=":material/save:")
-            delete_requested = action_cols[1].form_submit_button("Delete Place", icon=":material/delete_forever:")
-            undo_requested = action_cols[2].form_submit_button("Undo Changes", icon=":material/undo:")
+            save_requested = action_cols[0].form_submit_button(
+                "Save Place",
+                icon=":material/save:",
+                on_click=set_main_navigation_tab,
+                args=("Places",),
+            )
+            delete_requested = action_cols[1].form_submit_button(
+                "Delete Place",
+                icon=":material/delete_forever:",
+                on_click=set_main_navigation_tab,
+                args=("Places",),
+            )
+            undo_requested = action_cols[2].form_submit_button(
+                "Undo Changes",
+                icon=":material/undo:",
+                on_click=set_main_navigation_tab,
+                args=("Places",),
+            )
             if undo_requested:
                 undo_place_changes(place)
             if delete_requested:
@@ -1093,7 +1045,13 @@ def render_session_notes() -> None:
             key="main_existing_session_note",
         )
         selected_note = note_files[display_names.index(selected_note_label)]
-        if st.button("Open Session Note", icon=":material/event_note:", key="main_open_session_note"):
+        if st.button(
+            "Open Session Note",
+            icon=":material/event_note:",
+            key="main_open_session_note",
+            on_click=set_main_navigation_tab,
+            args=("Session Notes",),
+        ):
             set_active_session_note(selected_note)
             st.rerun()
         if "active_session_note" not in st.session_state:
@@ -1128,7 +1086,13 @@ def render_session_notes() -> None:
             value=True,
             key="split_markdown_import_session_headings",
         )
-        if st.button("Import Notes", icon=":material/upload_file:", key="import_markdown"):
+        if st.button(
+            "Import Notes",
+            icon=":material/upload_file:",
+            key="import_markdown",
+            on_click=set_main_navigation_tab,
+            args=("Session Notes",),
+        ):
             if uploaded_notes is None:
                 st.error("Choose A Markdown File Before Importing.")
                 return
@@ -1168,7 +1132,13 @@ def render_session_notes() -> None:
             key="session_notes_draft",
         )
         action_cols = st.columns(2)
-        if action_cols[0].button("Save Session Notes", icon=":material/note_add:", key="save_session_notes"):
+        if action_cols[0].button(
+            "Save Session Notes",
+            icon=":material/note_add:",
+            key="save_session_notes",
+            on_click=set_main_navigation_tab,
+            args=("Session Notes",),
+        ):
             if not notes.strip():
                 st.error("Add Session Notes Before Saving.")
                 return
@@ -1179,7 +1149,13 @@ def render_session_notes() -> None:
                 set_active_session_note(saved[0].path)
             st.session_state["clear_session_notes_draft"] = True
             st.rerun()
-        if action_cols[1].button("Undo Changes", icon=":material/undo:", key="undo_session_notes"):
+        if action_cols[1].button(
+            "Undo Changes",
+            icon=":material/undo:",
+            key="undo_session_notes",
+            on_click=set_main_navigation_tab,
+            args=("Session Notes",),
+        ):
             undo_session_notes_changes()
 
 
@@ -1221,12 +1197,24 @@ def render_session_note_editor(path, show_dates: bool = False) -> None:
                 key=f"session_note_body_{path.name}_{editor_revision}",
             )
             action_cols = st.columns(3)
-            save_requested = action_cols[0].form_submit_button("Save Session Note", icon=":material/save:")
+            save_requested = action_cols[0].form_submit_button(
+                "Save Session Note",
+                icon=":material/save:",
+                on_click=set_main_navigation_tab,
+                args=("Session Notes",),
+            )
             delete_requested = action_cols[1].form_submit_button(
                 "Delete Session Note",
                 icon=":material/delete_forever:",
+                on_click=set_main_navigation_tab,
+                args=("Session Notes",),
             )
-            undo_requested = action_cols[2].form_submit_button("Undo Changes", icon=":material/undo:")
+            undo_requested = action_cols[2].form_submit_button(
+                "Undo Changes",
+                icon=":material/undo:",
+                on_click=set_main_navigation_tab,
+                args=("Session Notes",),
+            )
             if undo_requested:
                 undo_session_notes_changes()
             if delete_requested:
@@ -1271,7 +1259,13 @@ def render_character_panel() -> None:
             key="main_existing_character",
         )
         selected_character = characters[display_names.index(selected_character_label)]
-        if st.button("Open Character", icon=":material/chat:", key="main_open_character"):
+        if st.button(
+            "Open Character",
+            icon=":material/chat:",
+            key="main_open_character",
+            on_click=set_main_navigation_tab,
+            args=("Characters",),
+        ):
             set_active_character(selected_character)
             st.rerun()
         if "active_character" not in st.session_state:
@@ -1305,7 +1299,13 @@ def render_external_character_sheet_import() -> None:
             placeholder="Optional display name",
             key="external_character_sheet_name",
         )
-        if st.button("Import Character Sheet", icon=":material/upload_file:", key="import_external_character_sheet"):
+        if st.button(
+            "Import Character Sheet",
+            icon=":material/upload_file:",
+            key="import_external_character_sheet",
+            on_click=set_main_navigation_tab,
+            args=("Characters",),
+        ):
             if external_sheet is None:
                 st.error("Choose A PDF Or Image Character Sheet Before Importing.")
                 return
@@ -1392,20 +1392,45 @@ def render_character_editor(character: Character) -> None:
                 details_value = profile.details or default_details(profile)
                 details = st.text_area("Character Details", value=details_value, height=120)
             action_cols = st.columns(5 if graph_rewrites_enabled() else 3)
-            save_requested = action_cols[0].form_submit_button("Save Character", icon=":material/save:")
+            save_requested = action_cols[0].form_submit_button(
+                "Save Character",
+                icon=":material/save:",
+                on_click=set_main_navigation_tab,
+                args=("Characters",),
+            )
             populate_summary = False
             repopulate_summary = False
             rewrite_backstory = False
             if graph_rewrites_enabled():
-                repopulate_summary = action_cols[1].form_submit_button("Repopulate Summary", icon=":material/sync:")
-                rewrite_backstory = action_cols[2].form_submit_button("Rewrite Backstory", icon=":material/edit_note:")
+                repopulate_summary = action_cols[1].form_submit_button(
+                    "Repopulate Summary",
+                    icon=":material/sync:",
+                    on_click=set_main_navigation_tab,
+                    args=("Characters",),
+                )
+                rewrite_backstory = action_cols[2].form_submit_button(
+                    "Rewrite Backstory",
+                    icon=":material/edit_note:",
+                    on_click=set_main_navigation_tab,
+                    args=("Characters",),
+                )
                 delete_col = action_cols[3]
                 undo_col = action_cols[4]
             else:
                 delete_col = action_cols[1]
                 undo_col = action_cols[2]
-            delete_requested = delete_col.form_submit_button("Delete Character", icon=":material/delete_forever:")
-            undo_requested = undo_col.form_submit_button("Undo Changes", icon=":material/undo:")
+            delete_requested = delete_col.form_submit_button(
+                "Delete Character",
+                icon=":material/delete_forever:",
+                on_click=set_main_navigation_tab,
+                args=("Characters",),
+            )
+            undo_requested = undo_col.form_submit_button(
+                "Undo Changes",
+                icon=":material/undo:",
+                on_click=set_main_navigation_tab,
+                args=("Characters",),
+            )
             if undo_requested:
                 undo_character_changes(character)
             if delete_requested:
@@ -1430,20 +1455,23 @@ def render_character_editor(character: Character) -> None:
                 try:
                     if populate_summary and not next_summary:
                         original_summary = profile.summary
-                        next_summary = graph_generated_summary(character, profile)
+                        with st.spinner("Preparing the local writing model. First run may download model files."):
+                            next_summary = graph_generated_summary(character, profile)
                         auto_generated_sections = mark_auto_generated(profile, "Character Summary")
                         updated_sections = remove_updated_section(updated_sections, "Character Summary")
                     elif repopulate_summary:
                         original_summary = profile.original_summary or profile.summary
-                        next_summary = graph_generated_summary(character, profile)
+                        with st.spinner("Preparing the local writing model. First run may download model files."):
+                            next_summary = graph_generated_summary(character, profile)
                         auto_generated_sections = mark_auto_generated(profile, "Character Summary")
                         updated_sections = remove_updated_section(updated_sections, "Character Summary")
                     elif rewrite_backstory:
                         original_backstory = profile.original_backstory or profile.backstory
-                        next_backstory = graph_generated_backstory(character, profile)
+                        with st.spinner("Preparing the local writing model. First run may download model files."):
+                            next_backstory = graph_generated_backstory(character, profile)
                         auto_generated_sections = mark_auto_generated(profile, "Character Backstory")
                         updated_sections = remove_updated_section(updated_sections, "Character Backstory")
-                except ValueError as exc:
+                except (RuntimeError, ValueError) as exc:
                     st.error(str(exc))
                     return
                 generated = {value.lower() for value in auto_generated_sections}
@@ -1522,10 +1550,13 @@ st.caption("Create Character Sheets And Explore Relationship Graphs From Local L
 
 render_lore_import_tools()
 
+if MAIN_NAVIGATION_WIDGET_KEY in st.session_state:
+    st.session_state[MAIN_NAVIGATION_TAB_KEY] = st.session_state[MAIN_NAVIGATION_WIDGET_KEY]
+
 characters_tab, places_tab, session_notes_tab = st.tabs(
     ["Characters", "Places", "Session Notes"],
-    default=st.session_state.get("main_navigation_tab", "Characters"),
-    key="main_navigation_tab",
+    default=st.session_state.get(MAIN_NAVIGATION_TAB_KEY, "Characters"),
+    key=MAIN_NAVIGATION_WIDGET_KEY,
 )
 
 with characters_tab:

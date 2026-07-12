@@ -4,15 +4,15 @@
   "model_url": "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF",
   "api_base_url": "http://127.0.0.1:8000/v1",
   "size": "3B",
-  "download_size": "Q4_K_M 1.93 GB",
-  "description": "Selected semantic model: compact GGUF instruction model for local people/place extraction, character rewrites, and knowledge graph summaries.",
+  "download_size": "IQ2_M 1.14 GB",
+  "description": "Selected semantic model: compact GGUF instruction model for local people/place extraction, character rewrites, and knowledge graph summaries. Uses the smaller IQ2_M artifact by default to keep first-run downloads lighter.",
   "server": {
     "runner": "llama.cpp",
     "command": [
       "llama",
       "serve",
       "-hf",
-      "bartowski/Qwen2.5-3B-Instruct-GGUF:Q4_K_M",
+      "bartowski/Qwen2.5-3B-Instruct-GGUF:IQ2_M",
       "--host",
       "127.0.0.1",
       "--port",

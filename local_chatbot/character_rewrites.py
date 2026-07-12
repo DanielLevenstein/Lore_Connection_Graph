@@ -1,15 +1,26 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 from dataclasses import dataclass
+from typing import Callable
 
 from character_graph.embeddings import HashingEmbedder, cosine_similarity
 from character_graph.schema import CharacterGraph
+from model_harness.downloads import (
+    default_download_option,
+    download_option,
+    local_model_path,
+    selected_downloaded_option,
+)
+from model_harness.models import ModelConfig, list_model_configs
 
 from .storage import CharacterProfile, character_first_name
 
 
 RECOMMENDED_REWRITE_MODEL = "qwen2.5-3b-instruct-gguf"
+RewriteClient = Callable[[list[dict[str, str]]], str]
 
 
 @dataclass(frozen=True)
@@ -20,87 +31,257 @@ class RewriteQualityScore:
     concision: float
 
 
-def graph_generated_summary(graph: CharacterGraph, profile: CharacterProfile) -> str:
-    primary = graph.characters.get(graph.primary_character.id)
-    traits = ", ".join(primary.traits[:3]) if primary and primary.traits else ""
-    drives = ", ".join(graph_drive_values(graph, profile)[:2])
-    places = ", ".join(story_place_names(graph)[:2])
-    relationships = story_relationship_names(graph)[:2]
-    pieces = [profile.first_name or character_first_name(profile.name) or profile.name]
-    descriptor = " is"
-    if traits:
-        trait_text = f" who is {traits}"
-    else:
-        trait_text = ""
-    role = " ".join(value for value in [profile.race, profile.character_class] if value).strip()
-    if role:
-        descriptor += f" a {role}"
-    descriptor += trait_text
-    pieces.append(descriptor)
-    if places:
-        pieces.append(f" tied to {places}")
-    if relationships:
-        pieces.append(f" and connected to {', '.join(relationships)}")
-    if drives:
-        pieces.append(f", driven to {drives}")
-    return humanize_generated_text("".join(pieces).strip() + ".")
+def graph_generated_summary(
+    graph: CharacterGraph,
+    profile: CharacterProfile,
+    rewrite_client: RewriteClient | None = None,
+) -> str:
+    prompt = rewrite_prompt("summary", graph, profile)
+    return run_model_rewrite(prompt, rewrite_client=rewrite_client)
 
 
-def graph_generated_backstory(graph: CharacterGraph, profile: CharacterProfile) -> str:
-    name = profile.first_name or character_first_name(profile.name) or profile.name
-    full_name = profile.name
-    role = " ".join(value for value in [profile.race, profile.character_class] if value).strip() or "wanderer"
-    places = story_place_names(graph)
-    drives = graph_drive_values(graph, profile)
-    relationships = story_relationship_names(graph)
-    home = profile.origin or attribute_value(graph, "home")
-    relationship_focus = relationships[0] if relationships else ""
-    place_focus = places[0] if places else home
-    curse_drive = next((drive for drive in drives if "curse" in drive.lower()), "")
-    protection_drive = next((drive for drive in drives if "relative" in drive.lower() or "history" in drive.lower()), "")
+def graph_generated_backstory(
+    graph: CharacterGraph,
+    profile: CharacterProfile,
+    rewrite_client: RewriteClient | None = None,
+) -> str:
+    prompt = rewrite_prompt("backstory", graph, profile)
+    return run_model_rewrite(prompt, rewrite_client=rewrite_client)
 
-    origin_line = (
-        f"{name} came of age at {place_focus}, a place that sharpened both his talent and his sense of exile."
-        if place_focus
-        else f"{name} came of age between inherited expectations and the uneasy promise of his own gifts."
+
+def run_model_rewrite(prompt: str, rewrite_client: RewriteClient | None = None) -> str:
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You rewrite roleplaying character lore. Use only facts from the supplied character sheet "
+                "and knowledge graph context. Return only the requested prose, with no preface, loader text, "
+                "or reasoning."
+            ),
+        },
+        {"role": "user", "content": prompt},
+    ]
+    try:
+        response = (rewrite_client or local_rewrite_client)(messages)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not generate rewrite with local model `{RECOMMENDED_REWRITE_MODEL}`. "
+            "Ensure the configured GGUF model is downloaded and try again."
+        ) from exc
+    cleaned = clean_model_rewrite(response)
+    if not cleaned:
+        raise RuntimeError(f"Local model `{RECOMMENDED_REWRITE_MODEL}` returned an empty rewrite.")
+    return humanize_generated_text(cleaned)
+
+
+StatusWriter = Callable[[str], None]
+
+
+def local_rewrite_client(messages: list[dict[str, str]], status_writer: StatusWriter | None = None) -> str:
+    config = rewrite_model_config()
+    option = ensure_rewrite_model_downloaded(config, status_writer=status_writer)
+    if option is None:
+        raise RuntimeError(f"Local model `{RECOMMENDED_REWRITE_MODEL}` does not list downloadable GGUF options.")
+    model_path = local_model_path(config, option)
+    prompt = direct_rewrite_prompt(messages)
+    result = subprocess.run(
+        [
+            "llama",
+            "cli",
+            "--log-disable",
+            "--model",
+            str(model_path),
+            "--device",
+            "none",
+            "--gpu-layers",
+            "0",
+            "--prompt",
+            prompt,
+            "--single-turn",
+            "--no-display-prompt",
+            "--simple-io",
+            "--temperature",
+            "0.3",
+            "--predict",
+            "512",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
     )
-    first = (
-        f"{full_name} is a {role} whose life has been shaped by the tension between legacy and self-invention. "
-        f"{origin_line}"
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise RuntimeError(f"Local model `{RECOMMENDED_REWRITE_MODEL}` failed: {detail}")
+    return clean_llama_cli_output(result.stdout)
+
+
+direct_local_rewrite_client = local_rewrite_client
+
+
+def ensure_rewrite_model_downloaded(config: ModelConfig, status_writer: StatusWriter | None = None) -> dict | None:
+    option = selected_downloaded_option(config)
+    if option:
+        return option
+    option = default_download_option(config)
+    if option:
+        write_status = status_writer or default_download_status_writer
+        write_status(download_status_bar("Downloading", option, filled=1))
+        download_option(config, option)
+        write_status(download_status_bar("Ready", option, filled=20))
+    return option
+
+
+def default_download_status_writer(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def download_status_bar(label: str, option: dict, filled: int, width: int = 20) -> str:
+    filled = max(0, min(width, filled))
+    bar = "#" * filled + "-" * (width - filled)
+    filename = option.get("filename", "model")
+    return f"{label} local model [{bar}] {filename}"
+
+
+def clean_llama_cli_output(output: str) -> str:
+    lines = []
+    skip_thinking = False
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line == "[Start thinking]":
+            skip_thinking = True
+            continue
+        if line == "[End thinking]":
+            skip_thinking = False
+            continue
+        if skip_thinking:
+            continue
+        if llama_cli_noise_line(line):
+            continue
+        lines.append(raw_line.strip())
+    return "\n".join(lines).strip()
+
+
+def llama_cli_noise_line(line: str) -> bool:
+    if line in {"Loading model...", "Exiting...", "available commands:"}:
+        return True
+    if line.startswith(("build      :", "model      :", "ftype      :", "modalities :", "0.")):
+        return True
+    if line.startswith(("/exit", "/regen", "/clear", "/read", "/glob", "[ Prompt:", ">")):
+        return True
+    if set(line) <= {"▄", "▀", "█", " ", "\t"}:
+        return True
+    return False
+
+
+def direct_rewrite_prompt(messages: list[dict[str, str]]) -> str:
+    sections = []
+    for message in messages:
+        role = message.get("role", "user").strip().title()
+        content = message.get("content", "").strip()
+        if content:
+            sections.append(f"{role}:\n{content}")
+    sections.append("Assistant:")
+    return "\n\n".join(sections)
+
+
+def rewrite_model_config() -> ModelConfig:
+    configs = {config.name: config for config in list_model_configs()}
+    config = configs.get(RECOMMENDED_REWRITE_MODEL)
+    if config is None:
+        raise RuntimeError(f"Missing model config `{RECOMMENDED_REWRITE_MODEL}`.")
+    return config
+
+
+def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) -> str:
+    if kind == "summary":
+        instruction = (
+            "Write one polished character summary sentence. Keep it under 70 words. "
+            "Include the character's race, class, key place, important relationship, and main drive when present."
+        )
+    elif kind == "backstory":
+        instruction = (
+            "Rewrite the character backstory as 2 to 4 concise paragraphs. Preserve the named people, places, "
+            "relationships, and drives. Make it read like authored campaign lore, not a bullet list."
+        )
+    else:
+        raise ValueError(f"Unknown rewrite kind: {kind}")
+    return "\n\n".join(
+        [
+            instruction,
+            "Character profile:",
+            character_profile_context(profile),
+            "Knowledge graph context:",
+            graph_context(graph),
+        ]
     )
 
-    if relationship_focus and curse_drive:
-        second = (
-            f"The loss of {relationship_focus} left more than grief behind; it gave {name} a reason to understand "
-            f"the curse shadowing his family and to stop it from claiming anyone else."
-        )
-    elif curse_drive:
-        second = (
-            f"A family curse sits at the center of {name}'s story, turning old pain into a task he can no longer ignore."
-        )
-    elif relationship_focus:
-        second = (
-            f"His bond with {relationship_focus} gives the story its emotional weight and keeps his choices personal."
-        )
-    else:
-        second = (
-            f"The past keeps pressing on {name}, but he has learned to turn that pressure into purpose."
-        )
 
-    if protection_drive:
-        third = (
-            f"Now {name} carries his music forward as a form of defiance, trying to {protection_drive} while "
-            "turning inherited sorrow into something brave enough to protect the living."
-        )
-    elif drives:
-        third = (
-            f"Now {name} moves with a clearer purpose: to {drives[0]}, without letting the old story decide who he becomes."
-        )
-    else:
-        third = (
-            f"Now {name} steps into the wider world with a clearer voice, determined to make the next verse his own."
-        )
-    return humanize_generated_text("\n\n".join([first, second, third]))
+def character_profile_context(profile: CharacterProfile) -> str:
+    values = [
+        f"Name: {profile.name}",
+        f"First name: {profile.first_name or character_first_name(profile.name)}",
+        f"Race: {profile.race}",
+        f"Class: {profile.character_class}",
+        f"Pronouns: {profile.pronouns}",
+        f"Summary: {profile.summary}",
+        f"Backstory: {profile.backstory}",
+        f"Original backstory: {profile.original_backstory}",
+        f"Drives: {'; '.join(profile.drives or [])}",
+        f"Alliances: {'; '.join(profile.alliances or [])}",
+        f"Enemies: {'; '.join(profile.enemies or [])}",
+    ]
+    return "\n".join(value for value in values if value.split(":", 1)[1].strip())
+
+
+def graph_context(graph: CharacterGraph) -> str:
+    lines = [
+        f"Primary character: {graph.primary_character.name}",
+        "Characters:",
+    ]
+    for character in graph.characters.values():
+        pieces = [character.name]
+        if character.summary:
+            pieces.append(character.summary)
+        if character.traits:
+            pieces.append("traits: " + ", ".join(character.traits))
+        if character.source_spans:
+            pieces.append("evidence: " + " ".join(character.source_spans[:3]))
+        lines.append("- " + " | ".join(pieces))
+    if graph.places:
+        lines.append("Places:")
+        for place in graph.places.values():
+            pieces = [place.name]
+            if place.summary:
+                pieces.append(place.summary)
+            if place.source_spans:
+                pieces.append("evidence: " + " ".join(place.source_spans[:3]))
+            lines.append("- " + " | ".join(pieces))
+    if graph.attributes:
+        lines.append("Attributes:")
+        for attribute in graph.attributes.values():
+            pieces = [attribute.attribute_type, attribute.value]
+            if attribute.summary:
+                pieces.append(attribute.summary)
+            lines.append("- " + " | ".join(piece for piece in pieces if piece))
+    if graph.relationships:
+        lines.append("Relationships:")
+        for edge in graph.relationships:
+            target = graph.characters.get(edge.target)
+            target_name = target.name if target else edge.target
+            evidence = " ".join(edge.evidence[:2])
+            lines.append(f"- {edge.relationship_label or edge.relationship_type}: {target_name}. {evidence}".strip())
+    return "\n".join(lines)
+
+
+def clean_model_rewrite(response: str) -> str:
+    cleaned = response.strip()
+    cleaned = re.sub(r"^```(?:markdown|md)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    cleaned = re.sub(r"^(?:summary|backstory)\s*:\s*", "", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 
 def rewrite_quality_context(graph: CharacterGraph, profile: CharacterProfile) -> str:
