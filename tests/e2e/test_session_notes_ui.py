@@ -91,7 +91,7 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
         page.get_by_role("tab", name="Session Notes", exact=True).click()
         expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
         page.get_by_text("Add Or Import Session Note", exact=True).click()
-        page.get_by_role("textbox", name="Session Notes").fill(
+        page.get_by_role("textbox", name="New Session Notes").fill(
             "2026-07-10\n"
             "The party found a silver key.\n\n"
             "2026-07-11\n"
@@ -100,8 +100,13 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
         page.get_by_role("button", name="note_add Save Session Notes").click()
         expect(page.get_by_text("Saved 2 Session Note Files.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
+        expect(page.get_by_role("tab", name="Session Notes", exact=True)).to_have_attribute(
+            "aria-selected",
+            "true",
+            timeout=10000,
+        )
         page.get_by_text("Edit Session Note", exact=True).click()
-        expect(page.get_by_role("textbox", name="Session Date")).to_have_value("2026-07-10", timeout=10000)
+        expect(page.get_by_role("textbox", name="Session Date", exact=True)).to_have_value("2026-07-10", timeout=10000)
         expect(page.get_by_role("textbox", name="Title")).to_be_visible(timeout=10000)
         browser.close()
 
@@ -115,30 +120,7 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
     assert "lighthouse door" in second.read_text(encoding="utf-8")
 
 
-def test_show_dates_preserves_session_notes_tab(isolated_session_notes_app):
-    app_url, docs_lore_dir = isolated_session_notes_app
-    notes_dir = docs_lore_dir / "session_notes"
-    notes_dir.mkdir(parents=True)
-    (notes_dir / "2026-07-10_Session_Notes.md").write_text(
-        "# Session Notes\n\nA dated note.\n",
-        encoding="utf-8",
-    )
-
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
-        page = browser.new_page(viewport={"width": 1280, "height": 1000})
-        page.goto(app_url, wait_until="networkidle")
-
-        session_notes_tab = page.get_by_role("tab", name="Session Notes", exact=True)
-        session_notes_tab.click()
-        expect(session_notes_tab).to_have_attribute("aria-selected", "true", timeout=10000)
-        page.get_by_label("Show Dates").focus()
-        page.keyboard.press("Space")
-        expect(session_notes_tab).to_have_attribute("aria-selected", "true", timeout=10000)
-        browser.close()
-
-
-def test_ui_imports_discord_session_notes_with_markdown_and_date_field(isolated_session_notes_app):
+def test_ui_imports_uploaded_session_notes_as_one_markdown_file(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
     notes_dir = docs_lore_dir / "session_notes"
     import_file = docs_lore_dir / "discord_import.md"
@@ -173,22 +155,33 @@ Session 13:
         page.get_by_text("Add Or Import Session Note", exact=True).click()
         page.get_by_label("File", exact=True).locator("input[type=file]").set_input_files(str(import_file))
         page.get_by_role("button", name="note_add Save Session Notes").click()
-        expect(page.get_by_text("Saved 2 Session Note Files.")).to_be_visible(timeout=10000)
-        expect(page.get_by_role("heading", name="Session 12", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Select Searchable Headings")).to_be_visible(timeout=10000)
+        page.get_by_role("button", name="check Save Selected Headings").click()
+        expect(page.get_by_text("Saved 1 Session Note File.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("tab", name="Session Notes", exact=True)).to_have_attribute(
+            "aria-selected",
+            "true",
+            timeout=10000,
+        )
+        expect(page.get_by_role("heading", name="discord import", exact=True)).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Scene Notes", exact=True)).to_be_visible(timeout=10000)
-        page.get_by_text("Edit Session Note", exact=True).click()
-        expect(page.get_by_role("textbox", name="Session Date")).to_have_value("2026-07-10", timeout=10000)
+        page.get_by_role("combobox", name="Session Note").click()
+        page.get_by_role("option", name="discord_import.md - Scene Notes", exact=True).click()
+        page.get_by_role("button", name="event_note Open Session Note").click()
+        expect(page.get_by_role("heading", name="Scene Notes", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Second Scene", exact=True)).to_have_count(0)
+        page.get_by_text("Edit Lore Document", exact=True).click()
+        expect(page.get_by_role("textbox", name="Lore Document")).to_contain_text("Session 12")
         browser.close()
 
-    first = notes_dir / "2026-07-10_Session_12.md"
-    second = notes_dir / "2026-07-10_Session_13.md"
-    assert first.exists()
-    assert second.exists()
-    text = first.read_text(encoding="utf-8")
+    imported = notes_dir / "discord_import.md"
+    assert imported.exists()
+    assert not list(notes_dir.glob("2026-07-10*.md"))
+    text = imported.read_text(encoding="utf-8")
     assert "## Scene Notes" in text
     assert "- Found a **silver key**" in text
     assert "| Clue | Status |" in text
-    assert "## Second Scene" in second.read_text(encoding="utf-8")
+    assert "## Second Scene" in text
 
 
 def test_ui_imports_freeform_lore_markdown_without_requiring_dates(isolated_session_notes_app):
@@ -205,11 +198,24 @@ def test_ui_imports_freeform_lore_markdown_without_requiring_dates(isolated_sess
         page.get_by_text("Add Or Import Session Note", exact=True).click()
         page.get_by_label("File", exact=True).locator("input[type=file]").set_input_files(str(import_file))
         page.get_by_role("textbox", name="Imported File Name").fill("Imported Atlantia.md")
-        expect(page.get_by_label("Use Detected Dates As RP Calendar Dates")).to_be_checked(timeout=10000)
         page.get_by_role("button", name="note_add Save Session Notes").click()
+        expect(page.get_by_role("heading", name="Select Searchable Headings")).to_be_visible(timeout=10000)
+        expect(page.get_by_label("H1 Atlantia Lore")).to_be_checked(timeout=10000)
+        expect(page.get_by_label("H2 The Watch Tower")).to_be_checked(timeout=10000)
+        page.get_by_role("button", name="check Save Selected Headings").click()
         expect(page.get_by_text("Saved 1 Session Note File.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("tab", name="Session Notes", exact=True)).to_have_attribute(
+            "aria-selected",
+            "true",
+            timeout=10000,
+        )
         expect(page.get_by_role("heading", name="Atlantia Lore", exact=True)).to_have_count(1)
         expect(page.get_by_role("heading", name="Town Overview", exact=True)).to_be_visible(timeout=10000)
+        page.get_by_role("combobox", name="Session Note").click()
+        page.get_by_role("option", name="Imported_Atlantia.md - The Harbor", exact=True).click()
+        page.get_by_role("button", name="event_note Open Session Note").click()
+        expect(page.get_by_role("heading", name="The Harbor", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="The Watch Tower", exact=True)).to_have_count(0)
         page.get_by_text("Edit Lore Document", exact=True).click()
         expect(page.get_by_role("textbox", name="Lore Document")).to_contain_text("Sunstone Mage College")
         browser.close()
@@ -219,6 +225,7 @@ def test_ui_imports_freeform_lore_markdown_without_requiring_dates(isolated_sess
     text = imported.read_text(encoding="utf-8")
     assert text.startswith("# Atlantia Lore")
     assert "## The Harbor" in text
+    assert "## The Watch Tower" in text
 
 
 def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
@@ -301,6 +308,11 @@ def test_ui_imports_external_character_sheet(isolated_session_notes_app):
         expect(import_sheet_button).to_be_visible(timeout=10000)
         import_sheet_button.click(force=True)
         expect(page.get_by_text("Imported External Character Sheet: external_sheet.pdf.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("tab", name="Characters", exact=True)).to_have_attribute(
+            "aria-selected",
+            "true",
+            timeout=10000,
+        )
         page.get_by_text("External Character Sheets", exact=True).first.click()
         expect(page.get_by_role("cell", name="external_sheet.pdf")).to_be_visible(timeout=10000)
         browser.close()

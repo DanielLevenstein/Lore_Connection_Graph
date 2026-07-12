@@ -7,6 +7,8 @@ from local_chatbot.session_notes import (
     import_discord_session_notes,
     import_lore_document_text,
     import_markdown_text,
+    markdown_sections,
+    prepare_markdown_import,
     save_session_notes,
     split_discord_session_notes,
     split_session_notes,
@@ -121,6 +123,181 @@ def test_markdown_import_with_date_detection_saves_detected_dates(tmp_path, monk
 
     assert imported[0].note_date == date(2026, 7, 10)
     assert imported[0].path.name == "2026-07-10_Silver_Key.md"
+
+
+def test_prepare_markdown_import_extracts_dates_and_sections_as_headings():
+    prepared, headings = prepare_markdown_import(
+        """Lighthouse Log
+
+2026-07-10
+
+Harbor Trouble:
+The party found a sealed brass door.
+
+## Existing Section
+More notes.
+""",
+        title="Lighthouse Log",
+        today=date(2026, 7, 12),
+    )
+
+    assert prepared.startswith("# Lighthouse Log")
+    assert "## 2026-07-10" in prepared
+    assert "### Harbor Trouble" in prepared
+    assert "## Existing Section" in prepared
+    assert [(heading.level, heading.text, heading.kind) for heading in headings] == [
+        (1, "Lighthouse Log", "heading"),
+        (2, "2026-07-10", "date"),
+        (3, "Harbor Trouble", "heading"),
+        (2, "Existing Section", "heading"),
+    ]
+
+
+def test_markdown_import_restores_unselected_searchable_headings_to_plain_text(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    source = """# Session Import
+
+2026-07-10
+
+## Secret Thread
+Private material.
+
+## Public Thread
+Searchable material.
+"""
+    _prepared, headings = prepare_markdown_import(source, title="Session Import", today=date(2026, 7, 12))
+    selected = {heading.key for heading in headings if heading.text != "Secret Thread"}
+
+    imported = import_markdown_text(
+        source,
+        title="Session Import",
+        selected_heading_keys=selected,
+        save_as_single_file=True,
+        today=date(2026, 7, 12),
+    )
+
+    text = imported[0].path.read_text(encoding="utf-8")
+    assert imported[0].path.name == "Session_Import.md"
+    assert "## 2026-07-10" in text
+    assert "\nSecret Thread\n" in text
+    assert "#### Secret Thread" not in text
+    assert "## Public Thread" in text
+
+
+def test_markdown_import_keeps_dates_as_h2_even_when_not_selected(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    imported = import_markdown_text(
+        "2026-07-10\nThe party found a sealed brass door.",
+        title="Session Import",
+        selected_heading_keys=set(),
+        save_as_single_file=True,
+        today=date(2026, 7, 12),
+    )
+
+    text = imported[0].path.read_text(encoding="utf-8")
+    assert "## 2026-07-10" in text
+
+
+def test_markdown_import_does_not_treat_poem_lines_as_headings():
+    poem = """Within the Filthy swamps a Vermin king rises
+The Soot on her fingers leave no surprises
+To Ignis she would bow down her head
+Where Elva lurks, you know there'll be red
+
+Humming echoes through the dunes like shackles
+Lizard men hide to the Flair of her cackle
+"""
+
+    prepared, headings = prepare_markdown_import(poem, title="Session Import", today=date(2026, 7, 12))
+
+    assert prepared.startswith("# Session Import")
+    assert "### Within the Filthy swamps" not in prepared
+    assert "### Humming echoes" not in prepared
+    assert [(heading.level, heading.text) for heading in headings] == [(1, "Session Import")]
+
+
+def test_markdown_import_rewrites_discord_author_lines_as_h4_metadata():
+    prepared, headings = prepare_markdown_import(
+        """Jane Smith [OOZE], Server Tag: OOZEOOZE — 7/10/26, 11:36 PMFriday, July 10, 2026 at 11:36 PM
+The party found a sealed brass door.
+
+John [OOZE], Server Tag: OOZEOOZE — 7/11/26, 12:01 AMSaturday, July 11, 2026 at 12:01 AM
+The party opened the lighthouse door.
+
+Skunkman22 [CULT],  — 1/2/25, 6:49 PM
+The party found another sign.
+""",
+        title="Session Import",
+        today=date(2026, 7, 12),
+    )
+
+    assert "#### 2026/07/10 - Jane Smith" in prepared
+    assert "#### 2026/07/11 - John" in prepared
+    assert "#### 2025/01/02 - Skunkman22" in prepared
+    assert "Server Tag" not in prepared
+    assert [(heading.level, heading.text) for heading in headings] == [(1, "Session Import")]
+
+
+def test_markdown_sections_expose_searchable_import_headings(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    source = """# Session Import
+
+2026-07-10
+
+## Harbor Trouble
+The party found a sealed brass door.
+
+## Lighthouse Door
+The party opened the lighthouse door.
+"""
+    _prepared, headings = prepare_markdown_import(source, title="Session Import", today=date(2026, 7, 12))
+    imported = import_markdown_text(
+        source,
+        title="Session Import",
+        selected_heading_keys={heading.key for heading in headings},
+        save_as_single_file=True,
+        today=date(2026, 7, 12),
+    )
+
+    sections = markdown_sections(imported[0].path.read_text(encoding="utf-8"), today=date(2026, 7, 12))
+
+    assert [(section.level, section.date_text, section.text) for section in sections] == [
+        (1, "", "Session Import"),
+        (2, "2026-07-10", "2026-07-10"),
+        (2, "2026-07-10", "Harbor Trouble"),
+        (2, "2026-07-10", "Lighthouse Door"),
+    ]
+    assert sections[2].body == "## Harbor Trouble\nThe party found a sealed brass door."
+
+
+def test_uploaded_session_importer_saves_single_lore_file_without_date_split(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    source = """2026-07-10
+The party found a sealed brass door.
+
+2026-07-11
+The party opened the lighthouse door.
+"""
+    _prepared, headings = prepare_markdown_import(source, title="Session_Importer", today=date(2026, 7, 12))
+
+    imported = import_markdown_text(
+        source,
+        title="Session_Importer",
+        selected_heading_keys={heading.key for heading in headings},
+        save_as_single_file=True,
+        today=date(2026, 7, 12),
+    )
+
+    assert [note.path.name for note in imported] == ["Session_importer.md"]
+    assert [path.name for path in session_notes.list_session_notes()] == ["Session_importer.md"]
+    text = imported[0].path.read_text(encoding="utf-8")
+    assert "# Session Importer" in text
+    assert "## 2026-07-10" in text
+    assert "## 2026-07-11" in text
 
 
 def test_legacy_session_note_body_only_strips_date_heading(tmp_path):

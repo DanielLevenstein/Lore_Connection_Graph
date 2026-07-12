@@ -59,7 +59,10 @@ from local_chatbot.character_rewrites import (
 from local_chatbot.session_notes import (
     import_markdown_text,
     delete_session_note,
+    markdown_sections,
+    prepare_markdown_import,
     list_session_notes,
+    read_markdown_section,
     read_session_note,
     read_session_note_body,
     read_session_note_date_text,
@@ -137,6 +140,13 @@ def get_active_session_note():
     return next((path for path in list_session_notes() if path.name == name), None)
 
 
+def set_active_session_note_section(section_key: str = "") -> None:
+    if section_key:
+        st.session_state.active_session_note_section = section_key
+    else:
+        st.session_state.pop("active_session_note_section", None)
+
+
 def display_character_name(character: Character) -> str:
     profile = read_character_profile(character)
     return clean_display_name(profile.name or character.name)
@@ -162,7 +172,31 @@ def display_session_note_name(path, show_dates: bool = False) -> str:
 
 
 def display_session_note_option(path, show_dates: bool = False) -> str:
-    return f"{display_session_note_name(path, show_dates=show_dates)} ({path.name})"
+    note_date = read_session_note_date_text(path)
+    heading = display_session_note_name(path, show_dates=False)
+    if note_date and show_dates:
+        return f"{path.name} - {note_date} - {heading}"
+    return f"{path.name} - {heading}"
+
+
+def session_note_select_options(paths, show_dates: bool = False) -> list[dict[str, str]]:
+    options: list[dict[str, str]] = []
+    for path in paths:
+        note_date = read_session_note_date_text(path)
+        if note_date:
+            options.append({"label": display_session_note_option(path, show_dates=show_dates), "path": path.name, "section": ""})
+        sections = markdown_sections(read_session_note(path))
+        if not sections:
+            if not note_date:
+                options.append({"label": display_session_note_option(path, show_dates=show_dates), "path": path.name, "section": ""})
+            continue
+        for section in sections:
+            if section.date_text and show_dates:
+                label = f"{path.name} - {section.date_text} - {section.text}"
+            else:
+                label = f"{path.name} - {section.text}"
+            options.append({"label": label, "path": path.name, "section": section.key})
+    return options
 
 
 def markdown_document_title(text: str) -> str:
@@ -1070,6 +1104,47 @@ def render_bulk_lore_removal_warning() -> None:
         st.rerun()
 
 
+@st.dialog("Select Searchable Headings")
+def render_session_import_heading_dialog(
+    notes: str,
+    source_name: str,
+    session_date: str,
+) -> None:
+    import_title = os.path.splitext(source_name)[0]
+    _normalized, headings = prepare_markdown_import(notes, title=import_title)
+    st.write("Choose which extracted headings should remain searchable.")
+    selected_heading_keys: set[str] = set()
+    for heading in headings:
+        label = f"H{heading.level} {heading.text}"
+        if st.checkbox(
+            label,
+            value=True,
+            disabled=heading.kind == "date",
+            key=f"import_heading_{heading.key}",
+        ):
+            selected_heading_keys.add(heading.key)
+    action_cols = st.columns(2)
+    if action_cols[0].button("Save Selected Headings", icon=":material/check:", width="stretch"):
+        st.session_state["main_navigation_tab"] = "Session Notes"
+        push_session_notes_undo()
+        saved = import_markdown_text(
+            notes,
+            title=import_title,
+            session_date=session_date,
+            selected_heading_keys=selected_heading_keys,
+            save_as_single_file=True,
+        )
+        st.session_state["session_notes_saved_count"] = len(saved)
+        if saved:
+            set_active_session_note(saved[0].path)
+            set_active_session_note_section()
+        st.session_state["clear_session_notes_draft"] = True
+        st.rerun()
+    if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
+        st.session_state["main_navigation_tab"] = "Session Notes"
+        st.rerun()
+
+
 def render_session_notes() -> None:
     st.title("Session Notes")
     saved_count = st.session_state.pop("session_notes_saved_count", 0)
@@ -1078,34 +1153,53 @@ def render_session_notes() -> None:
     session_notes_status = st.session_state.pop("session_notes_status", "")
     if session_notes_status:
         st.success(session_notes_status)
-    show_dates = st.checkbox("Show Dates", value=False, key="show_session_note_dates")
+    show_dates = True
 
     note_files = list_session_notes()
     if note_files:
-        display_names = [display_session_note_option(path, show_dates=show_dates) for path in note_files]
+        select_options = session_note_select_options(note_files, show_dates=show_dates)
+        display_names = [option["label"] for option in select_options]
         current = st.session_state.get("active_session_note", note_files[0].name)
-        current_index = next((index for index, path in enumerate(note_files) if path.name == current), 0)
+        current_section = st.session_state.get("active_session_note_section", "")
+        current_index = next(
+            (
+                index
+                for index, option in enumerate(select_options)
+                if option["path"] == current and option["section"] == current_section
+            ),
+            next((index for index, option in enumerate(select_options) if option["path"] == current), 0),
+        )
         selected_note_label = st.selectbox(
             "Session Note",
             display_names,
             index=current_index,
             key="main_existing_session_note",
         )
-        selected_note = note_files[display_names.index(selected_note_label)]
+        selected_option = select_options[display_names.index(selected_note_label)]
+        selected_note = next(path for path in note_files if path.name == selected_option["path"])
         if st.button("Open Session Note", icon=":material/event_note:", key="main_open_session_note"):
             set_active_session_note(selected_note)
+            set_active_session_note_section(selected_option["section"])
             st.rerun()
         if "active_session_note" not in st.session_state:
             set_active_session_note(selected_note)
+            set_active_session_note_section(selected_option["section"])
     else:
         st.info("Create Your First Session Note To Begin.")
 
     active_note = get_active_session_note()
     if active_note:
-        render_session_note_editor(active_note, show_dates=show_dates)
+        render_session_note_editor(
+            active_note,
+            show_dates=show_dates,
+            section_key=st.session_state.get("active_session_note_section", ""),
+        )
 
     st.subheader("New Session Notes")
-    with st.expander("Add Or Import Session Note", expanded=False):
+    with st.expander(
+        "Add Or Import Session Note",
+        expanded=st.session_state.get("session_notes_import_expanded", False),
+    ):
         if st.session_state.pop("clear_session_notes_draft", False):
             st.session_state["session_notes_draft"] = ""
             st.session_state["session_notes_session_date"] = ""
@@ -1121,28 +1215,19 @@ def render_session_notes() -> None:
             key="markdown_import_source_name",
         )
         session_date = st.text_input(
-            "Session Date",
+            "Import Session Date",
             placeholder=f"Optional campaign date, e.g. {date.today().isoformat()} or Third Moon 17",
             key="session_notes_session_date",
         )
-        include_detected_dates = st.checkbox(
-            "Use Detected Dates As RP Calendar Dates",
-            value=True,
-            key="include_markdown_import_dates",
-        )
-        split_import_sessions = st.checkbox(
-            "Split Session Headings Into Separate Notes",
-            value=True,
-            key="split_markdown_import_session_headings",
-        )
         notes = st.text_area(
-            "Session Notes",
+            "New Session Notes",
             height=180,
             placeholder="Write campaign memory in Markdown. Include dates to split notes into dated files.",
             key="session_notes_draft",
         )
         action_cols = st.columns(2)
         if action_cols[0].button("Save Session Notes", icon=":material/note_add:", key="save_session_notes"):
+            st.session_state["session_notes_import_expanded"] = True
             source_name = title.strip() or (uploaded_notes.name if uploaded_notes is not None else "")
             if uploaded_notes is not None:
                 try:
@@ -1153,32 +1238,44 @@ def render_session_notes() -> None:
             if not notes.strip():
                 st.error("Add Session Notes Before Saving.")
                 return
+            if uploaded_notes is not None:
+                st.session_state["main_navigation_tab"] = "Session Notes"
+                render_session_import_heading_dialog(
+                    notes,
+                    source_name,
+                    session_date,
+                )
+                return
             push_session_notes_undo()
             saved = import_markdown_text(
                 notes,
                 title=os.path.splitext(source_name)[0],
-                include_detected_dates=include_detected_dates,
-                split_sessions=split_import_sessions,
+                include_detected_dates=True,
+                split_sessions=True,
                 session_date=session_date,
             )
+            st.session_state["main_navigation_tab"] = "Session Notes"
             st.session_state["session_notes_saved_count"] = len(saved)
+            st.session_state["session_notes_import_expanded"] = True
             if saved:
                 set_active_session_note(saved[0].path)
+                set_active_session_note_section()
             st.session_state["clear_session_notes_draft"] = True
             st.rerun()
         if action_cols[1].button("Undo Changes", icon=":material/undo:", key="undo_session_notes"):
             undo_session_notes_changes()
 
 
-def render_session_note_editor(path, show_dates: bool = False) -> None:
-    note_label = display_session_note_name(path, show_dates=show_dates)
+def render_session_note_editor(path, show_dates: bool = False, section_key: str = "") -> None:
+    note_label = display_session_note_name(path, show_dates=False)
     note_date = read_session_note_date_text(path)
     note_title = read_session_note_title(path) if note_date else ""
     note_body = read_session_note_body(path) if note_date else read_session_note(path).strip()
+    display_body = read_markdown_section(path, section_key) if section_key else note_body
     if markdown_document_title(note_body) != note_label:
         st.subheader(note_label)
-    if note_body:
-        st.markdown(note_body)
+    if display_body:
+        st.markdown(display_body)
     expander_label = "Edit Session Note" if note_date else "Edit Lore Document"
     with st.expander(expander_label, expanded=False):
         editor_revision = st.session_state.get(f"session_note_editor_revision_{path.name}", 0)
@@ -1300,6 +1397,7 @@ def render_external_character_sheet_import() -> None:
             except ValueError as exc:
                 st.error(str(exc))
                 return
+            st.session_state["main_navigation_tab"] = "Characters"
             st.session_state["character_panel_status"] = f"Imported External Character Sheet: {imported.path.name}."
             st.rerun()
 
