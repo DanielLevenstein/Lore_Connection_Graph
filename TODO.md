@@ -21,18 +21,11 @@ docs/screenshots/Time_Turning.png
 tests/fixtures/session_notes/Family_Tree.md
 tests/fixtures/places/Atlantia_Lore.md
 
-### Testing
-- `.venv/bin/python -m pytest tests/test_session_notes.py tests/test_entity_file_saves.py`
-- `.venv/bin/python -m pytest tests/e2e/test_session_notes_ui.py tests/e2e/test_character_sheet_roundtrip_ui.py`
-
 ## Completed
 - Freeform lore Markdown import can preserve undated Markdown files without forcing calendar dates.
 - Places now use a raw Markdown create/edit/view flow instead of structured place fields.
-- Added `docs/screenshots/places_markdown.png` for the updated Places page.
-- Bulk lore directory import now defaults to the configured `docs/lore` directory while allowing any source directory path.
 - Character save choices now preserve generated/manual pairs with `Generated`, `Updated`, and `Original` section markers.
 - Lore import now appears above the Characters, Places, and Session Notes tabs.
-- External PDF/image character sheets can be imported and saved as original files under character sheets.
 - Bulk lore removal now asks for destructive confirmation before cleaning `docs/lore` and `data/lore`.
 - Session Notes keeps the active tab selected when toggling `Show Dates`.
 
@@ -45,6 +38,11 @@ tests/fixtures/places/Atlantia_Lore.md
 - Move lore import to the top of the UI above the Characters, Places, and Session notes section.
 - Add support for external character sheet import which are saved as is in a pdf or image format. 
 
-### Testing
-- `.venv/bin/python -m pytest tests/test_character_generation.py tests/test_entity_file_saves.py tests/test_lore_import.py`
-- `.venv/bin/python -m pytest tests/e2e/test_session_notes_ui.py tests/e2e/test_character_sheet_roundtrip_ui.py`
+## Bugs Found
+- When transitioning from separating session notes by heading to separating them by heading, the default ordering of the files got messed up.
+- The Import Session Note and Add session note UI should be combined, so there is a single code path for testing purposes then we test the shit out of that one path.
+- There are two date values present in the app import date and session date. If the session date is present, we should default to ordering by it, otherwise we should order it by import date. 
+  - We need to make the session date field editable so that if a game chooses to set up a date system that doesn't match real world dates, the system will still work.
+## Solution
+- Restoring session note functionality from 90dc828 which split out session breaks by the date field.
+- Markdown heading import and date import are now separate UI flows.
