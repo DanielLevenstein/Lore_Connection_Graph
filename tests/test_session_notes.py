@@ -6,6 +6,7 @@ from local_chatbot.session_notes import (
     child_markdown_sections,
     combine_markdown_section,
     date_from_line,
+    hide_markdown_section_heading,
     insert_markdown_section,
     import_discord_session_notes,
     import_lore_document_text,
@@ -14,6 +15,7 @@ from local_chatbot.session_notes import (
     normalize_session_note_file_headings,
     prepare_markdown_import,
     remove_markdown_section,
+    removing_markdown_section_removes_file,
     save_session_notes,
     split_discord_session_notes,
     split_session_notes,
@@ -87,14 +89,77 @@ Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College.
     assert session_notes.list_session_notes() == [imported.path]
 
 
-def test_freeform_lore_import_uses_unique_markdown_paths(tmp_path, monkeypatch):
+def test_freeform_lore_import_merges_new_section_titles(tmp_path, monkeypatch):
     monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
 
-    first = import_lore_document_text("# Time Turning", title="Atlantia Lore")
-    second = import_lore_document_text("# Time Turning", title="Atlantia Lore")
+    first = import_lore_document_text(
+        """# Atlantia Lore
 
-    assert first.path.name == "Atlantia_Lore.md"
-    assert second.path.name == "Atlantia_Lore_2.md"
+## Time Turning
+
+Original time notes.
+""",
+        title="Atlantia Lore",
+    )
+    second = import_lore_document_text(
+        """# Atlantia Lore
+
+## Time Turning
+
+Changed duplicate notes should not overwrite the original section.
+
+## New Section
+
+Only this section should be appended.
+""",
+        title="Atlantia Lore",
+    )
+
+    assert first.path == second.path
+    assert second.path.name == "Atlantia_Lore.md"
+    text = second.path.read_text(encoding="utf-8")
+    assert text.count("## Time Turning") == 1
+    assert "Original time notes." in text
+    assert "Changed duplicate notes" not in text
+    assert "## New Section\n\nOnly this section should be appended." in text
+
+
+def test_freeform_lore_reimport_with_only_existing_last_section_preserves_prior_sections(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    first = import_lore_document_text(
+        """# Family Tree
+
+## The Nighbloom Family
+
+Original Nighbloom notes.
+
+## The Ravenmark Family
+
+Original Ravenmark notes.
+
+## The Lovington Family
+
+Original Lovington notes.
+""",
+        title="Family Tree",
+    )
+    second = import_lore_document_text(
+        """# Family Tree
+
+## The Lovington Family
+
+Copied last section text should not replace the original.
+""",
+        title="Family Tree",
+    )
+
+    assert first.path == second.path
+    text = second.path.read_text(encoding="utf-8")
+    assert "## The Nighbloom Family\n\nOriginal Nighbloom notes." in text
+    assert "## The Ravenmark Family\n\nOriginal Ravenmark notes." in text
+    assert "## The Lovington Family\n\nOriginal Lovington notes." in text
+    assert "Copied last section text should not replace the original." not in text
 
 
 def test_markdown_import_with_date_detection_preserves_undated_lore(tmp_path, monkeypatch):
@@ -626,6 +691,52 @@ The party opened the lighthouse door.
     assert "## Harbor Trouble\n" not in text
     assert "##### Locked Door" not in text
     assert "## Lighthouse Door" in text
+
+
+def test_hide_markdown_section_heading_demotes_h1_to_ignored_h4(tmp_path):
+    path = tmp_path / "Family_Tree.md"
+    path.write_text(
+        """# Family Tree
+
+Introductory family notes.
+
+## The Ravenmark Family
+
+Ravenmark details.
+""",
+        encoding="utf-8",
+    )
+    family_section = next(section for section in markdown_sections(path.read_text(encoding="utf-8")) if section.text == "Family Tree")
+
+    hide_markdown_section_heading(path, family_section.key)
+
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith("#### Family Tree\n\nIntroductory family notes.")
+    assert "# The Ravenmark Family\n\nRavenmark details." in text
+    assert [(section.level, section.text) for section in markdown_sections(text)] == [(1, "The Ravenmark Family")]
+
+
+def test_removing_last_markdown_section_reports_file_removal():
+    text = """# Single Section
+
+Only one searchable section exists.
+"""
+    section = markdown_sections(text)[0]
+
+    assert removing_markdown_section_removes_file(text, section.key)
+
+    text = """# Multi Section
+
+Intro.
+
+## Second Section
+
+More notes.
+"""
+    sections = markdown_sections(text)
+
+    assert not removing_markdown_section_removes_file(text, sections[1].key)
+    assert removing_markdown_section_removes_file(text, sections[0].key)
 
 
 def test_section_markdown_must_start_with_h1_h2_or_h3():

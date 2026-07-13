@@ -102,6 +102,10 @@ def lore_document_path(title: str) -> Path:
     return unique_markdown_path(SESSION_NOTES_DIR / f"{safe_session_note_title(title)}.md")
 
 
+def base_lore_document_path(title: str) -> Path:
+    return SESSION_NOTES_DIR / f"{safe_session_note_title(title)}.md"
+
+
 def unique_markdown_path(path: Path) -> Path:
     if not path.exists():
         return path
@@ -115,10 +119,42 @@ def unique_markdown_path(path: Path) -> Path:
 def import_lore_document_text(text: str, title: str = "") -> SessionNote:
     SESSION_NOTES_DIR.mkdir(parents=True, exist_ok=True)
     inferred_title = title.strip() or markdown_title(text) or "Lore Document"
-    path = lore_document_path(inferred_title)
+    path = base_lore_document_path(inferred_title)
     body = text.strip()
+    if path.exists():
+        body = merge_new_markdown_sections(path.read_text(encoding="utf-8"), body)
     path.write_text(f"{body}\n", encoding="utf-8")
     return SessionNote(note_date=None, body=body, path=path, title=inferred_title)
+
+
+def merge_new_markdown_sections(existing: str, incoming: str) -> str:
+    existing_body = existing.strip()
+    incoming_body = incoming.strip()
+    if not existing_body:
+        return incoming_body
+    if not incoming_body:
+        return existing_body
+
+    existing_titles = {section_title_key(section.text) for section in markdown_sections(existing_body)}
+    appended_titles: set[str] = set()
+    appended_ranges: list[tuple[int, int]] = []
+    additions: list[str] = []
+    for section in markdown_sections(incoming_body):
+        title_key = section_title_key(section.text)
+        if title_key in existing_titles or title_key in appended_titles:
+            continue
+        if any(start < section.start_line and section.end_line <= end for start, end in appended_ranges):
+            continue
+        additions.append(section.body)
+        appended_titles.add(title_key)
+        appended_ranges.append((section.start_line, section.end_line))
+    if not additions:
+        return existing_body
+    return "\n\n".join([existing_body, *additions]).strip()
+
+
+def section_title_key(title: str) -> str:
+    return safe_session_note_title(title).lower()
 
 
 def prepare_markdown_import(
@@ -490,6 +526,36 @@ def remove_markdown_section(path: Path, section_key: str) -> SessionNote:
     updated_lines = lines[: section.start_line] + lines[section.end_line :]
     updated = "\n".join(updated_lines).strip()
     return write_lore_document(path, updated)
+
+
+def hide_markdown_section_heading(path: Path, section_key: str) -> SessionNote:
+    text = read_session_note(path)
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None:
+        return write_lore_document(path, text)
+
+    lines = text.splitlines()
+    lines[section.start_line] = f"#### {section.text}"
+    for index in range(section.start_line + 1, section.end_line):
+        heading = markdown_heading_parts(lines[index].strip())
+        if heading and heading[0] > 1:
+            lines[index] = f"# {heading[1]}"
+            break
+    updated = "\n".join(lines).strip()
+    return write_lore_document(path, updated)
+
+
+def removing_markdown_section_removes_file(text: str, section_key: str) -> bool:
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None:
+        return False
+
+    lines = text.splitlines()
+    updated_lines = lines[: section.start_line] + lines[section.end_line :]
+    updated = "\n".join(updated_lines).strip()
+    return not markdown_sections(updated)
 
 
 def combine_markdown_section(path: Path, section_key: str) -> tuple[SessionNote, str]:

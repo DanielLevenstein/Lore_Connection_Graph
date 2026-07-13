@@ -59,6 +59,7 @@ from local_chatbot.character_rewrites import (
 from local_chatbot.session_notes import (
     child_markdown_sections,
     combine_markdown_section,
+    hide_markdown_section_heading,
     import_markdown_text,
     delete_session_note,
     insert_markdown_section,
@@ -72,6 +73,7 @@ from local_chatbot.session_notes import (
     read_session_note_date_text,
     read_session_note_title,
     remove_markdown_section,
+    removing_markdown_section_removes_file,
     starts_with_searchable_markdown_heading,
     write_lore_document,
     write_markdown_section,
@@ -1122,6 +1124,41 @@ def render_bulk_lore_removal_warning() -> None:
         st.rerun()
 
 
+@st.dialog("Delete Session Note File?")
+def render_delete_session_note_file_warning(path: Path, section_key: str) -> None:
+    st.warning("This is the last section in this file. Do you want to delete the full session note file?")
+    st.write(f"`{path.name}` will be removed.")
+    action_cols = st.columns(2)
+    if action_cols[0].button(
+        "Delete Session Note File",
+        icon=":material/delete_forever:",
+        key=f"confirm_delete_last_section_file_{path.name}_{section_key}",
+        width="stretch",
+    ):
+        push_session_notes_undo()
+        delete_session_note(path)
+        st.session_state.pop(f"session_note_editor_revision_{path.name}", None)
+        for key in (
+            "active_session_note",
+            "active_session_note_section",
+            "active_session_note_editor",
+            "pending_delete_session_section",
+            "pending_delete_session_note_file",
+        ):
+            st.session_state.pop(key, None)
+        st.session_state["session_notes_status"] = "Session Note Deleted."
+        st.rerun()
+    if action_cols[1].button(
+        "Cancel",
+        icon=":material/close:",
+        key=f"cancel_delete_last_section_file_{path.name}_{section_key}",
+        width="stretch",
+    ):
+        st.session_state.pop("pending_delete_session_note_file", None)
+        st.session_state.pop("pending_delete_session_section", None)
+        st.rerun()
+
+
 @st.dialog("Select Searchable Headings")
 def render_session_import_heading_dialog(
     notes: str,
@@ -1178,6 +1215,7 @@ def render_session_notes() -> None:
     if note_files:
         if any(normalize_session_note_file_headings(path) for path in note_files):
             note_files = list_session_notes()
+        note_files = sorted(note_files, key=lambda path: path.name.casefold())
     if note_files:
         select_options = session_note_select_options(note_files, show_dates=show_dates)
         display_names = [option["label"] for option in select_options]
@@ -1271,7 +1309,14 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
         st.subheader(note_label)
     if selected_section:
         top_action_cols = st.columns(3)
-        if not is_first_title_section and top_action_cols[0].button(
+        if selected_section.level == 1:
+            if top_action_cols[0].button(
+                "Hide Heading",
+                icon=":material/visibility_off:",
+                key=f"top_hide_heading_{path.name}_{section_key}",
+            ):
+                st.session_state["pending_hide_session_heading"] = {"path": path.name, "section": section_key}
+        elif not is_first_title_section and top_action_cols[0].button(
             "Add Previous Section",
             icon=":material/vertical_align_top:",
             key=f"add_previous_section_{path.name}_{section_key}",
@@ -1306,6 +1351,37 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
             st.session_state["active_session_note_editor"] = f"{path.name}:{new_section_key or 'full'}"
             st.session_state["session_notes_status"] = "Next Section Added."
             st.rerun()
+        pending_hide = st.session_state.get("pending_hide_session_heading", {})
+        if pending_hide.get("path") == path.name and pending_hide.get("section") == section_key:
+            promoted_section = next(iter(child_markdown_sections(read_session_note(path), section_key)), None)
+            st.warning(f'Are you sure you want to hide "{selected_section.text}" heading')
+            if promoted_section:
+                st.write(
+                    f'Hiding this heading will promote "{promoted_section.text}" heading top level heading for this document'
+                )
+            else:
+                st.write("Hiding this heading will leave this document without a top level heading.")
+            confirm_cols = st.columns(2)
+            if confirm_cols[0].button(
+                "Hide Heading",
+                icon=":material/visibility_off:",
+                key=f"confirm_hide_heading_{path.name}_{section_key}",
+            ):
+                push_session_notes_undo()
+                hide_markdown_section_heading(path, section_key)
+                set_active_session_note(path)
+                set_active_session_note_section()
+                st.session_state.pop("active_session_note_editor", None)
+                st.session_state.pop("pending_hide_session_heading", None)
+                st.session_state["session_notes_status"] = "Heading Hidden."
+                st.rerun()
+            if confirm_cols[1].button(
+                "Cancel",
+                icon=":material/close:",
+                key=f"cancel_hide_heading_{path.name}_{section_key}",
+            ):
+                st.session_state.pop("pending_hide_session_heading", None)
+                st.rerun()
     if display_body:
         st.markdown(display_body)
     if selected_section:
@@ -1329,13 +1405,20 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
             st.session_state["active_session_note_editor"] = f"{path.name}:{new_section_key or 'full'}"
             st.session_state["session_notes_status"] = "Next Section Added."
             st.rerun()
-        if bottom_action_cols[2].button(
+        if selected_section.level != 1 and bottom_action_cols[2].button(
             "Remove Section",
             icon=":material/delete:",
             key=f"remove_section_{path.name}_{section_key}",
         ):
-            st.session_state["pending_delete_session_section"] = {"path": path.name, "section": section_key}
-            st.rerun()
+            pending_key = (
+                "pending_delete_session_note_file"
+                if removing_markdown_section_removes_file(read_session_note(path), section_key)
+                else "pending_delete_session_section"
+            )
+            st.session_state[pending_key] = {"path": path.name, "section": section_key}
+        pending_file_delete = st.session_state.get("pending_delete_session_note_file", {})
+        if pending_file_delete.get("path") == path.name and pending_file_delete.get("section") == section_key:
+            render_delete_session_note_file_warning(path, section_key)
         pending_delete = st.session_state.get("pending_delete_session_section", {})
         if pending_delete.get("path") == path.name and pending_delete.get("section") == section_key:
             st.warning("Are you sure you would like to delete this section and all sub sections?")
@@ -1392,20 +1475,30 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
             action_cols = st.columns(3)
             save_requested = action_cols[0].form_submit_button("Save Session Note", icon=":material/save:")
             delete_requested = action_cols[1].form_submit_button(
-                "Delete Section" if section_key else "Delete Session Note",
-                icon=":material/delete_forever:",
+                "Hide Heading"
+                if selected_section and selected_section.level == 1
+                else "Delete Section"
+                if section_key
+                else "Delete Session Note",
+                icon=":material/visibility_off:" if selected_section and selected_section.level == 1 else ":material/delete_forever:",
             )
             undo_requested = action_cols[2].form_submit_button("Undo Changes", icon=":material/undo:")
             if undo_requested:
                 undo_session_notes_changes()
             if delete_requested:
-                push_session_notes_undo()
                 if section_key:
-                    remove_markdown_section(path, section_key)
-                    set_active_session_note(path)
-                    set_active_session_note_section()
-                    st.session_state["session_notes_status"] = "Section Removed."
+                    if selected_section and selected_section.level == 1:
+                        st.session_state["pending_hide_session_heading"] = {"path": path.name, "section": section_key}
+                    elif removing_markdown_section_removes_file(read_session_note(path), section_key):
+                        st.session_state["pending_delete_session_note_file"] = {"path": path.name, "section": section_key}
+                    else:
+                        push_session_notes_undo()
+                        remove_markdown_section(path, section_key)
+                        set_active_session_note(path)
+                        set_active_session_note_section()
+                        st.session_state["session_notes_status"] = "Section Removed."
                 else:
+                    push_session_notes_undo()
                     delete_session_note(path)
                     st.session_state.pop(f"session_note_editor_revision_{path.name}", None)
                     st.session_state.pop("active_session_note", None)
