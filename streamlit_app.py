@@ -807,18 +807,18 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
         backstory="",
     )
     with st.form(key_prefix):
-        name = st.text_input("Name", value=draft_profile.name, placeholder="Mara Voss", key=f"{key_prefix}_name")
+        name = st.text_input("Name", value=draft_profile.name, placeholder="Ari Vale", key=f"{key_prefix}_name")
         name_cols = st.columns(2)
         first_name = name_cols[0].text_input(
             "First Name",
             value=draft_profile.first_name,
-            placeholder="Mara",
+            placeholder="Glorious",
             key=f"{key_prefix}_first_name",
         )
         family_name = name_cols[1].text_input(
             "Family Name",
             value=draft_profile.family_name,
-            placeholder="Voss",
+            placeholder="Maximus",
             key=f"{key_prefix}_family_name",
         )
         stat_cols = st.columns(4)
@@ -840,14 +840,14 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
         backstory = st.text_area(
             "Backstory",
             value=draft_profile.backstory,
-            placeholder="A terse archivist from a vanished city who tests every lock twice...",
+            placeholder="A careful scholar who keeps notes about every strange place they visit...",
             height=160,
             key=f"{key_prefix}_backstory",
         )
         summary = st.text_area(
             "Summary",
             value=draft_profile.summary,
-            placeholder="Mara is a wary archivist whose courage looks like preparation.",
+            placeholder="Ari is a measured guide whose calm is their greatest strength.",
             height=96,
             key=f"{key_prefix}_summary",
         )
@@ -856,28 +856,28 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
             drives = detail_cols[0].text_area(
                 "Drives",
                 value=render_list_field(draft_profile.drives),
-                placeholder="Restore Family Name\nProtect Old Friends",
+                placeholder="Protect A Shared Home\nFollow A Longstanding Promise",
                 height=96,
                 key=f"{key_prefix}_drives",
             )
             alliances = detail_cols[1].text_area(
                 "Alliances",
                 value=render_list_field(draft_profile.alliances),
-                placeholder="Silver Cartographers\nMara Voss",
+                placeholder="The Harbor Circle\nAri Vale",
                 height=96,
                 key=f"{key_prefix}_alliances",
             )
             enemies = detail_cols[2].text_area(
                 "Enemies",
                 value=render_list_field(draft_profile.enemies),
-                placeholder="The Ash Court\nTorvak",
+                placeholder="The Hollow Council\nAlder Grin",
                 height=96,
                 key=f"{key_prefix}_enemies",
             )
             details = st.text_area(
                 "Character Details",
                 value=draft_profile.details,
-                placeholder="Add Any Freeform Character Sheet Fields Here.",
+                placeholder="Add any extra notes, traits, or background details here.",
                 height=120,
                 key=f"{key_prefix}_details",
             )
@@ -949,11 +949,12 @@ def render_place_creator() -> None:
 def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | None = None) -> None:
     draft_profile = draft_profile or PlaceProfile(name="", place_type="", summary="")
     with st.form(key_prefix):
-        name = st.text_input("Name", value=draft_profile.name, placeholder="Royal Tittles", key=f"{key_prefix}_name")
+        st.caption("Describe the place with a name and a short overview. You can add more detail later if you want to expand the lore.")
+        name = st.text_input("Name", value=draft_profile.name, placeholder="Lantern House", key=f"{key_prefix}_name")
         markdown = st.text_area(
             "Place Markdown",
             value=draft_place_markdown(draft_profile),
-            placeholder="# Royal Tittles\n\nA dockside tavern where private bargains sound like songs.",
+            placeholder="# Lantern House\n\nA welcoming inn where travelers share stories and quiet conversations.",
             height=220,
             key=f"{key_prefix}_markdown",
         )
@@ -1519,13 +1520,13 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
                 session_date = st.text_input(
                     "Session Date",
                     value=note_date,
-                    placeholder="Campaign date",
+                    placeholder="Session date",
                     key=f"session_note_date_{path.name}_{editor_revision}",
                 )
                 title = st.text_input(
                     "Title",
                     value=note_title,
-                    placeholder="Optional session title",
+                    placeholder="Optional session heading",
                     key=f"session_note_title_{path.name}_{editor_revision}",
                 )
             body = st.text_area(
@@ -1640,7 +1641,7 @@ def render_external_character_sheet_import() -> None:
         external_sheet_name = st.text_input(
             "Character Sheet Name",
             value="",
-            placeholder="Optional display name",
+            placeholder="Optional label",
             key="external_character_sheet_name",
         )
         if st.button("Import Character Sheet", icon=":material/upload_file:", key="import_external_character_sheet"):

@@ -9,16 +9,16 @@
 
 ## Character Backstory
 
-Neal Lovington is a traveling performer who works in a local tavern. They have spent several years entertaining guests at the Royal Tittles, a welcoming pub with a lively stage and a steady flow of visitors.
+Neal Lovington is a traveling performer who works in a local tavern. They have spent several years entertaining guests at the Lantern House, a welcoming pub with a lively stage and a steady flow of visitors.
 
 One of their recurring patrons was Mr. Nightbloom. Orin Nightbloom was a sailor who carried the grief of losing his mother. Their conversations often helped him reflect on the old family curse that had shaped his life.
 But Neal's favorite patron was Ms. Ravenmark. Jory Ravenmark worked at the shoreline lighthouse and carried a quiet loneliness that made their talks feel unusually meaningful.
 
-The Royal Tittles bar is located in Ashton, which is a human village frequented by sailors on shore leave.
+The Lantern House bar is located in Ashton, which is a human village frequented by sailors on shore leave.
 
 ## Character Summary
 
-Neal Lovington is a traveling performer working at the Royal Tittles in the seaside village of Ashton.
+Neal Lovington is a traveling performer working at the Lantern House in the seaside village of Ashton.
 
 ### Character Details
 
