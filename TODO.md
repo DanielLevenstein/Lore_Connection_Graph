@@ -90,3 +90,4 @@ Backup lore files are stored in `world_building/backup` and are updated every ti
 
 - Created global skills for LangGraph knowledge graphs, local model text transformations, Playwright e2e tests, Streamlit business logic separation, and language-model-assisted worldbuilding.
 - Validated the new skill frontmatter and naming constraints.
+- Added `AGENTS.md` guidance to use the worldbuilding skill for lore consistency checks.
