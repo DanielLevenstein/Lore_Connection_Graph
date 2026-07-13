@@ -1,12 +1,14 @@
 # Character Parsing Rules
 
-Character sheets are authored markdown files stored in `docs/lore/character_sheets`.
+Character sheets are authored markdown files stored in `world_building/lore/character_sheets`.
 This directory is ignored by git so each user can keep their own campaign lore local.
+
+`world_building/lore/character_sheets` is the source of truth for editable character Markdown. Runtime metadata derived from those files belongs under `world_building/meta_data/character_metadata`, and generated graph JSON belongs under `world_building/meta_data/character_graph`.
 
 ## Supported Paths
 
-- `docs/lore/character_sheets/character_name.md`
-- `docs/lore/character_sheets/character_name/BACKSTORY.md`
+- `world_building/lore/character_sheets/character_name.md`
+- `world_building/lore/character_sheets/character_name/BACKSTORY.md`
 
 ## Required Sections
 

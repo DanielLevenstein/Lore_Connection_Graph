@@ -50,24 +50,25 @@ def markdown_title(path: Path) -> str:
 
 @pytest.fixture()
 def isolated_character_app(tmp_path):
-    docs_lore_dir = tmp_path / "docs" / "lore"
+    world_building_dir = tmp_path / "world_building"
+    docs_lore_dir = world_building_dir / "lore"
     characters_dir = docs_lore_dir / "character_sheets"
     places_dir = docs_lore_dir / "places"
     session_notes_dir = docs_lore_dir / "session_notes"
-    data_dir = tmp_path / "data"
+    meta_data_dir = world_building_dir / "meta_data"
     shutil.copytree(FIXTURE_CHARACTER_SHEETS_DIR, characters_dir)
     places_dir.mkdir(parents=True)
     session_notes_dir.mkdir(parents=True)
-    data_dir.mkdir()
+    meta_data_dir.mkdir()
 
     env = os.environ.copy()
     env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
     env["LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH"] = "1"
-    env["LOCAL_CHATBOT_DOCS_LORE_DIR"] = str(docs_lore_dir)
+    env["LOCAL_CHATBOT_WORLD_BUILDING_DIR"] = str(world_building_dir)
+    env["LOCAL_CHATBOT_LORE_DIR"] = str(docs_lore_dir)
     env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(characters_dir)
     env["LOCAL_CHATBOT_PLACES_DIR"] = str(places_dir)
     env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(session_notes_dir)
-    env["LOCAL_CHATBOT_DATA_DIR"] = str(data_dir)
     process = subprocess.Popen(
         [
             str(streamlit_executable()),
@@ -86,7 +87,7 @@ def isolated_character_app(tmp_path):
     )
     try:
         wait_for_streamlit(APP_URL, process)
-        yield APP_URL, docs_lore_dir, characters_dir, places_dir, session_notes_dir, data_dir
+        yield APP_URL, docs_lore_dir, characters_dir, places_dir, session_notes_dir, meta_data_dir
     finally:
         process.terminate()
         try:
@@ -114,7 +115,7 @@ def select_character(page, character_label: str, index: int) -> None:
 
 
 def wait_for_profile_write(data_dir: Path, character_file: Path, timeout: int = 10) -> None:
-    profile_path = data_dir / "lore" / "character_sheets" / character_file.stem / "PROFILE.json"
+    profile_path = data_dir / "character_metadata" / character_file.stem / "PROFILE.json"
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if profile_path.exists():
@@ -428,7 +429,6 @@ def test_ui_creates_loads_and_undoes_session_notes(isolated_character_app):
         page.get_by_role("textbox", name="Session Note", exact=True).fill("The party found a silver key and a brass map.")
         page.get_by_role("button", name="save Save Session Note").click()
         open_tab(page, "Session Notes")
-        expect(page.get_by_text("Session Note Saved.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Silver Key", exact=True)).to_be_visible(timeout=10000)
         expect(page.locator("p").filter(has_text="The party found a silver key and a brass map.")).to_be_visible(timeout=10000)
 
@@ -436,16 +436,16 @@ def test_ui_creates_loads_and_undoes_session_notes(isolated_character_app):
         page.get_by_role("textbox", name="Session Note", exact=True).fill("The party lost the key.")
         page.get_by_role("button", name="save Save Session Note").click()
         open_tab(page, "Session Notes")
-        expect(page.get_by_text("Session Note Saved.")).to_be_visible(timeout=10000)
+        expect(page.locator("p").filter(has_text="The party lost the key.")).to_be_visible(timeout=10000)
 
         ensure_session_note_editor_open(page)
         page.get_by_role("button", name="undo Undo Changes").last.click()
         open_tab(page, "Session Notes")
-        expect(page.get_by_text("Session Note Changes Undone.")).to_be_visible(timeout=10000)
+        expect(page.locator("p").filter(has_text="The party found a silver key and a brass map.")).to_be_visible(timeout=10000)
         ensure_session_note_editor_open(page)
         page.get_by_role("button", name="undo Undo Changes").last.click()
         open_tab(page, "Session Notes")
-        expect(page.get_by_text("Session Note Changes Undone.")).to_be_visible(timeout=10000)
+        expect(page.locator("p").filter(has_text="The party found a silver key.")).to_be_visible(timeout=10000)
         browser.close()
 
     assert note_path.exists()

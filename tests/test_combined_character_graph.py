@@ -90,7 +90,7 @@ Neal is a performer.
     )
     combined = build_combined_character_graph(
         [neal],
-        place_sources=[("royal_tittles", "Royal Tittles", "docs/lore/places/Royal_Tittles.md")],
+        place_sources=[("royal_tittles", "Royal Tittles", "world_building/lore/places/Royal_Tittles.md")],
         lore_relationships=[
             {
                 "source_id": "neal_lovington",
@@ -472,7 +472,7 @@ def test_combined_graph_deduplicates_edges_after_node_merge():
 def test_combined_graph_clarifies_same_label_for_different_entity_types():
     combined = build_combined_character_graph(
         [],
-        place_sources=[("royal_tittles", "Royal Tittles", "docs/lore/places/Royal_Tittles.md")],
+        place_sources=[("royal_tittles", "Royal Tittles", "world_building/lore/places/Royal_Tittles.md")],
         lore_relationships=[
             {
                 "source_id": "royal_tittles",
@@ -508,7 +508,7 @@ Neal Lovington performs at Royal Tittles.
 
     combined = build_combined_character_graph(
         [royal_tittles],
-        place_sources=[("royal_tittles", "Royal Tittles", "docs/lore/places/Royal_Tittles.md")],
+        place_sources=[("royal_tittles", "Royal Tittles", "world_building/lore/places/Royal_Tittles.md")],
         lore_relationships=[
             {
                 "source_id": "royal_tittles",
@@ -529,13 +529,13 @@ Neal Lovington performs at Royal Tittles.
 def test_combined_graph_includes_lore_relationships_without_character_sheets():
     combined = build_combined_character_graph(
         [],
-        place_sources=[("royal_tittles", "Royal Tittles", "docs/lore/places/Royal_Tittles.md")],
+        place_sources=[("royal_tittles", "Royal Tittles", "world_building/lore/places/Royal_Tittles.md")],
         lore_relationships=[
             {
                 "source_id": "royal_tittles",
                 "source_name": "Royal Tittles",
                 "source_type": "place",
-                "source_file": "docs/lore/places/Royal_Tittles.md",
+                "source_file": "world_building/lore/places/Royal_Tittles.md",
                 "target_id": "neal_lovington",
                 "target_name": "Neal Lovington",
                 "target_type": "character",
@@ -577,7 +577,7 @@ def test_combined_graph_forbids_self_referencing_lore_edges():
 def test_combined_graph_prunes_disconnected_nodes():
     combined = build_combined_character_graph(
         [],
-        place_sources=[("royal_tittles", "Royal Tittles", "docs/lore/places/Royal_Tittles.md")],
+        place_sources=[("royal_tittles", "Royal Tittles", "world_building/lore/places/Royal_Tittles.md")],
         lore_relationships=[
             {
                 "source_id": "neal_lovington",

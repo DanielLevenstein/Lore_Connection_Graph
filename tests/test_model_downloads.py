@@ -1,5 +1,8 @@
+import os
 from pathlib import Path
 
+import language_model_harness
+from model_harness import environment
 from model_harness.downloads import default_download_option, downloaded_options
 from model_harness.models import ModelConfig, list_model_configs
 from character_graph.extraction import extract_character_graph
@@ -53,6 +56,23 @@ def test_selected_visual_inspection_model_config_is_available():
     assert visual.model_id == "Qwen/Qwen2.5-VL-3B-Instruct"
     assert visual.server["runner"] == "vLLM"
     assert "visual inspection model" in visual.description.lower()
+
+
+def test_model_harness_data_defaults_under_world_building(monkeypatch):
+    monkeypatch.delenv(environment.DATA_DIR_ENV, raising=False)
+
+    assert environment.data_dir() == environment.DEFAULT_PROJECT_DIR / "world_building" / "meta_data" / "model"
+
+
+def test_language_model_harness_configures_model_data_under_world_building(monkeypatch):
+    monkeypatch.delenv(environment.DATA_DIR_ENV, raising=False)
+
+    language_model_harness.configure_language_model_harness()
+
+    assert (
+        Path(os.environ[environment.DATA_DIR_ENV])
+        == language_model_harness.ROOT_DIR / "world_building" / "meta_data" / "model"
+    )
 
 
 def test_semantic_extraction_finds_people_and_places_in_fixture_lore():

@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import date, datetime
 from pathlib import Path
 import os
 
@@ -58,10 +59,12 @@ from local_chatbot.character_rewrites import (
 from local_chatbot.session_notes import (
     child_markdown_sections,
     combine_markdown_section,
+    hide_markdown_section_heading,
     import_markdown_text,
     delete_session_note,
     insert_markdown_section,
     markdown_sections,
+    normalize_session_note_file_headings,
     prepare_markdown_import,
     list_session_notes,
     read_markdown_section,
@@ -70,21 +73,30 @@ from local_chatbot.session_notes import (
     read_session_note_date_text,
     read_session_note_title,
     remove_markdown_section,
+    removing_markdown_section_removes_file,
     starts_with_searchable_markdown_heading,
     write_lore_document,
     write_markdown_section,
     write_session_note,
 )
-from local_chatbot.lore_import import clear_local_lore, import_lore_directory
-from local_chatbot.paths import DOCS_LORE_DIR
+from local_chatbot.lore_import import (
+    backup_lore_files,
+    clear_local_lore,
+    import_lore_directory,
+    list_lore_backups,
+    read_lore_backup_date,
+)
+from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, WORLD_BUILDING_IMPORT_DIR
 
 ENABLE_CHARACTER_REWRITE = "1"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 ENABLE_EXTERNAL_CHARACTER_IMPORT = "LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"
 MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
+LORE_BACKUP_IMPORT_SOURCE_KEY = "lore_backup_import_source"
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
 ensure_base_dirs()
+backup_lore_files()
 
 st.markdown(
     """
@@ -680,11 +692,11 @@ def load_lore_graphs():
 
 
 def lore_markdown_files():
-    if not DOCS_LORE_DIR.exists():
+    if not LORE_DIR.exists():
         return []
     return [
         path
-        for path in sorted(DOCS_LORE_DIR.rglob("*.md"))
+        for path in sorted(LORE_DIR.rglob("*.md"))
         if "TEMPLATE" not in path.name.upper() and not path.name.startswith(".")
     ]
 
@@ -1078,11 +1090,18 @@ def render_lore_import_tools() -> None:
         st.success(import_status)
 
     with st.expander("Lore Import", expanded=False):
+        backup_date = read_lore_backup_date()
+        st.text_input(
+            "Last Backup",
+            value=format_backup_date(backup_date) if backup_date else "No Backup Created",
+            disabled=True,
+            key="last_lore_backup_date",
+        )
         st.subheader("Bulk Lore Directory")
         source_dir = st.text_input(
             "Source Directory",
-            value=str(DOCS_LORE_DIR),
-            help="Choose the root directory that contains character_sheets, places, and session_notes folders.",
+            value=str(WORLD_BUILDING_IMPORT_DIR),
+            help="Choose a directory under world_building/import that contains character_sheets, places, and session_notes folders.",
             key="lore_directory_import_source",
         )
         overwrite_existing = st.checkbox(
@@ -1090,8 +1109,8 @@ def render_lore_import_tools() -> None:
             value=True,
             key="lore_directory_import_overwrite",
         )
-        action_cols = st.columns(2)
-        if action_cols[0].button("Import Lore Directory", icon=":material/folder_copy:", key="import_lore_directory"):
+        action_cols = st.columns(4)
+        if action_cols[0].button("Import Testing Lore", icon=":material/folder_copy:", key="import_testing_lore"):
             try:
                 summary = import_lore_directory(Path(source_dir), overwrite=overwrite_existing)
             except FileNotFoundError:
@@ -1102,8 +1121,52 @@ def render_lore_import_tools() -> None:
                 f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
             )
             st.rerun()
-        if action_cols[1].button("Bulk Lore Removal", icon=":material/delete_forever:", key="bulk_lore_removal"):
+        if action_cols[1].button("Create Lore Backup", icon=":material/backup:", key="create_lore_backup"):
+            summary = backup_lore_files(snapshot=True)
+            st.session_state["lore_import_status"] = (
+                f"Created Backup For {summary.files} File{'s' if summary.files != 1 else ''}."
+            )
+            st.rerun()
+        if action_cols[2].button("Import Lore Backup", icon=":material/restore_page:", key="import_lore_backup"):
+            render_lore_backup_restore_dialog(overwrite_existing)
+        if action_cols[3].button("Bulk Lore Removal", icon=":material/delete_forever:", key="bulk_lore_removal"):
             render_bulk_lore_removal_warning()
+
+
+def format_backup_date(value: datetime | None) -> str:
+    if value is None:
+        return "Unknown"
+    return value.astimezone().strftime("%Y-%m-%d %H:%M")
+
+
+@st.dialog("Import Lore Backup")
+def render_lore_backup_restore_dialog(overwrite_existing: bool) -> None:
+    backup_options = list_lore_backups(WORLD_BUILDING_BACKUP_DIR)
+    if not backup_options:
+        st.warning("No Lore Backups Are Available.")
+        if st.button("Close", icon=":material/close:", width="stretch"):
+            st.rerun()
+        return
+
+    selected_backup = st.selectbox(
+        "Backup",
+        backup_options,
+        format_func=lambda option: option.label,
+        key="selected_lore_backup",
+    )
+    st.session_state[LORE_BACKUP_IMPORT_SOURCE_KEY] = str(selected_backup.path)
+    action_cols = st.columns(2)
+    if action_cols[0].button("Restore Selected Backup", icon=":material/restore_page:", width="stretch"):
+        backup_source = Path(st.session_state[LORE_BACKUP_IMPORT_SOURCE_KEY])
+        summary = import_lore_directory(backup_source, overwrite=overwrite_existing)
+        st.session_state["lore_import_status"] = (
+            f"Restored {summary.total} Backup File{'s' if summary.total != 1 else ''} "
+            f"({summary.characters} Characters, {summary.places} Places, "
+            f"{summary.session_notes} Session Notes, {summary.metadata} Metadata Files)."
+        )
+        st.rerun()
+    if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
+        st.rerun()
 
 
 @st.dialog("Bulk Lore Removal")
@@ -1111,18 +1174,55 @@ def render_bulk_lore_removal_warning() -> None:
     st.warning(
         "This operation is destructive. Do you want to delete all local characters, places, and notes?"
     )
-    st.write("This will clean the configured `docs/lore` and `data/lore` directories.")
+    st.write("This will clean the configured lore directory and generated lore data.")
     action_cols = st.columns(2)
     if action_cols[0].button("Yes, Delete Local Lore", icon=":material/delete_forever:", width="stretch"):
+        backup_lore_files(snapshot=True)
         summary = clear_local_lore()
         st.session_state["lore_import_status"] = (
-            f"Deleted {summary.total} Local Lore File{'s' if summary.total != 1 else ''} "
-            f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
+            f"Deleted {summary.total} Local File{'s' if summary.total != 1 else ''} "
+            f"({summary.characters} Characters, {summary.places} Places, "
+            f"{summary.session_notes} Session Notes, {summary.metadata} Metadata Files)."
         )
         for key in ("active_character", "active_place", "active_session_note"):
             st.session_state.pop(key, None)
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
+        st.rerun()
+
+
+@st.dialog("Delete Session Note File?")
+def render_delete_session_note_file_warning(path: Path, section_key: str) -> None:
+    st.warning("This is the last section in this file. Do you want to delete the full session note file?")
+    st.write(f"`{path.name}` will be removed.")
+    action_cols = st.columns(2)
+    if action_cols[0].button(
+        "Delete Session Note File",
+        icon=":material/delete_forever:",
+        key=f"confirm_delete_last_section_file_{path.name}_{section_key}",
+        width="stretch",
+    ):
+        push_session_notes_undo()
+        delete_session_note(path)
+        st.session_state.pop(f"session_note_editor_revision_{path.name}", None)
+        for key in (
+            "active_session_note",
+            "active_session_note_section",
+            "active_session_note_editor",
+            "pending_delete_session_section",
+            "pending_delete_session_note_file",
+        ):
+            st.session_state.pop(key, None)
+        st.session_state["session_notes_status"] = "Session Note Deleted."
+        st.rerun()
+    if action_cols[1].button(
+        "Cancel",
+        icon=":material/close:",
+        key=f"cancel_delete_last_section_file_{path.name}_{section_key}",
+        width="stretch",
+    ):
+        st.session_state.pop("pending_delete_session_note_file", None)
+        st.session_state.pop("pending_delete_session_section", None)
         st.rerun()
 
 
@@ -1140,7 +1240,7 @@ def render_session_import_heading_dialog(
         if st.checkbox(
             label,
             value=True,
-            disabled=heading.kind == "date",
+            disabled=heading.kind == "structure",
             key=f"import_heading_{heading.key}",
         ):
             selected_heading_keys.add(heading.key)
@@ -1165,6 +1265,47 @@ def render_session_import_heading_dialog(
         st.rerun()
 
 
+
+def import_session_note():
+    uploaded_file_state = st.session_state.get("markdown_import")
+    import_expanded = st.session_state.get("session_notes_import_expanded", False) or uploaded_file_state is not None
+    with st.expander(
+            "Import Session Note",
+            expanded=import_expanded,
+    ):
+        if st.session_state.pop("clear_session_notes_import", False):
+            st.session_state["markdown_import_source_name"] = ""
+        uploaded_notes = st.file_uploader(
+            "File",
+            type=["md", "txt"],
+            key="markdown_import",
+        )
+        title = st.text_input(
+            "Imported File Name",
+            placeholder=uploaded_notes.name if uploaded_notes is not None else "Optional title or source filename",
+            key="markdown_import_source_name",
+        )
+        if st.button("Upload Session Note", icon=":material/upload_file:", key="upload_session_notes"):
+            st.session_state["session_notes_import_expanded"] = True
+            source_name = title.strip() or (uploaded_notes.name if uploaded_notes is not None else "")
+            if uploaded_notes is None:
+                st.error("Choose A Markdown Or Text File Before Uploading.")
+                return
+            try:
+                notes = uploaded_notes.getvalue().decode("utf-8")
+            except UnicodeDecodeError:
+                st.error("Import File Must Be UTF-8 Text.")
+                return
+            if not notes.strip():
+                st.error("Import File Must Include Session Notes.")
+                return
+            request_main_navigation_tab("Session Notes")
+            render_session_import_heading_dialog(
+                notes,
+                source_name,
+            )
+            return
+
 def render_session_notes() -> None:
     st.title("Session Notes")
     saved_count = st.session_state.pop("session_notes_saved_count", 0)
@@ -1179,6 +1320,10 @@ def render_session_notes() -> None:
     show_dates = True
 
     note_files = list_session_notes()
+    if note_files:
+        if any(normalize_session_note_file_headings(path) for path in note_files):
+            note_files = list_session_notes()
+        note_files = sorted(note_files, key=lambda path: path.name.casefold())
     if note_files:
         select_options = session_note_select_options(note_files, show_dates=show_dates)
         display_names = [option["label"] for option in select_options]
@@ -1217,44 +1362,6 @@ def render_session_notes() -> None:
             show_dates=show_dates,
             section_key=st.session_state.get("active_session_note_section", ""),
         )
-    uploaded_file_state = st.session_state.get("markdown_import")
-    import_expanded = st.session_state.get("session_notes_import_expanded", False) or uploaded_file_state is not None
-    with st.expander(
-        "Import Session Note",
-        expanded=import_expanded,
-    ):
-        if st.session_state.pop("clear_session_notes_import", False):
-            st.session_state["markdown_import_source_name"] = ""
-        uploaded_notes = st.file_uploader(
-            "File",
-            type=["md", "txt"],
-            key="markdown_import",
-        )
-        title = st.text_input(
-            "Imported File Name",
-            placeholder=uploaded_notes.name if uploaded_notes is not None else "Optional title or source filename",
-            key="markdown_import_source_name",
-        )
-        if st.button("Upload Session Note", icon=":material/upload_file:", key="upload_session_notes"):
-            st.session_state["session_notes_import_expanded"] = True
-            source_name = title.strip() or (uploaded_notes.name if uploaded_notes is not None else "")
-            if uploaded_notes is None:
-                st.error("Choose A Markdown Or Text File Before Uploading.")
-                return
-            try:
-                notes = uploaded_notes.getvalue().decode("utf-8")
-            except UnicodeDecodeError:
-                st.error("Import File Must Be UTF-8 Text.")
-                return
-            if not notes.strip():
-                st.error("Import File Must Include Session Notes.")
-                return
-            request_main_navigation_tab("Session Notes")
-            render_session_import_heading_dialog(
-                notes,
-                source_name,
-            )
-            return
 
 
 def render_session_note_editor(path, show_dates: bool = False, section_key: str = "") -> None:
@@ -1272,7 +1379,14 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
         st.subheader(note_label)
     if selected_section:
         top_action_cols = st.columns(3)
-        if not is_first_title_section and top_action_cols[0].button(
+        if selected_section.level == 1:
+            if top_action_cols[0].button(
+                "Hide Heading",
+                icon=":material/visibility_off:",
+                key=f"top_hide_heading_{path.name}_{section_key}",
+            ):
+                st.session_state["pending_hide_session_heading"] = {"path": path.name, "section": section_key}
+        elif not is_first_title_section and top_action_cols[0].button(
             "Add Previous Section",
             icon=":material/vertical_align_top:",
             key=f"add_previous_section_{path.name}_{section_key}",
@@ -1307,6 +1421,37 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
             st.session_state["active_session_note_editor"] = f"{path.name}:{new_section_key or 'full'}"
             st.session_state["session_notes_status"] = "Next Section Added."
             st.rerun()
+        pending_hide = st.session_state.get("pending_hide_session_heading", {})
+        if pending_hide.get("path") == path.name and pending_hide.get("section") == section_key:
+            promoted_section = next(iter(child_markdown_sections(read_session_note(path), section_key)), None)
+            st.warning(f'Are you sure you want to hide "{selected_section.text}" heading')
+            if promoted_section:
+                st.write(
+                    f'Hiding this heading will promote "{promoted_section.text}" heading top level heading for this document'
+                )
+            else:
+                st.write("Hiding this heading will leave this document without a top level heading.")
+            confirm_cols = st.columns(2)
+            if confirm_cols[0].button(
+                "Hide Heading",
+                icon=":material/visibility_off:",
+                key=f"confirm_hide_heading_{path.name}_{section_key}",
+            ):
+                push_session_notes_undo()
+                hide_markdown_section_heading(path, section_key)
+                set_active_session_note(path)
+                set_active_session_note_section()
+                st.session_state.pop("active_session_note_editor", None)
+                st.session_state.pop("pending_hide_session_heading", None)
+                st.session_state["session_notes_status"] = "Heading Hidden."
+                st.rerun()
+            if confirm_cols[1].button(
+                "Cancel",
+                icon=":material/close:",
+                key=f"cancel_hide_heading_{path.name}_{section_key}",
+            ):
+                st.session_state.pop("pending_hide_session_heading", None)
+                st.rerun()
     if display_body:
         st.markdown(display_body)
     if selected_section:
@@ -1330,13 +1475,20 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
             st.session_state["active_session_note_editor"] = f"{path.name}:{new_section_key or 'full'}"
             st.session_state["session_notes_status"] = "Next Section Added."
             st.rerun()
-        if bottom_action_cols[2].button(
+        if selected_section.level != 1 and bottom_action_cols[2].button(
             "Remove Section",
             icon=":material/delete:",
             key=f"remove_section_{path.name}_{section_key}",
         ):
-            st.session_state["pending_delete_session_section"] = {"path": path.name, "section": section_key}
-            st.rerun()
+            pending_key = (
+                "pending_delete_session_note_file"
+                if removing_markdown_section_removes_file(read_session_note(path), section_key)
+                else "pending_delete_session_section"
+            )
+            st.session_state[pending_key] = {"path": path.name, "section": section_key}
+        pending_file_delete = st.session_state.get("pending_delete_session_note_file", {})
+        if pending_file_delete.get("path") == path.name and pending_file_delete.get("section") == section_key:
+            render_delete_session_note_file_warning(path, section_key)
         pending_delete = st.session_state.get("pending_delete_session_section", {})
         if pending_delete.get("path") == path.name and pending_delete.get("section") == section_key:
             st.warning("Are you sure you would like to delete this section and all sub sections?")
@@ -1393,20 +1545,30 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
             action_cols = st.columns(3)
             save_requested = action_cols[0].form_submit_button("Save Session Note", icon=":material/save:")
             delete_requested = action_cols[1].form_submit_button(
-                "Delete Section" if section_key else "Delete Session Note",
-                icon=":material/delete_forever:",
+                "Hide Heading"
+                if selected_section and selected_section.level == 1
+                else "Delete Section"
+                if section_key
+                else "Delete Session Note",
+                icon=":material/visibility_off:" if selected_section and selected_section.level == 1 else ":material/delete_forever:",
             )
             undo_requested = action_cols[2].form_submit_button("Undo Changes", icon=":material/undo:")
             if undo_requested:
                 undo_session_notes_changes()
             if delete_requested:
-                push_session_notes_undo()
                 if section_key:
-                    remove_markdown_section(path, section_key)
-                    set_active_session_note(path)
-                    set_active_session_note_section()
-                    st.session_state["session_notes_status"] = "Section Removed."
+                    if selected_section and selected_section.level == 1:
+                        st.session_state["pending_hide_session_heading"] = {"path": path.name, "section": section_key}
+                    elif removing_markdown_section_removes_file(read_session_note(path), section_key):
+                        st.session_state["pending_delete_session_note_file"] = {"path": path.name, "section": section_key}
+                    else:
+                        push_session_notes_undo()
+                        remove_markdown_section(path, section_key)
+                        set_active_session_note(path)
+                        set_active_session_note_section()
+                        st.session_state["session_notes_status"] = "Section Removed."
                 else:
+                    push_session_notes_undo()
                     delete_session_note(path)
                     st.session_state.pop(f"session_note_editor_revision_{path.name}", None)
                     st.session_state.pop("active_session_note", None)
@@ -1773,6 +1935,7 @@ with places_tab:
     render_place_panel()
 
 with session_notes_tab:
+    import_session_note()
     render_session_notes()
 
 render_combined_character_graph()

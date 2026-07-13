@@ -2,9 +2,15 @@
 
 A local Streamlit app for creating tabletop character sheets, organizing campaign lore, and visualizing relationships as knowledge graphs.
 
-The app treats authored markdown in `docs/lore` as the source of truth. Character sheets can be edited through the UI, places can be created as lore files, and derived graph JSON can be regenerated from the Markdown whenever needed.
+The app treats authored markdown in `world_building/lore` as the source of truth. Character sheets can be edited through the UI, places can be created as lore files, and derived graph JSON can be regenerated from the Markdown whenever needed.
 
-`docs/lore/` is intentionally ignored by git so each player can keep their own campaign data out of the repository. Templates and parsing rules are committed under `docs/`; test lore examples live under `tests/fixtures`.
+- `world_building/` is intentionally ignored by git so each player can keep their own campaign data
+- Generated runtime files are stored in `world_building/meta_data` while user-readable application docs are stored in `world_building/lore`
+- Templates, specifications, and parsing rules are committed under `docs/`
+- test lore examples live under `tests/fixtures`.
+
+Backup lore files are stored in `world_building/backup` and are updated everytime the app is loaded.
+A manual backup button has been added in the `Lore Import` Section for your convenience.
 
 ## What It Does
 
@@ -33,24 +39,39 @@ streamlit run streamlit_app.py
 
 ## Project Screenshots
 
+## Storage Source Of Truth
+
+The repository uses committed project docs plus one ignored local workspace root:
+
+- Only files under `world_building/lore` are treated as canonical authored campaign lore.
+- Files under `world_building/import` are raw inputs and can be re-imported or reorganized.
+- Files under `world_building/backup` are auto generated backups of lore and metadata which can be used for restoring old campaign notes and derived local state.
+- Files under `world_building/meta_data` are derived or runtime data and can be rebuilt or regenerated from the lore and model configuration.
+
 ## Project Layout
 
 ```text
 config/model/*.json                         Model configuration files
 docs/CHARACTER_TEMPLATE.md                  Character sheet template
 docs/PLACE_TEMPLATE.md                      Place lore template
-docs/lore/character_sheets/*.md             Authored character sheets
-docs/lore/character_sheets/*/BACKSTORY.md   Alternate character sheet format
-docs/lore/places/*.md                       Authored place lore
-data/lore/character_sheets/*.md             Generated character drafts
-data/lore/character_sheets/*/PROFILE.json   Runtime character metadata
-data/lore/character_sheets/*/MEMORY.md      Runtime memory notes
-data/lore/character_sheets/*/chatlogs/*.log Runtime play logs
-data/character_graph/*.graph.json           Derived per-character graph JSON
+world_building/import/                      Raw markdown/text import staging area
+world_building/lore/character_sheets/*.md   Authored character sheets
+world_building/lore/character_sheets/*/BACKSTORY.md
+                                            Alternate character sheet format
+world_building/lore/places/*.md             Authored place lore
+world_building/backup/                      Latest local Markdown backup
+world_building/meta_data/character_metadata/*/PROFILE.json
+                                            Runtime character metadata
+world_building/meta_data/character_metadata/*/MEMORY.md
+                                            Runtime memory notes
+world_building/meta_data/character_metadata/*/chatlogs/*.log
+                                            Runtime play logs
+world_building/meta_data/character_graph/*.graph.json
+                                            Derived per-character graph JSON
+world_building/meta_data/model/             Local model downloads and runtime data
 ```
 
-Everything under `data/` is local runtime or generated output and should not be committed.
-Everything under `docs/lore/` is local authored campaign lore and should not be committed.
+Everything under `world_building/` is local campaign material, runtime data, or generated output and should not be committed.
 
 ## Specs
 

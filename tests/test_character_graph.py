@@ -54,6 +54,18 @@ def test_load_backstory_computes_source_hash(tmp_path):
     assert len(document.source_hash) == 64
 
 
+def test_load_graph_reports_invalid_graph_shape(tmp_path):
+    source = tmp_path / "stale.graph.json"
+    source.write_text("{}", encoding="utf-8")
+
+    try:
+        load_graph(source)
+    except ValueError as exc:
+        assert "valid character graph" in str(exc)
+    else:
+        raise AssertionError("Expected invalid graph shape to raise ValueError.")
+
+
 def test_extract_character_graph_creates_stats_and_known_prose_relationships(tmp_path):
     source = tmp_path / "arlen.md"
     source.write_text(BACKSTORY, encoding="utf-8")

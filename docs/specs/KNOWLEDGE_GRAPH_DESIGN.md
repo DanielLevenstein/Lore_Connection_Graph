@@ -4,7 +4,7 @@
 
 The Character Association Graph is a derived index built from each character's human-authored `BACKSTORY.md`. Its config defines three broad connection buckets: relationships, attributes, and places. The extractor only auto-populates facts the markdown can be expected to provide reliably: the character name, race, and class.
 
-The markdown backstory remains the canonical source of truth. The graph JSON is regenerated derived data and can be discarded or rebuilt when the backstory changes.
+The markdown backstory in `world_building/lore/character_sheets` remains the canonical source of truth. The graph JSON in `world_building/meta_data/character_graph` is regenerated derived data and can be discarded or rebuilt when the backstory changes.
 
 ## Current Scope
 
@@ -187,27 +187,29 @@ Keeping these helpers outside `streamlit_app.py` makes the display formatting te
 
 ## Storage Integration
 
+Storage follows the project-wide source-of-truth split: `docs/` holds committed specifications and templates, `world_building/lore` holds editable campaign Markdown, `world_building/import` holds raw source imports, and `world_building/meta_data` holds derived/runtime application data.
+
 Authored character markdown files live under:
 
 ```text
-docs/lore/character_sheets/<name>/BACKSTORY.md
+world_building/lore/character_sheets/<name>/BACKSTORY.md
 ```
 or 
 
 ```text
-docs/lore/character_sheets/Character_Name.md
+world_building/lore/character_sheets/Character_Name.md
 ```
 
 Generated draft character sheets live under:
 
 ```text
-data/lore/character_sheets/Character_Name.md
+world_building/lore/character_sheets/Character_Name.md
 ```
 
 Graph JSON now lives under:
 
 ```text
-data/character_graph/<name>.graph.json
+world_building/meta_data/character_graph/<name>.graph.json
 ```
 
 `local_chatbot.paths` defines `CHARACTER_GRAPHS_DIR` and creates it in `ensure_base_dirs()`.
@@ -258,7 +260,7 @@ If no graph JSON exists yet, the UI prompts the user to regenerate it. If graph 
   "primary_character": {
     "id": "arlen_voss",
     "name": "Arlen Voss",
-    "source_file": "docs/lore/character_sheets/Arlen Voss/BACKSTORY.md"
+    "source_file": "world_building/lore/character_sheets/Arlen Voss/BACKSTORY.md"
   },
   "characters": {
     "arlen_voss": {

@@ -14,7 +14,7 @@ MODEL_BACKSTORY = (
 
 def test_semantic_report_configures_local_model_harness():
     assert os.environ["LANGUAGE_MODEL_HARNESS_CONFIG_DIR"].endswith("config/model")
-    assert os.environ["LANGUAGE_MODEL_HARNESS_DATA_DIR"].endswith("data")
+    assert os.environ["LANGUAGE_MODEL_HARNESS_DATA_DIR"].endswith("world_building/meta_data/model")
 
 
 def test_semantic_report_formats_three_version_score_table():

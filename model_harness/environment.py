@@ -5,6 +5,7 @@ from pathlib import Path
 CONFIG_DIR_ENV = "LANGUAGE_MODEL_HARNESS_CONFIG_DIR"
 DATA_DIR_ENV = "LANGUAGE_MODEL_HARNESS_DATA_DIR"
 DEFAULT_PROJECT_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_WORLD_BUILDING_DIR = DEFAULT_PROJECT_DIR / "world_building"
 
 
 def config_dir() -> Path:
@@ -12,7 +13,7 @@ def config_dir() -> Path:
 
 
 def data_dir() -> Path:
-    return Path(os.environ.get(DATA_DIR_ENV, DEFAULT_PROJECT_DIR / "data")).resolve()
+    return Path(os.environ.get(DATA_DIR_ENV, DEFAULT_WORLD_BUILDING_DIR / "meta_data" / "model")).resolve()
 
 
 def ensure_base_dirs() -> None:

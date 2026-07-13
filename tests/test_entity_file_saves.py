@@ -22,7 +22,7 @@ from local_chatbot.storage import (
 
 def test_character_file_save_round_trips_updated_fields(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "CHARACTERS_DIR", tmp_path / "docs" / "lore" / "character_sheets")
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "character_metadata")
     monkeypatch.setattr(storage, "CHARACTER_GRAPHS_DIR", tmp_path / "data" / "character_graph")
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
 
@@ -77,7 +77,7 @@ def test_character_file_save_round_trips_updated_fields(tmp_path, monkeypatch):
 
 def test_character_delete_removes_sheet_metadata_and_graph(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "CHARACTERS_DIR", tmp_path / "docs" / "lore" / "character_sheets")
-    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "lore" / "character_sheets")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "character_metadata")
     monkeypatch.setattr(storage, "CHARACTER_GRAPHS_DIR", tmp_path / "data" / "character_graph")
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
 
