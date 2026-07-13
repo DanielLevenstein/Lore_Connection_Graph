@@ -1541,11 +1541,13 @@ def render_character_editor(character: Character) -> None:
             pronouns = stat_cols[3].text_input("Pronouns", value=profile.pronouns)
             if has_distinct_original(profile.backstory, profile.original_backstory):
                 backstory_cols = st.columns(2)
+                backstory_cols[0].caption(section_status_label("Character Backstory", profile))
                 backstory = backstory_cols[0].text_area(
-                    section_label("Backstory", profile, "Character Backstory"),
+                    "Backstory",
                     value=profile.backstory,
                     height=180,
                 )
+                backstory_cols[1].caption("Original Character Backstory")
                 backstory_cols[1].text_area(
                     "Original Backstory",
                     value=profile.original_backstory,
@@ -1553,14 +1555,17 @@ def render_character_editor(character: Character) -> None:
                     disabled=True,
                 )
             else:
-                backstory = st.text_area(section_label("Backstory", profile, "Character Backstory"), value=profile.backstory, height=180)
+                render_section_status("Character Backstory", profile)
+                backstory = st.text_area("Backstory", value=profile.backstory, height=180)
             if has_distinct_original(profile.summary, profile.original_summary):
                 summary_cols = st.columns(2)
+                summary_cols[0].caption(section_status_label("Character Summary", profile))
                 summary = summary_cols[0].text_area(
-                    section_label("Summary", profile, "Character Summary"),
+                    "Summary",
                     value=profile.summary,
                     height=96,
                 )
+                summary_cols[1].caption("Original Character Summary")
                 summary_cols[1].text_area(
                     "Original Summary",
                     value=profile.original_summary,
@@ -1568,7 +1573,8 @@ def render_character_editor(character: Character) -> None:
                     disabled=True,
                 )
             else:
-                summary = st.text_area(section_label("Summary", profile, "Character Summary"), value=profile.summary, height=96)
+                render_section_status("Character Summary", profile)
+                summary = st.text_area("Summary", value=profile.summary, height=96)
             with st.expander("Optional Metadata", expanded=False):
                 detail_cols = st.columns(3)
                 drives = detail_cols[0].text_area("Drives", value=render_list_field(profile.drives), height=96)
@@ -1706,9 +1712,20 @@ def render_character_editor(character: Character) -> None:
             render_character_save_choice(character)
 
 
-def section_label(label: str, profile: CharacterProfile, section: str) -> str:
+def section_status_label(section: str, profile: CharacterProfile) -> str:
     generated = {value.lower() for value in profile.auto_generated_sections or []}
-    return f"{label} (Generated)" if section.lower() in generated else label
+    updated = {value.lower() for value in profile.updated_sections or []}
+    if section.lower() in updated:
+        return f"{section} (Updated)"
+    if section.lower() in generated:
+        return f"{section} (Generated)"
+    return section
+
+
+def render_section_status(section: str, profile: CharacterProfile) -> None:
+    label = section_status_label(section, profile)
+    if label != section:
+        st.caption(label)
 
 
 def render_memory_tools(character: Character) -> None:
