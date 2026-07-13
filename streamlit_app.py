@@ -82,6 +82,7 @@ from local_chatbot.paths import DOCS_LORE_DIR
 ENABLE_CHARACTER_REWRITE = "1"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 ENABLE_EXTERNAL_CHARACTER_IMPORT = "LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"
+MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
 ensure_base_dirs()
@@ -151,6 +152,19 @@ def set_active_session_note_section(section_key: str = "") -> None:
         st.session_state.active_session_note_section = section_key
     else:
         st.session_state.pop("active_session_note_section", None)
+
+
+def request_main_navigation_tab(tab_name: str) -> None:
+    if tab_name not in MAIN_NAVIGATION_TABS:
+        return
+    st.session_state["main_navigation_tab_default"] = tab_name
+    st.session_state["main_navigation_tab_revision"] = st.session_state.get("main_navigation_tab_revision", 0) + 1
+
+
+def sync_main_navigation_tab(tab_key: str) -> None:
+    selected = st.session_state.get(tab_key)
+    if selected in MAIN_NAVIGATION_TABS:
+        st.session_state["main_navigation_tab_default"] = selected
 
 
 def display_character_name(character: Character) -> str:
@@ -1127,7 +1141,7 @@ def render_session_import_heading_dialog(
             selected_heading_keys.add(heading.key)
     action_cols = st.columns(2)
     if action_cols[0].button("Save Selected Headings", icon=":material/check:", width="stretch"):
-        st.session_state["main_navigation_tab"] = "Session Notes"
+        request_main_navigation_tab("Session Notes")
         push_session_notes_undo()
         saved = import_markdown_text(
             notes,
@@ -1142,7 +1156,7 @@ def render_session_import_heading_dialog(
         st.session_state["clear_session_notes_draft"] = True
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
-        st.session_state["main_navigation_tab"] = "Session Notes"
+        request_main_navigation_tab("Session Notes")
         st.rerun()
 
 
@@ -1230,7 +1244,7 @@ def render_session_notes() -> None:
             if not notes.strip():
                 st.error("Import File Must Include Session Notes.")
                 return
-            st.session_state["main_navigation_tab"] = "Session Notes"
+            request_main_navigation_tab("Session Notes")
             render_session_import_heading_dialog(
                 notes,
                 source_name,
@@ -1483,7 +1497,7 @@ def render_external_character_sheet_import() -> None:
             except ValueError as exc:
                 st.error(str(exc))
                 return
-            st.session_state["main_navigation_tab"] = "Characters"
+            request_main_navigation_tab("Characters")
             st.session_state["character_panel_status"] = f"Imported External Character Sheet: {imported.path.name}."
             st.rerun()
 
@@ -1688,10 +1702,15 @@ st.caption("Create Character Sheets And Explore Relationship Graphs From Local L
 
 render_lore_import_tools()
 
+main_navigation_default = st.session_state.get("main_navigation_tab_default", "Characters")
+main_navigation_revision = st.session_state.get("main_navigation_tab_revision", 0)
+main_navigation_key = f"main_navigation_tab_{main_navigation_revision}"
 characters_tab, places_tab, session_notes_tab = st.tabs(
-    ["Characters", "Places", "Session Notes"],
-    default=st.session_state.get("main_navigation_tab", "Characters"),
-    key="main_navigation_tab",
+    MAIN_NAVIGATION_TABS,
+    default=main_navigation_default,
+    key=main_navigation_key,
+    on_change=sync_main_navigation_tab,
+    args=(main_navigation_key,),
 )
 
 with characters_tab:
