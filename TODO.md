@@ -85,3 +85,8 @@ Backup lore files are stored in `world_building/backup` and are updated every ti
 - Resolved merge conflicts between `feature/character_rewrite` and `feature/lore_move`.
 - Preserved the `world_building` directory defaults while retaining fixture overrides for tests.
 - Preserved the semantic improvement report comparison across model rewrite, existing generated section, and original section.
+
+### Global Codex Skills
+
+- Created global skills for LangGraph knowledge graphs, local model text transformations, Playwright e2e tests, Streamlit business logic separation, and language-model-assisted worldbuilding.
+- Validated the new skill frontmatter and naming constraints.
