@@ -1,5 +1,4 @@
-import os
-
+from model_harness import environment
 from scripts.generate_semantic_improvement_report import build_report
 
 
@@ -12,9 +11,9 @@ MODEL_BACKSTORY = (
 )
 
 
-def test_semantic_report_configures_local_model_harness():
-    assert os.environ["LANGUAGE_MODEL_HARNESS_CONFIG_DIR"].endswith("config/model")
-    assert os.environ["LANGUAGE_MODEL_HARNESS_DATA_DIR"].endswith("world_building/meta_data/model")
+def test_semantic_report_uses_model_harness_defaults():
+    assert environment.config_dir().as_posix().endswith("config/model")
+    assert environment.data_dir().as_posix().endswith("world_building/meta_data/model")
 
 
 def test_semantic_report_formats_three_version_score_table():

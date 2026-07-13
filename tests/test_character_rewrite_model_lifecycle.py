@@ -1,9 +1,11 @@
 from pathlib import Path
 from subprocess import CompletedProcess
+from types import SimpleNamespace
 
 import pytest
 
 import local_chatbot.character_rewrites as rewrites
+from model_harness.chat import SYSTEM_PROMPT, normalized_chat_messages
 from model_harness.models import ModelConfig
 
 
@@ -51,7 +53,7 @@ def test_local_rewrite_client_invokes_downloaded_model_directly(monkeypatch):
 
     monkeypatch.setattr(rewrites.subprocess, "run", run)
 
-    result = rewrites.local_rewrite_client(
+    result = rewrites.direct_local_rewrite_client(
         [
             {"role": "system", "content": "Use only supplied facts."},
             {"role": "user", "content": "Rewrite this backstory."},
@@ -86,7 +88,7 @@ def test_local_rewrite_client_downloads_default_model_when_missing(monkeypatch, 
         lambda command, **kwargs: CompletedProcess(command, 0, stdout="Model rewrite.\n", stderr=""),
     )
 
-    assert rewrites.local_rewrite_client([{"role": "user", "content": "Rewrite."}]) == "Model rewrite."
+    assert rewrites.direct_local_rewrite_client([{"role": "user", "content": "Rewrite."}]) == "Model rewrite."
     assert downloads == [(config, config.download_options[0])]
     status_output = capsys.readouterr().err
     assert "Downloading local model [#-------------------] model.gguf" in status_output
@@ -98,7 +100,7 @@ def test_local_rewrite_client_requires_downloadable_model(monkeypatch):
     monkeypatch.setattr(rewrites, "selected_downloaded_option", lambda received: None)
 
     with pytest.raises(RuntimeError, match="does not list downloadable GGUF options"):
-        rewrites.local_rewrite_client([{"role": "user", "content": "Rewrite."}])
+        rewrites.direct_local_rewrite_client([{"role": "user", "content": "Rewrite."}])
 
 
 def test_local_rewrite_client_reports_cli_failure(monkeypatch):
@@ -113,7 +115,7 @@ def test_local_rewrite_client_reports_cli_failure(monkeypatch):
     )
 
     with pytest.raises(RuntimeError, match="bad model"):
-        rewrites.local_rewrite_client([{"role": "user", "content": "Rewrite."}])
+        rewrites.direct_local_rewrite_client([{"role": "user", "content": "Rewrite."}])
 
 
 def test_local_rewrite_client_strips_llama_loader_output(monkeypatch):
@@ -145,6 +147,56 @@ Exiting...
         lambda command, **kwargs: CompletedProcess(command, 0, stdout=stdout, stderr=""),
     )
 
-    assert rewrites.local_rewrite_client([{"role": "user", "content": "Rewrite."}]) == (
+    assert rewrites.direct_local_rewrite_client([{"role": "user", "content": "Rewrite."}]) == (
         "Jory Ravenmark is a Human Barbarian shaped by grief, sea-lore, and a vow to protect her community."
     )
+
+
+def test_local_rewrite_client_uses_configured_model_server(monkeypatch):
+    config = model_config()
+    calls = []
+    server_status = SimpleNamespace(healthy=True, log_path=Path("rewrite.log"))
+
+    monkeypatch.setattr(rewrites, "rewrite_model_config", lambda: config)
+    monkeypatch.setattr(rewrites, "ensure_rewrite_model_downloaded", lambda received, status_writer=None: config.download_options[0])
+
+    def start_server(received, wait_seconds=0, option=None):
+        calls.append(("start", received, wait_seconds, option))
+        return server_status
+
+    def chat_completion(received, messages, server_status=None):
+        calls.append(("chat", received, messages, server_status))
+        return "Model rewrite."
+
+    monkeypatch.setattr(rewrites, "start_server", start_server)
+    monkeypatch.setattr(rewrites, "chat_completion", chat_completion)
+
+    messages = [{"role": "user", "content": "Rewrite this backstory."}]
+
+    assert rewrites.local_rewrite_client(messages) == "Model rewrite."
+    assert calls[0] == ("start", config, 45, config.download_options[0])
+    assert calls[1] == ("chat", config, messages, server_status)
+
+
+def test_local_rewrite_client_reports_unhealthy_model_server(monkeypatch):
+    config = model_config()
+    server_status = SimpleNamespace(healthy=False, log_path=Path("rewrite.log"))
+
+    monkeypatch.setattr(rewrites, "rewrite_model_config", lambda: config)
+    monkeypatch.setattr(rewrites, "ensure_rewrite_model_downloaded", lambda received, status_writer=None: config.download_options[0])
+    monkeypatch.setattr(rewrites, "start_server", lambda received, wait_seconds=0, option=None: server_status)
+
+    with pytest.raises(RuntimeError, match="is not ready"):
+        rewrites.local_rewrite_client([{"role": "user", "content": "Rewrite."}])
+
+
+def test_chat_message_normalization_respects_rewrite_system_prompt():
+    messages = normalized_chat_messages(
+        [
+            {"role": "system", "content": "Use only supplied character facts."},
+            {"role": "user", "content": "Rewrite."},
+        ]
+    )
+
+    assert messages[0] == {"role": "system", "content": "Use only supplied character facts."}
+    assert all(message["content"] != SYSTEM_PROMPT for message in messages)

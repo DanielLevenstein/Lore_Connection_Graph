@@ -6,10 +6,6 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR))
 
-from language_model_harness import configure_language_model_harness
-
-configure_language_model_harness()
-
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
 from local_chatbot.character_rewrites import (

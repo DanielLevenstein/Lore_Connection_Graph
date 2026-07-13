@@ -91,3 +91,17 @@ Backup lore files are stored in `world_building/backup` and are updated every ti
 - Created global skills for LangGraph knowledge graphs, local model text transformations, Playwright e2e tests, Streamlit business logic separation, and language-model-assisted worldbuilding.
 - Validated the new skill frontmatter and naming constraints.
 - Added `AGENTS.md` guidance to use the worldbuilding skill for lore consistency checks.
+
+### Rendering And Compiler Fixes
+
+- Removed stale `language_model_harness.py` imports and switched tests/scripts to the existing `model_harness` defaults.
+- Decoded literal escaped newlines during session note import, so imported headings and selected note labels render normally.
+- Deleted obsolete `rendering_bug_*` screenshots after verification.
+- Added `docs/screenshots/import_session_notes_escaped_newlines_fixed.png` to document the corrected import rendering.
+- Testing: `.venv/bin/python -m pytest tests/test_session_notes.py tests/test_semantic_improvement_report.py tests/test_model_downloads.py tests/test_character_rewrite_model_lifecycle.py`; `.venv/bin/python -m pytest tests/e2e/test_session_notes_ui.py`.
+
+### Environment Variable Removal Plan
+
+- Created `docs/reports/environment_variable_feature_audit.md`.
+- Added an ordered removal plan for all environment variables except `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES`, ranked from lowest to highest risk.
+- Testing: report-only change; no runtime tests required beyond the focused validation already run for the pending code fixes.

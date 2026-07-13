@@ -20,9 +20,7 @@ from character_graph.ingest import load_backstory
 from character_graph.prompt_context import build_prompt_context
 from character_graph.retrieval import retrieve_relevant_context
 from character_graph.storage import load_graph
-from language_model_harness import configure_language_model_harness
 
-configure_language_model_harness()
 
 from model_harness.environment import ensure_base_dirs
 from local_chatbot.storage import (
@@ -88,7 +86,7 @@ from local_chatbot.lore_import import (
 )
 from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, WORLD_BUILDING_IMPORT_DIR
 
-ENABLE_CHARACTER_REWRITE = "1"
+ENABLE_CHARACTER_REWRITE = "LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 ENABLE_EXTERNAL_CHARACTER_IMPORT = "LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"
 MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
@@ -248,7 +246,7 @@ def clean_display_name(name: str) -> str:
 
 
 def graph_rewrites_enabled() -> bool:
-    return ENABLE_CHARACTER_REWRITE
+    return os.environ.get(ENABLE_CHARACTER_REWRITE) == "1"
 
 
 def attribute_graph_override_enabled() -> bool:

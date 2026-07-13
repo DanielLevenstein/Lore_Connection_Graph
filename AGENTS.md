@@ -17,9 +17,8 @@
 - Verify generated worldbuilding output preserves established names, places, relationships, chronology, and source-backed facts.
 
 ## Application Screenshots
-- Add an application screenshot to docs/screenshots before committing code.
-- Name the screenshot based on the UI page you are modifying.
-- Compare the current version to the previous one before updating.
+- Add an application screenshot to docs/screenshots while testing code but do not commit these files. 
+- After reviewing the work I will commit the files which are useful for demonstration or bug tracking purposes. 
 
 ## Automated Testing
 

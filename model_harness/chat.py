@@ -78,7 +78,13 @@ def served_model_id(config, server_status=None) -> str:
 
 
 def normalized_chat_messages(messages: list[dict[str, str]]) -> list[dict[str, str]]:
-    normalized = [{"role": "system", "content": SYSTEM_PROMPT}]
+    has_system_prompt = any(
+        message.get("role") == "system"
+        and isinstance(message.get("content"), str)
+        and bool(message["content"].strip())
+        for message in messages
+    )
+    normalized = [] if has_system_prompt else [{"role": "system", "content": SYSTEM_PROMPT}]
     for message in messages:
         role = message.get("role")
         content = message.get("content")

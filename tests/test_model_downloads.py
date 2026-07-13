@@ -1,13 +1,10 @@
-import os
 from pathlib import Path
 
-import language_model_harness
 from model_harness import environment
 from model_harness.downloads import default_download_option, downloaded_options
 from model_harness.models import ModelConfig, list_model_configs
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
-from language_model_harness import configure_language_model_harness
 
 
 def test_default_download_option_skips_mmproj_projector():
@@ -37,8 +34,6 @@ def test_downloaded_options_only_returns_runnable_model_files(tmp_path):
 
 
 def test_selected_semantic_model_config_is_runnable_gguf():
-    configure_language_model_harness()
-
     configs = {config.name: config for config in list_model_configs()}
     semantic = configs["qwen2.5-3b-instruct-gguf"]
 
@@ -48,8 +43,6 @@ def test_selected_semantic_model_config_is_runnable_gguf():
 
 
 def test_selected_visual_inspection_model_config_is_available():
-    configure_language_model_harness()
-
     configs = {config.name: config for config in list_model_configs()}
     visual = configs["qwen2.5-vl-3b-instruct"]
 
@@ -64,15 +57,10 @@ def test_model_harness_data_defaults_under_world_building(monkeypatch):
     assert environment.data_dir() == environment.DEFAULT_PROJECT_DIR / "world_building" / "meta_data" / "model"
 
 
-def test_language_model_harness_configures_model_data_under_world_building(monkeypatch):
+def test_model_harness_configures_model_data_under_world_building(monkeypatch):
     monkeypatch.delenv(environment.DATA_DIR_ENV, raising=False)
 
-    language_model_harness.configure_language_model_harness()
-
-    assert (
-        Path(os.environ[environment.DATA_DIR_ENV])
-        == language_model_harness.ROOT_DIR / "world_building" / "meta_data" / "model"
-    )
+    assert environment.data_dir() == environment.DEFAULT_PROJECT_DIR / "world_building" / "meta_data" / "model"
 
 
 def test_semantic_extraction_finds_people_and_places_in_fixture_lore():

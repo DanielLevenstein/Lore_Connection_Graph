@@ -8,6 +8,7 @@ from typing import Callable
 
 from character_graph.embeddings import HashingEmbedder, cosine_similarity
 from character_graph.schema import CharacterGraph
+from model_harness.chat import chat_completion
 from model_harness.downloads import (
     default_download_option,
     download_option,
@@ -15,6 +16,7 @@ from model_harness.downloads import (
     selected_downloaded_option,
 )
 from model_harness.models import ModelConfig, list_model_configs
+from model_harness.server import start_server
 
 from .storage import CharacterProfile, character_first_name
 
@@ -80,6 +82,19 @@ StatusWriter = Callable[[str], None]
 def local_rewrite_client(messages: list[dict[str, str]], status_writer: StatusWriter | None = None) -> str:
     config = rewrite_model_config()
     option = ensure_rewrite_model_downloaded(config, status_writer=status_writer)
+    write_status = status_writer or default_download_status_writer
+    write_status(f"Starting local model server for `{config.name}`.")
+    server_status = start_server(config, wait_seconds=45, option=option)
+    if not server_status.healthy:
+        raise RuntimeError(
+            f"Local model server for `{config.name}` is not ready. See log: {server_status.log_path}"
+        )
+    return chat_completion(config, messages, server_status=server_status)
+
+
+def direct_local_rewrite_client(messages: list[dict[str, str]], status_writer: StatusWriter | None = None) -> str:
+    config = rewrite_model_config()
+    option = ensure_rewrite_model_downloaded(config, status_writer=status_writer)
     if option is None:
         raise RuntimeError(f"Local model `{RECOMMENDED_REWRITE_MODEL}` does not list downloadable GGUF options.")
     model_path = local_model_path(config, option)
@@ -114,9 +129,6 @@ def local_rewrite_client(messages: list[dict[str, str]], status_writer: StatusWr
         detail = (result.stderr or result.stdout).strip()
         raise RuntimeError(f"Local model `{RECOMMENDED_REWRITE_MODEL}` failed: {detail}")
     return clean_llama_cli_output(result.stdout)
-
-
-direct_local_rewrite_client = local_rewrite_client
 
 
 def ensure_rewrite_model_downloaded(config: ModelConfig, status_writer: StatusWriter | None = None) -> dict | None:
