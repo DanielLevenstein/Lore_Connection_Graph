@@ -10,10 +10,16 @@ from .paths import SESSION_NOTES_DIR
 
 
 ISO_DATE_PATTERN = re.compile(r"\b(?P<year>20\d{2})-(?P<month>\d{1,2})-(?P<day>\d{1,2})\b")
+YEAR_SLASH_DATE_PATTERN = re.compile(r"\b(?P<year>20\d{2})/(?P<month>\d{1,2})/(?P<day>\d{1,2})\b")
 SLASH_DATE_PATTERN = re.compile(r"\b(?P<month>\d{1,2})/(?P<day>\d{1,2})(?:/(?P<year>20\d{2}))?\b")
 MONTH_DATE_PATTERN = re.compile(
     r"\b(?P<month>January|February|March|April|May|June|July|August|September|October|November|December)"
     r"\s+(?P<day>\d{1,2})(?:,\s*(?P<year>20\d{2}))?\b",
+    re.IGNORECASE,
+)
+MONTH_YEAR_PATTERN = re.compile(
+    r"^(?P<month>January|February|March|April|May|June|July|August|September|October|November|December)"
+    r"\s+(?P<year>20\d{2})$",
     re.IGNORECASE,
 )
 DISCORD_AUTHOR_DATE_PATTERN = re.compile(r"—\s*\d{1,2}/\d{1,2}/(?:\d{2}|20\d{2}),\s*.+$")
@@ -121,11 +127,16 @@ def prepare_markdown_import(
     selected_heading_keys: set[str] | None = None,
     today: date | None = None,
 ) -> tuple[str, list[ImportHeading]]:
-    normalized = normalize_import_headings(text, title=title, today=today)
+    normalized = expand_single_newlines(normalize_import_headings(text, title=title, today=today))
     headings = import_headings(normalized, today=today)
     if selected_heading_keys is None:
         return normalized, headings
     return restore_unselected_import_headings(normalized, selected_heading_keys, today=today), headings
+
+
+def expand_single_newlines(text: str) -> str:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    return re.sub(r"(?<!\n)\n(?!\n)", "\n\n", normalized)
 
 
 def normalize_import_headings(text: str, title: str = "", today: date | None = None) -> str:
@@ -140,6 +151,7 @@ def normalize_import_headings(text: str, title: str = "", today: date | None = N
         stripped = line.strip()
         discord_heading = discord_author_heading_text(stripped)
         if discord_heading:
+            normalized.append(f"## {month_year_heading_text(discord_author_line_date(stripped))}")
             normalized.append(f"##### {discord_heading}")
             if stripped:
                 seen_content = True
@@ -147,7 +159,7 @@ def normalize_import_headings(text: str, title: str = "", today: date | None = N
         heading = markdown_heading_parts(stripped)
         date_text = standalone_date_text(stripped, default_year)
         if date_text:
-            normalized.append(f"## {date_text}")
+            normalized.append(f"## {month_year_heading_text(date_from_line(date_text, default_year))}")
             continue
         if heading:
             level, heading_text = heading
@@ -156,7 +168,12 @@ def normalize_import_headings(text: str, title: str = "", today: date | None = N
                 found_document_title = True
                 seen_content = True
             else:
-                normalized.append(f"{'#' * level} {heading_text}")
+                heading_date = date_from_line(heading_text, default_year)
+                if heading_date and not standalone_month_year_text(heading_text):
+                    normalized.append(f"## {month_year_heading_text(heading_date)}")
+                    normalized.append(f"{'#' * level} {heading_text}")
+                else:
+                    normalized.append(f"{'#' * level} {heading_text}")
                 seen_content = True
             continue
         if (
@@ -177,9 +194,12 @@ def normalize_import_headings(text: str, title: str = "", today: date | None = N
                 normalized.append(f"# {heading_text}")
                 found_document_title = True
             else:
-                normalized.append(f"## {heading_text}")
+                normalized.append(f"### {inferred_import_heading_text(heading_text)}")
             seen_content = True
             continue
+        line_date = date_from_line(stripped, default_year)
+        if line_date:
+            normalized.append(f"## {month_year_heading_text(line_date)}")
         normalized.append(line)
         if stripped:
             seen_content = True
@@ -188,7 +208,100 @@ def normalize_import_headings(text: str, title: str = "", today: date | None = N
         normalized.insert(0, f"# {document_title}")
         if len(normalized) > 1 and normalized[1].strip():
             normalized.insert(1, "")
-    return "\n".join(move_chat_headings_below_higher_level_headings(normalized)).strip()
+    normalized = renormalize_import_heading_hierarchy(normalized)
+    normalized = move_chat_headings_below_higher_level_headings(normalized)
+    return remove_duplicate_markdown_headings("\n".join(normalized), today=today).strip()
+
+
+def month_year_heading_text(note_date: date | None) -> str:
+    return note_date.strftime("%B %Y") if note_date else ""
+
+
+INFERRED_IMPORT_HEADING_PREFIX = "__LCG_INFERRED_IMPORT_HEADING__ "
+
+
+def inferred_import_heading_text(text: str) -> str:
+    return f"{INFERRED_IMPORT_HEADING_PREFIX}{text}"
+
+
+def strip_inferred_import_heading_marker(text: str) -> str:
+    if text.startswith(INFERRED_IMPORT_HEADING_PREFIX):
+        return text.removeprefix(INFERRED_IMPORT_HEADING_PREFIX)
+    return text
+
+
+def is_inferred_import_heading_text(text: str) -> bool:
+    return text.startswith(INFERRED_IMPORT_HEADING_PREFIX)
+
+
+def standalone_month_year_text(text: str) -> str:
+    heading = markdown_heading_parts(text)
+    value = heading[1] if heading else text.strip()
+    match = MONTH_YEAR_PATTERN.fullmatch(value)
+    if not match:
+        return ""
+    month = MONTHS[match.group("month").lower()]
+    return f"{date(int(match.group('year')), month, 1):%B %Y}"
+
+
+def renormalize_import_heading_hierarchy(lines: list[str]) -> list[str]:
+    normalized: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        heading = markdown_heading_parts(line.strip())
+        if heading:
+            level, heading_text = heading
+            if level == 3:
+                if standalone_month_year_text(heading_text):
+                    normalized.append(f"## {heading_text}")
+                    index += 1
+                    continue
+                following_index = next_nonblank_line_index(lines, index + 1)
+                following_heading = (
+                    markdown_heading_parts(lines[following_index].strip()) if following_index is not None else None
+                )
+                if (
+                    is_inferred_import_heading_text(heading_text)
+                    and following_heading
+                    and following_heading[0] == 2
+                    and standalone_month_year_text(following_heading[1])
+                ):
+                    normalized.append(lines[following_index])
+                    normalized.append(f"### {strip_inferred_import_heading_marker(heading_text)}")
+                    index = following_index + 1
+                    continue
+            if is_inferred_import_heading_text(heading_text):
+                normalized.append(f"{'#' * level} {strip_inferred_import_heading_marker(heading_text)}")
+                index += 1
+                continue
+        normalized.append(line)
+        index += 1
+    return normalized
+
+
+def next_nonblank_line_index(lines: list[str], start_index: int) -> int | None:
+    for index in range(start_index, len(lines)):
+        if lines[index].strip():
+            return index
+    return None
+
+
+def remove_duplicate_markdown_headings(text: str, today: date | None = None) -> str:
+    seen_headings: set[tuple[int, str]] = set()
+    normalized: list[str] = []
+    for line in text.splitlines():
+        heading = markdown_heading_parts(line.strip())
+        if not heading:
+            normalized.append(line)
+            continue
+        level, heading_text = heading
+        heading_key = (level, heading_text)
+        if heading_key in seen_headings:
+            continue
+        seen_headings.add(heading_key)
+        normalized.append(line)
+    return "\n".join(normalized).strip()
 
 
 def import_headings(text: str, today: date | None = None) -> list[ImportHeading]:
@@ -201,7 +314,12 @@ def import_headings(text: str, today: date | None = None) -> list[ImportHeading]
         level, heading_text = heading
         if level > 3:
             continue
-        kind = "date" if standalone_date_text(heading_text, default_year) else "heading"
+        if standalone_date_text(heading_text, default_year) or standalone_month_year_text(heading_text):
+            kind = "date"
+        elif level == 1:
+            kind = "structure"
+        else:
+            kind = "heading"
         key = f"{len(headings)}:{kind}:{safe_session_note_title(heading_text)}"
         headings.append(ImportHeading(key=key, level=level, text=heading_text, kind=kind))
     return headings
@@ -228,9 +346,11 @@ def restore_unselected_import_headings(
         _level, heading_text = heading
         key = key_by_index.get(heading_index)
         heading_index += 1
-        is_date_heading = standalone_date_text(heading_text, (today or date.today()).year)
-        if key and key not in selected_heading_keys and not is_date_heading:
-            output.append(heading_text)
+        is_fixed_heading = (
+            heading[0] == 1
+        )
+        if key and key not in selected_heading_keys and not is_fixed_heading:
+            output.append(f"#### {heading_text}")
         else:
             output.append(line)
     return "\n".join(output).strip()
@@ -248,7 +368,7 @@ def markdown_sections(text: str, today: date | None = None) -> list[MarkdownSect
     sections: list[MarkdownSection] = []
     current_date = ""
     for position, (line_index, level, heading_text) in enumerate(heading_positions):
-        if level == 2 and standalone_date_text(heading_text, default_year):
+        if (level == 2 and (standalone_date_text(heading_text, default_year) or standalone_month_year_text(heading_text))):
             current_date = heading_text
         next_index = len(lines)
         for following_index, following_level, _following_text in heading_positions[position + 1 :]:
@@ -256,7 +376,10 @@ def markdown_sections(text: str, today: date | None = None) -> list[MarkdownSect
                 next_index = following_index
                 break
         body = "\n".join(lines[line_index:next_index]).strip()
-        section_date = heading_text if level == 2 and standalone_date_text(heading_text, default_year) else current_date
+        is_date_section = level == 2 and (
+            standalone_date_text(heading_text, default_year) or standalone_month_year_text(heading_text)
+        )
+        section_date = heading_text if is_date_section else current_date
         key = f"{position}:{level}:{safe_session_note_title(heading_text)}"
         sections.append(
             MarkdownSection(
@@ -393,7 +516,8 @@ def combine_markdown_section(path: Path, section_key: str) -> tuple[SessionNote,
 
 def move_chat_headings_below_higher_level_headings(lines: list[str]) -> list[str]:
     reordered = list(lines)
-    for index in range(0, len(reordered) - 1):
+    index = 0
+    while index < len(reordered) - 1:
         current_heading = markdown_heading_parts(reordered[index].strip())
         following_heading = markdown_heading_parts(reordered[index + 1].strip())
         if (
@@ -402,7 +526,14 @@ def move_chat_headings_below_higher_level_headings(lines: list[str]) -> list[str
             and is_chat_log_heading(current_heading)
             and following_heading[0] < current_heading[0]
         ):
+            if index > 0:
+                previous_heading = markdown_heading_parts(reordered[index - 1].strip())
+                if previous_heading and previous_heading[0] == 3 and standalone_month_year_text(previous_heading[1]):
+                    reordered[index - 1 : index + 2] = [reordered[index + 1], reordered[index - 1], reordered[index]]
+                    index += 3
+                    continue
             reordered[index], reordered[index + 1] = reordered[index + 1], reordered[index]
+        index += 1
     return reordered
 
 
@@ -739,6 +870,15 @@ def read_session_note(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
+def normalize_session_note_file_headings(path: Path, today: date | None = None) -> bool:
+    text = read_session_note(path)
+    normalized = remove_duplicate_markdown_headings(text, today=today)
+    if normalized == text.strip():
+        return False
+    path.write_text(f"{normalized}\n", encoding="utf-8")
+    return True
+
+
 def read_session_note_body(path: Path) -> str:
     text = read_session_note(path)
     lines = text.splitlines()
@@ -865,7 +1005,7 @@ def path_import_timestamp(path: Path) -> float:
 
 
 def date_from_line(line: str, default_year: int) -> date | None:
-    for pattern in (ISO_DATE_PATTERN, SLASH_DATE_PATTERN, MONTH_DATE_PATTERN):
+    for pattern in (ISO_DATE_PATTERN, YEAR_SLASH_DATE_PATTERN, SLASH_DATE_PATTERN, MONTH_DATE_PATTERN):
         match = pattern.search(line)
         if not match:
             continue
@@ -903,6 +1043,7 @@ def standalone_date_text(line: str, default_year: int) -> str:
         return ""
     exact_patterns = (
         r"20\d{2}-\d{1,2}-\d{1,2}",
+        r"20\d{2}/\d{1,2}/\d{1,2}",
         r"\d{1,2}/\d{1,2}(?:/20\d{2})?",
         r"(?:January|February|March|April|May|June|July|August|September|October|November|December)"
         r"\s+\d{1,2}(?:,\s*20\d{2})?",
