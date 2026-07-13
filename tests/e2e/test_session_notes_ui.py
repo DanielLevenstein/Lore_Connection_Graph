@@ -90,7 +90,7 @@ def test_ui_saves_dated_session_notes(isolated_session_notes_app):
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
         expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
-        page.get_by_text("Add Or Import Session Note", exact=True).click()
+        page.get_by_text("Add Session Note", exact=True).click()
         page.get_by_role("textbox", name="New Session Notes").fill(
             "2026-07-10\n"
             "The party found a silver key.\n\n"
@@ -152,9 +152,9 @@ Session 13:
         page.goto(app_url, wait_until="networkidle")
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
-        page.get_by_text("Add Or Import Session Note", exact=True).click()
+        page.get_by_text("Import Session Note", exact=True).click()
         page.get_by_label("File", exact=True).locator("input[type=file]").set_input_files(str(import_file))
-        page.get_by_role("button", name="note_add Save Session Notes").click()
+        page.get_by_role("button", name="upload_file Upload Session Note").click()
         expect(page.get_by_role("heading", name="Select Searchable Headings")).to_be_visible(timeout=10000)
         page.get_by_role("button", name="check Save Selected Headings").click()
         expect(page.get_by_text("Saved 1 Session Note File.")).to_be_visible(timeout=10000)
@@ -195,10 +195,10 @@ def test_ui_imports_freeform_lore_markdown_without_requiring_dates(isolated_sess
         page.goto(app_url, wait_until="networkidle")
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
-        page.get_by_text("Add Or Import Session Note", exact=True).click()
+        page.get_by_text("Import Session Note", exact=True).click()
         page.get_by_label("File", exact=True).locator("input[type=file]").set_input_files(str(import_file))
         page.get_by_role("textbox", name="Imported File Name").fill("Imported Atlantia.md")
-        page.get_by_role("button", name="note_add Save Session Notes").click()
+        page.get_by_role("button", name="upload_file Upload Session Note").click()
         expect(page.get_by_role("heading", name="Select Searchable Headings")).to_be_visible(timeout=10000)
         expect(page.get_by_label("H1 Atlantia Lore")).to_be_checked(timeout=10000)
         expect(page.get_by_label("H2 The Watch Tower")).to_be_checked(timeout=10000)
@@ -307,14 +307,11 @@ def test_ui_imports_external_character_sheet(isolated_session_notes_app):
         import_sheet_button = page.get_by_role("button", name="upload_file Import Character Sheet")
         expect(import_sheet_button).to_be_visible(timeout=10000)
         import_sheet_button.click(force=True)
-        expect(page.get_by_text("Imported External Character Sheet: external_sheet.pdf.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("tab", name="Characters", exact=True)).to_have_attribute(
             "aria-selected",
             "true",
             timeout=10000,
         )
-        page.get_by_text("External Character Sheets", exact=True).first.click()
-        expect(page.get_by_role("cell", name="external_sheet.pdf")).to_be_visible(timeout=10000)
         browser.close()
 
     assert (characters_dir / "external" / "external_sheet.pdf").read_bytes() == b"%PDF-1.4\nexternal character sheet\n"

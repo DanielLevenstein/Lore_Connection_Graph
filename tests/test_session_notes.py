@@ -240,6 +240,48 @@ The party found another sign.
     assert [(heading.level, heading.text) for heading in headings] == [(1, "Session Import")]
 
 
+def test_markdown_import_moves_h3_session_headings_above_trailing_discord_metadata():
+    prepared, headings = prepare_markdown_import(
+        """This is the start of the #story channel.
+
+Session 1:
+
+Sean [DM],  — 2/19/23, 6:49 PM
+The party awoke in strange cells.
+
+Sean [DM],  — 2/20/23, 7:00 PM
+The party found the piano.
+
+Sean [DM],  — 8/3/23, 8:00 PM
+Session 2:
+
+The next session began.
+""",
+        title="Session Import",
+        today=date(2026, 7, 12),
+    )
+
+    assert "### Session 1" in prepared
+    assert "#### 2023/02/19 - Sean" in prepared
+    assert "#### 2023/02/20 - Sean" in prepared
+    assert "### Session 2\n#### 2023/08/03 - Sean" in prepared
+    assert [(heading.level, heading.text) for heading in headings] == [
+        (1, "Session Import"),
+        (3, "Session 1"),
+        (3, "Session 2"),
+    ]
+
+    session_1 = next(section for section in markdown_sections(prepared) if section.text == "Session 1")
+    session_2 = next(section for section in markdown_sections(prepared) if section.text == "Session 2")
+
+    assert "#### 2023/02/20 - Sean" in session_1.body
+    assert "The party found the piano." in session_1.body
+    assert "#### 2023/08/03 - Sean" not in session_1.body
+    assert "Session 2" not in session_1.body
+    assert "#### 2023/08/03 - Sean" in session_2.body
+    assert "The next session began." in session_2.body
+
+
 def test_markdown_sections_expose_searchable_import_headings(tmp_path, monkeypatch):
     monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
 
@@ -271,6 +313,29 @@ The party opened the lighthouse door.
         (2, "2026-07-10", "Lighthouse Door"),
     ]
     assert sections[2].body == "## Harbor Trouble\nThe party found a sealed brass door."
+
+
+def test_markdown_sections_expose_user_promoted_h2_headings():
+    sections = markdown_sections(
+        """# Session Import
+
+#### 2025/01/02 - Skunkman22
+This H4 marker remains metadata.
+
+## 2025/01/02 - Skunkman22
+The user promoted this marker to a searchable section.
+""",
+        today=date(2026, 7, 12),
+    )
+
+    assert [(section.level, section.text) for section in sections] == [
+        (1, "Session Import"),
+        (2, "2025/01/02 - Skunkman22"),
+    ]
+    assert sections[1].body == (
+        "## 2025/01/02 - Skunkman22\n"
+        "The user promoted this marker to a searchable section."
+    )
 
 
 def test_uploaded_session_importer_saves_single_lore_file_without_date_split(tmp_path, monkeypatch):

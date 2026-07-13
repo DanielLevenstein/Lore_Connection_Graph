@@ -76,6 +76,8 @@ class MarkdownSection:
     text: str
     date_text: str
     body: str
+    start_line: int = 0
+    end_line: int = 0
 
 
 def session_note_path(note_date: date | str, title: str = "") -> Path:
@@ -186,7 +188,7 @@ def normalize_import_headings(text: str, title: str = "", today: date | None = N
         normalized.insert(0, f"# {document_title}")
         if len(normalized) > 1 and normalized[1].strip():
             normalized.insert(1, "")
-    return "\n".join(normalized).strip()
+    return "\n".join(move_h3_headings_up_one_line(normalized)).strip()
 
 
 def import_headings(text: str, today: date | None = None) -> list[ImportHeading]:
@@ -263,6 +265,8 @@ def markdown_sections(text: str, today: date | None = None) -> list[MarkdownSect
                 text=heading_text,
                 date_text=section_date,
                 body=body,
+                start_line=line_index,
+                end_line=next_index,
             )
         )
     return sections
@@ -273,6 +277,30 @@ def read_markdown_section(path: Path, section_key: str) -> str:
         if section.key == section_key:
             return section.body
     return read_session_note(path).strip()
+
+
+def write_markdown_section(path: Path, section_key: str, body: str) -> SessionNote:
+    text = read_session_note(path)
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None:
+        return write_lore_document(path, body)
+
+    lines = text.splitlines()
+    replacement = body.strip().splitlines()
+    updated_lines = lines[: section.start_line] + replacement + lines[section.end_line :]
+    updated = "\n".join(updated_lines).strip()
+    path.write_text(f"{updated}\n", encoding="utf-8")
+    title = markdown_title(updated) or path.stem.replace("_", " ")
+    return SessionNote(note_date=None, body=updated, path=path, title=title)
+
+
+def move_h3_headings_up_one_line(lines: list[str]) -> list[str]:
+    reordered = list(lines)
+    for index in range(1, len(reordered)):
+        if markdown_heading_parts(reordered[index].strip()) and reordered[index].strip().startswith("### "):
+            reordered[index - 1], reordered[index] = reordered[index], reordered[index - 1]
+    return reordered
 
 
 def import_markdown_text(
