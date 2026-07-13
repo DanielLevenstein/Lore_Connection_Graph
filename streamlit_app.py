@@ -798,7 +798,7 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
         backstory="",
     )
     with st.form(key_prefix):
-        name = st.text_input("Name", value=draft_profile.name, placeholder="Ari Vale", key=f"{key_prefix}_name")
+        name = st.text_input("Name", value=draft_profile.name, placeholder="Ms. Glorious", key=f"{key_prefix}_name")
         name_cols = st.columns(2)
         first_name = name_cols[0].text_input(
             "First Name",
@@ -838,7 +838,7 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
         summary = st.text_area(
             "Summary",
             value=draft_profile.summary,
-            placeholder="Ari is a measured guide whose calm is their greatest strength.",
+            placeholder="Ms. Glorious specializes in the study of the dark arts.\n.",
             height=96,
             key=f"{key_prefix}_summary",
         )
@@ -854,7 +854,7 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
             alliances = detail_cols[1].text_area(
                 "Alliances",
                 value=render_list_field(draft_profile.alliances),
-                placeholder="The Harbor Circle\nAri Vale",
+                placeholder="The Harbor Circle",
                 height=96,
                 key=f"{key_prefix}_alliances",
             )
