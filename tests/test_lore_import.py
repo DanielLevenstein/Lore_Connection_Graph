@@ -47,16 +47,19 @@ def test_import_lore_directory_can_skip_existing_files(tmp_path, monkeypatch):
     assert existing.read_text(encoding="utf-8") == "# Existing Atlantia\n"
 
 
-def test_clear_local_lore_cleans_docs_and_data_lore(tmp_path, monkeypatch):
-    docs_lore_dir = tmp_path / "docs" / "lore"
-    generated_lore_dir = tmp_path / "data" / "lore"
-    characters_dir = tmp_path / "docs" / "lore" / "character_sheets"
-    places_dir = tmp_path / "docs" / "lore" / "places"
-    session_notes_dir = tmp_path / "docs" / "lore" / "session_notes"
-    generated_character_dir = generated_lore_dir / "character_sheets" / "Draft"
+def test_clear_local_lore_cleans_configured_lore_dir(tmp_path, monkeypatch):
+    lore_dir = tmp_path / "data" / "lore"
+    character_metadata_dir = tmp_path / "data" / "character_metadata"
+    characters_dir = lore_dir / "character_sheets"
+    places_dir = lore_dir / "places"
+    session_notes_dir = lore_dir / "session_notes"
+    generated_character_dir = character_metadata_dir / "Draft"
+    stale_profile = generated_character_dir / "PROFILE.json"
+    stale_memory = generated_character_dir / "MEMORY.md"
     monkeypatch.setattr(lore_import, "CHARACTERS_DIR", characters_dir)
-    monkeypatch.setattr(lore_import, "DOCS_LORE_DIR", docs_lore_dir)
-    monkeypatch.setattr(lore_import, "GENERATED_LORE_DIR", generated_lore_dir)
+    monkeypatch.setattr(lore_import, "LORE_DIR", lore_dir)
+    monkeypatch.setattr(lore_import, "GENERATED_LORE_DIR", lore_dir)
+    monkeypatch.setattr(lore_import, "CHARACTER_METADATA_DIR", character_metadata_dir)
     monkeypatch.setattr(lore_import, "PLACES_DIR", places_dir)
     monkeypatch.setattr(lore_import, "SESSION_NOTES_DIR", session_notes_dir)
     monkeypatch.setattr(
@@ -64,13 +67,14 @@ def test_clear_local_lore_cleans_docs_and_data_lore(tmp_path, monkeypatch):
         "ensure_base_dirs",
         lambda: [
             path.mkdir(parents=True, exist_ok=True)
-            for path in (characters_dir, places_dir, session_notes_dir, generated_lore_dir)
+            for path in (characters_dir, places_dir, session_notes_dir, lore_dir, character_metadata_dir)
         ],
     )
 
     import_lore_directory(FIXTURES_DIR)
     generated_character_dir.mkdir(parents=True)
-    (generated_character_dir / "PROFILE.json").write_text("{}", encoding="utf-8")
+    stale_profile.write_text("{}", encoding="utf-8")
+    stale_memory.write_text("Draft memory.", encoding="utf-8")
 
     summary = clear_local_lore()
 
@@ -80,8 +84,10 @@ def test_clear_local_lore_cleans_docs_and_data_lore(tmp_path, monkeypatch):
     assert not (characters_dir / "Jory_Ravenmark.md").exists()
     assert not (places_dir / "Atlantia_Lore.md").exists()
     assert not (session_notes_dir / "Family_Tree.md").exists()
-    assert not (generated_character_dir / "PROFILE.json").exists()
+    assert not stale_profile.exists()
+    assert not stale_memory.exists()
     assert characters_dir.exists()
     assert places_dir.exists()
     assert session_notes_dir.exists()
-    assert generated_lore_dir.exists()
+    assert lore_dir.exists()
+    assert character_metadata_dir.exists()

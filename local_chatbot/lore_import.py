@@ -4,7 +4,15 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .paths import CHARACTERS_DIR, DOCS_LORE_DIR, GENERATED_LORE_DIR, PLACES_DIR, SESSION_NOTES_DIR, ensure_base_dirs
+from .paths import (
+    CHARACTER_METADATA_DIR,
+    CHARACTERS_DIR,
+    GENERATED_LORE_DIR,
+    LORE_DIR,
+    PLACES_DIR,
+    SESSION_NOTES_DIR,
+    ensure_base_dirs,
+)
 
 
 @dataclass(frozen=True)
@@ -66,16 +74,27 @@ def clear_local_lore() -> LoreImportSummary:
         places=count_files(PLACES_DIR),
         session_notes=count_files(SESSION_NOTES_DIR),
     )
-    for lore_dir in (DOCS_LORE_DIR, GENERATED_LORE_DIR):
+    for lore_dir in unique_paths(LORE_DIR, GENERATED_LORE_DIR, CHARACTER_METADATA_DIR):
         clear_directory_contents(lore_dir)
     ensure_base_dirs()
     return summary
 
 
+def unique_paths(*paths: Path) -> list[Path]:
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for path in paths:
+        resolved = path.resolve()
+        if resolved not in seen:
+            unique.append(path)
+            seen.add(resolved)
+    return unique
+
+
 def count_files(directory: Path) -> int:
     if not directory.exists():
         return 0
-    return sum(1 for path in directory.rglob("*") if path.is_file())
+    return sum(1 for path in directory.rglob("*.md") if path.is_file())
 
 
 def clear_directory_contents(directory: Path) -> None:

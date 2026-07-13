@@ -2,9 +2,9 @@
 
 A local Streamlit app for creating tabletop character sheets, organizing campaign lore, and visualizing relationships as knowledge graphs.
 
-The app treats authored markdown in `docs/lore` as the source of truth. Character sheets can be edited through the UI, places can be created as lore files, and derived graph JSON can be regenerated from the Markdown whenever needed.
+The app treats authored markdown in `data/lore` as the source of truth. Character sheets can be edited through the UI, places can be created as lore files, and derived graph JSON can be regenerated from the Markdown whenever needed.
 
-`docs/lore/` is intentionally ignored by git so each player can keep their own campaign data out of the repository. Templates and parsing rules are committed under `docs/`; test lore examples live under `tests/fixtures`.
+`data/lore/` is intentionally ignored by git so each player can keep their own campaign data out of the repository. Templates and parsing rules are committed under `docs/`; test lore examples live under `tests/fixtures`.
 
 ## What It Does
 
@@ -39,18 +39,17 @@ streamlit run streamlit_app.py
 config/model/*.json                         Model configuration files
 docs/CHARACTER_TEMPLATE.md                  Character sheet template
 docs/PLACE_TEMPLATE.md                      Place lore template
-docs/lore/character_sheets/*.md             Authored character sheets
-docs/lore/character_sheets/*/BACKSTORY.md   Alternate character sheet format
-docs/lore/places/*.md                       Authored place lore
-data/lore/character_sheets/*.md             Generated character drafts
-data/lore/character_sheets/*/PROFILE.json   Runtime character metadata
-data/lore/character_sheets/*/MEMORY.md      Runtime memory notes
-data/lore/character_sheets/*/chatlogs/*.log Runtime play logs
+data/lore/character_sheets/*.md             Authored character sheets
+data/lore/character_sheets/*/BACKSTORY.md   Alternate character sheet format
+data/lore/places/*.md                       Authored place lore
+data/character_metadata/*/PROFILE.json   Runtime character metadata
+data/character_metadata/*/MEMORY.md      Runtime memory notes
+data/character_metadata/*/chatlogs/*.log Runtime play logs
 data/character_graph/*.graph.json           Derived per-character graph JSON
 ```
 
 Everything under `data/` is local runtime or generated output and should not be committed.
-Everything under `docs/lore/` is local authored campaign lore and should not be committed.
+Everything under `data/lore/` is local authored campaign lore and should not be committed.
 
 ## Specs
 

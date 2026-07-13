@@ -63,7 +63,7 @@ def isolated_character_app(tmp_path):
     env = os.environ.copy()
     env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
     env["LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH"] = "1"
-    env["LOCAL_CHATBOT_DOCS_LORE_DIR"] = str(docs_lore_dir)
+    env["LOCAL_CHATBOT_LORE_DIR"] = str(docs_lore_dir)
     env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(characters_dir)
     env["LOCAL_CHATBOT_PLACES_DIR"] = str(places_dir)
     env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(session_notes_dir)
@@ -114,7 +114,7 @@ def select_character(page, character_label: str, index: int) -> None:
 
 
 def wait_for_profile_write(data_dir: Path, character_file: Path, timeout: int = 10) -> None:
-    profile_path = data_dir / "lore" / "character_sheets" / character_file.stem / "PROFILE.json"
+    profile_path = data_dir / "character_metadata" / character_file.stem / "PROFILE.json"
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if profile_path.exists():

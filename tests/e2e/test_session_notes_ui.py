@@ -46,7 +46,7 @@ def isolated_session_notes_app(tmp_path):
 
     env = os.environ.copy()
     env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-    env["LOCAL_CHATBOT_DOCS_LORE_DIR"] = str(docs_lore_dir)
+    env["LOCAL_CHATBOT_LORE_DIR"] = str(docs_lore_dir)
     env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(docs_lore_dir / "character_sheets")
     env["LOCAL_CHATBOT_PLACES_DIR"] = str(docs_lore_dir / "places")
     env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(docs_lore_dir / "session_notes")
@@ -375,12 +375,12 @@ def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
 
 def test_ui_bulk_lore_removal_confirms_before_cleaning_lore(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
-    data_lore_dir = docs_lore_dir.parent.parent / "data" / "lore"
+    character_metadata_dir = docs_lore_dir.parent.parent / "data" / "character_metadata"
     characters_dir = docs_lore_dir / "character_sheets"
     places_dir = docs_lore_dir / "places"
     notes_dir = docs_lore_dir / "session_notes"
     fixture_dir = ROOT_DIR / "tests" / "fixtures"
-    generated_draft = data_lore_dir / "character_sheets" / "Draft" / "PROFILE.json"
+    generated_draft = character_metadata_dir / "Draft" / "PROFILE.json"
     generated_draft.parent.mkdir(parents=True)
     generated_draft.write_text("{}", encoding="utf-8")
 

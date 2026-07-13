@@ -190,12 +190,12 @@ Keeping these helpers outside `streamlit_app.py` makes the display formatting te
 Authored character markdown files live under:
 
 ```text
-docs/lore/character_sheets/<name>/BACKSTORY.md
+data/lore/character_sheets/<name>/BACKSTORY.md
 ```
 or 
 
 ```text
-docs/lore/character_sheets/Character_Name.md
+data/lore/character_sheets/Character_Name.md
 ```
 
 Generated draft character sheets live under:
@@ -258,7 +258,7 @@ If no graph JSON exists yet, the UI prompts the user to regenerate it. If graph 
   "primary_character": {
     "id": "arlen_voss",
     "name": "Arlen Voss",
-    "source_file": "docs/lore/character_sheets/Arlen Voss/BACKSTORY.md"
+    "source_file": "data/lore/character_sheets/Arlen Voss/BACKSTORY.md"
   },
   "characters": {
     "arlen_voss": {

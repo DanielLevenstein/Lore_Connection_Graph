@@ -2,7 +2,7 @@
 
 ## v0.1.0 - First Local Release
 
-This first release packages the local roleplaying character creator as a Streamlit app for managing private campaign lore on disk. The app treats markdown files in `docs/lore` as the source of truth, keeps generated drafts and runtime metadata under `data`, and provides UI workflows for characters, places, session notes, and derived knowledge graphs.
+This first release packages the local roleplaying character creator as a Streamlit app for managing private campaign lore on disk. The app treats markdown files in `data/lore` as the source of truth, keeps runtime metadata under `data`, and provides UI workflows for characters, places, session notes, and derived knowledge graphs.
 
 ### Highlights
 
@@ -12,8 +12,8 @@ This first release packages the local roleplaying character creator as a Streaml
 
 ### Lore Storage
 
-- Authored campaign files live under `docs/lore`, which git ignores so private campaign material stays local.
-- Generated character drafts live under `data/lore/character_sheets` until the player promotes them into authored lore.
+- Authored campaign files live under `data/lore`, which git ignores so private campaign material stays local.
+- Generated characters are written to `data/lore/character_sheets` when the player saves them.
 - Runtime profile metadata, memory notes, chat logs, and generated graph JSON live under `data`.
 - Character sheets can include a `Character Connections` table using either `Table/Item/Value/Evidence` or `Source/Relationship/Name/Evidence` columns.
 

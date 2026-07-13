@@ -2,15 +2,15 @@
 
 ## Purpose
 
-The combined knowledge graph is a campaign-level view built from authored lore in `docs/lore`. It connects character sheets, place files, and secondary references into one navigable graph without requiring the player to manually load each character file.
+The combined knowledge graph is a campaign-level view built from authored lore in `data/lore`. It connects character sheets, place files, and secondary references into one navigable graph without requiring the player to manually load each character file.
 
 ## Source Of Truth
 
-- `docs/lore/character_sheets` is the source for available character sheets.
-- `docs/lore/places` is the source for available places.
-- `docs/lore` is ignored by git and should contain user-local campaign data.
+- `data/lore/character_sheets` is the source for available character sheets.
+- `data/lore/places` is the source for available places.
+- `data/lore` is ignored by git and should contain user-local campaign data.
 - `data/character_graph` stores derived per-character graph JSON and can be rebuilt.
-- `data/lore/character_sheets` stores generated draft characters and is not considered available campaign lore until the player moves a file into `docs/lore/character_sheets`.
+- Generated characters are written to `data/lore/character_sheets` only after the player saves them.
 
 ## Visibility
 
@@ -22,11 +22,11 @@ LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH=1
 
 ## Inputs
 
-When generating the combined graph, the app should parse all supported lore files under `docs/lore`:
+When generating the combined graph, the app should parse all supported lore files under `data/lore`:
 
-- `docs/lore/character_sheets/*.md`
-- `docs/lore/character_sheets/*/BACKSTORY.md`
-- `docs/lore/places/*.md`
+- `data/lore/character_sheets/*.md`
+- `data/lore/character_sheets/*/BACKSTORY.md`
+- `data/lore/places/*.md`
 
 ## Graph Semantics
 

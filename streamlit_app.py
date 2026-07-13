@@ -78,7 +78,7 @@ from local_chatbot.session_notes import (
     write_session_note,
 )
 from local_chatbot.lore_import import clear_local_lore, import_lore_directory
-from local_chatbot.paths import DOCS_LORE_DIR
+from local_chatbot.paths import LORE_DIR
 
 ENABLE_CHARACTER_REWRITE = "1"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
@@ -676,11 +676,11 @@ def load_lore_graphs():
 
 
 def lore_markdown_files():
-    if not DOCS_LORE_DIR.exists():
+    if not LORE_DIR.exists():
         return []
     return [
         path
-        for path in sorted(DOCS_LORE_DIR.rglob("*.md"))
+        for path in sorted(LORE_DIR.rglob("*.md"))
         if "TEMPLATE" not in path.name.upper() and not path.name.startswith(".")
     ]
 
@@ -1077,7 +1077,7 @@ def render_lore_import_tools() -> None:
         st.subheader("Bulk Lore Directory")
         source_dir = st.text_input(
             "Source Directory",
-            value=str(DOCS_LORE_DIR),
+            value=str(LORE_DIR),
             help="Choose the root directory that contains character_sheets, places, and session_notes folders.",
             key="lore_directory_import_source",
         )
@@ -1107,7 +1107,7 @@ def render_bulk_lore_removal_warning() -> None:
     st.warning(
         "This operation is destructive. Do you want to delete all local characters, places, and notes?"
     )
-    st.write("This will clean the configured `docs/lore` and `data/lore` directories.")
+    st.write("This will clean the configured lore directory and generated lore data.")
     action_cols = st.columns(2)
     if action_cols[0].button("Yes, Delete Local Lore", icon=":material/delete_forever:", width="stretch"):
         summary = clear_local_lore()

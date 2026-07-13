@@ -6,11 +6,8 @@ venv/
 .DS_Store
 .streamlit/secrets.toml
 
-# All app-generated characters, memory, chat logs, and model folders stay local.
+# App-generated data, local campaign lore, memory, chat logs, and model folders stay local.
 data/
-
-# Player-authored lore is local campaign data. Templates and specs live in docs/.
-docs/lore/
 /.idea/
 /config/*
 !/character_graph/character_graph.json
