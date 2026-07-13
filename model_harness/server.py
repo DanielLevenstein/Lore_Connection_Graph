@@ -12,6 +12,7 @@ import requests
 from .downloads import local_model_path, selected_downloaded_option
 from .environment import data_dir, ensure_base_dirs
 from .models import ModelConfig
+from .policy import require_codebase_owned_language_model
 
 
 @dataclass(frozen=True)
@@ -211,6 +212,7 @@ def status(config: ModelConfig) -> ServerStatus:
 
 
 def start_server(config: ModelConfig, wait_seconds: int = 0, option: dict | None = None) -> ServerStatus:
+    require_codebase_owned_language_model()
     current = status(config)
     if current.healthy:
         return current

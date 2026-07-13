@@ -105,3 +105,13 @@ Backup lore files are stored in `world_building/backup` and are updated every ti
 - Created `docs/reports/environment_variable_feature_audit.md`.
 - Added an ordered removal plan for all environment variables except `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES`, ranked from lowest to highest risk.
 - Testing: report-only change; no runtime tests required beyond the focused validation already run for the pending code fixes.
+
+### Hidden Knowledge Graph Release Hardening
+
+- Replaced the Qwen-backed rewrite path with the in-code `deterministic-graph-rewrite` engine.
+- Removed bundled external Qwen model configs from the release path.
+- Hardened graph validation and save behavior so missing evidence, missing node references, and missing embeddings fail before graph JSON is written.
+- Confirmed the same character knowledge graph can improve current character summary/backstory rewrites by feeding people, places, relationships, drives, and evidence into deterministic generated prose and the semantic improvement report.
+- Disabled model-config-backed random character backstory generation for this release.
+- Updated README, release notes, and rewrite design docs to reflect graph-backed generation instead of model downloads.
+- Testing: run focused graph, rewrite, model-config, semantic-report, and character-generation tests before committing this section.

@@ -1,8 +1,8 @@
 # Semantic Improvement Report: Orin Nightbloom
 
-## Model Recommendation
+## Rewrite Engine
 
-- Rewrite model: `qwen2.5-3b-instruct-gguf`
+- Rewrite engine: `deterministic-graph-rewrite`
 - Evaluation: deterministic local hash-embedding semantic scorer with concept coverage and concision.
 
 ## Candidate

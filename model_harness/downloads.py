@@ -6,6 +6,7 @@ from urllib.parse import quote
 import requests
 
 from .models import ModelConfig
+from .policy import require_codebase_owned_language_model
 
 
 @dataclass(frozen=True)
@@ -158,6 +159,7 @@ def write_downloads_index(config: ModelConfig) -> None:
 
 
 def download_option(config: ModelConfig, option: dict, chunk_size: int = 1024 * 1024) -> Path:
+    require_codebase_owned_language_model()
     config.local_dir.mkdir(parents=True, exist_ok=True)
     target = local_model_path(config, option)
     if target.exists():

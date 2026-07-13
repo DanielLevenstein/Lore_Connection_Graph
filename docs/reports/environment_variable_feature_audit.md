@@ -179,7 +179,7 @@ Why:
 Recommendation:
 
 - Prefer the app’s single local model path.
-- Delete `direct_local_rewrite_client`, `clean_llama_cli_output`, `llama_cli_noise_line`, and `direct_rewrite_prompt` once the server-backed rewrite path is settled.
+- Deleted the Qwen-backed rewrite client path in favor of `deterministic-graph-rewrite`; keep future model work out of the release path unless the model is a codebase-owned, redistributable dependency.
 
 ## Lower-Confidence Cleanup Candidates
 

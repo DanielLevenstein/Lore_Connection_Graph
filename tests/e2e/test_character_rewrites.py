@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pytest
-
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
 from character_graph.schema import CharacterGraph, CharacterNode, PrimaryCharacterRef, RelationshipEdge
@@ -64,17 +62,16 @@ def test_orin_graph_generated_summary_scores_better_than_original_backstory():
     assert generated_score.concision > original_score.concision
 
 
-def test_graph_generated_summary_requires_model_success():
+def test_graph_generated_summary_uses_default_graph_engine_without_model():
     character_path = FIXTURE_CHARACTER_SHEETS_DIR / "Orin_Nightbloom.md"
     character = Character(name=character_path.stem, path=character_path)
     profile = read_character_profile(character)
     graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
 
-    def failing_client(messages: list[dict[str, str]]) -> str:
-        raise ConnectionError("model unavailable")
+    generated_summary = graph_generated_summary(graph, profile)
 
-    with pytest.raises(RuntimeError, match="Could not generate rewrite with local model"):
-        graph_generated_summary(graph, profile, rewrite_client=failing_client)
+    assert generated_summary.startswith("Orin is a Half-Orc Bard")
+    assert "Sunstone Mage College" in generated_summary
 
 
 def test_orin_graph_generated_story_scores_better_than_original_backstory():

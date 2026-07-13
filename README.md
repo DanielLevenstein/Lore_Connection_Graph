@@ -23,9 +23,9 @@ A manual backup button has been added in the `Lore Import` Section for your conv
 
 - Import session notes from raw text or markdown file.
 - Extract the knowledge graph from the character backstory.
-- Suggest wording updates for character summary and backstory to improve writing legibility.
+- Suggest graph-backed wording updates for character summary and backstory to improve writing legibility.
 - All your data is stored locally on your machine.
-- The AI model will never overwrite human edits to your character files.
+- Graph-backed rewrite helpers never overwrite human edits to your character files.
 - Character creator does not enforce a specific character schema or stats system.
 
 ## Setup
@@ -46,12 +46,11 @@ The repository uses committed project docs plus one ignored local workspace root
 - Only files under `world_building/lore` are treated as canonical authored campaign lore.
 - Files under `world_building/import` are raw inputs and can be re-imported or reorganized.
 - Files under `world_building/backup` are auto generated backups of lore and metadata which can be used for restoring old campaign notes and derived local state.
-- Files under `world_building/meta_data` are derived or runtime data and can be rebuilt or regenerated from the lore and model configuration.
+- Files under `world_building/meta_data` are derived or runtime data and can be rebuilt or regenerated from the lore.
 
 ## Project Layout
 
 ```text
-config/model/*.json                         Model configuration files
 docs/CHARACTER_TEMPLATE.md                  Character sheet template
 docs/PLACE_TEMPLATE.md                      Place lore template
 world_building/import/                      Raw markdown/text import staging area
@@ -68,7 +67,6 @@ world_building/meta_data/character_metadata/*/chatlogs/*.log
                                             Runtime play logs
 world_building/meta_data/character_graph/*.graph.json
                                             Derived per-character graph JSON
-world_building/meta_data/model/             Local model downloads and runtime data
 ```
 
 Everything under `world_building/` is local campaign material, runtime data, or generated output and should not be committed.

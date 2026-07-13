@@ -24,3 +24,9 @@
 
 - e2e tests for this project use playwright
 - When automated tests break, add a unique id to the button or table you are accessing.
+
+### Environment Variable Removal Plan
+
+- Created `docs/reports/environment_variable_feature_audit.md`.
+- Added an ordered removal plan for all environment variables except `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES`, ranked from lowest to highest risk.
+- For environmental variables used in testing come up with the shortest override list possible that allows the testing that needs to be done without creating a maintenance issue. 

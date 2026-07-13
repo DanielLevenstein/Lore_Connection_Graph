@@ -33,22 +33,10 @@ def test_downloaded_options_only_returns_runnable_model_files(tmp_path):
     assert [option["filename"] for option in downloaded_options(config)] == ["model-Q4_K.gguf"]
 
 
-def test_selected_semantic_model_config_is_runnable_gguf():
-    configs = {config.name: config for config in list_model_configs()}
-    semantic = configs["qwen2.5-3b-instruct-gguf"]
+def test_release_ships_no_external_model_configs():
+    configs = list_model_configs()
 
-    assert semantic.server["runner"] == "llama.cpp"
-    assert "semantic model" in semantic.description.lower()
-    assert default_download_option(semantic)["filename"] == "Qwen2.5-3B-Instruct-IQ2_M.gguf"
-
-
-def test_selected_visual_inspection_model_config_is_available():
-    configs = {config.name: config for config in list_model_configs()}
-    visual = configs["qwen2.5-vl-3b-instruct"]
-
-    assert visual.model_id == "Qwen/Qwen2.5-VL-3B-Instruct"
-    assert visual.server["runner"] == "vLLM"
-    assert "visual inspection model" in visual.description.lower()
+    assert configs == []
 
 
 def test_model_harness_data_defaults_under_world_building(monkeypatch):

@@ -5,6 +5,7 @@ from character_graph.graph_view import attribute_rows, evidence_rows, place_rows
 from character_graph.ingest import load_backstory
 from character_graph.prompt_context import build_prompt_context
 from character_graph.retrieval import retrieve_relevant_context
+from character_graph.schema import CharacterGraph, CharacterNode, PrimaryCharacterRef, RelationshipEdge
 from character_graph.storage import load_graph, save_graph
 from character_graph.validation import validate_graph
 
@@ -107,6 +108,48 @@ def test_extract_character_graph_creates_stats_and_known_prose_relationships(tmp
     assert {edge.target for edge in enemy_edges} == {"silver_court", "torvak"}
     assert any(edge.relationship_type == "betrayer" and edge.target == "mirelle" for edge in graph.relationships)
     assert any(edge.relationship_type == "rival" and edge.target == "torvak" for edge in graph.relationships)
+    assert validate_graph(graph) == []
+
+
+def test_extract_character_graph_is_idempotent_for_same_source(tmp_path):
+    source = tmp_path / "arlen.md"
+    source.write_text(BACKSTORY, encoding="utf-8")
+    document = load_backstory(source, character_id="arlen_voss")
+
+    first = extract_character_graph(document)
+    second = extract_character_graph(document)
+
+    assert first.characters == second.characters
+    assert first.attributes == second.attributes
+    assert first.places == second.places
+    assert first.relationships == second.relationships
+    assert set(first.embeddings) == set(second.embeddings)
+    assert all(edge.evidence and all(item.strip() for item in edge.evidence) for edge in first.relationships)
+
+
+def test_save_graph_rejects_invalid_graph_without_edge_evidence(tmp_path):
+    graph = CharacterGraph(
+        schema_version="0.3.0",
+        primary_character=PrimaryCharacterRef(id="arlen_voss", name="Arlen Voss", source_file="arlen.md"),
+        characters={"arlen_voss": CharacterNode(name="Arlen Voss", summary="Arlen keeps quiet plans.")},
+        relationships=[
+            RelationshipEdge(
+                source="arlen_voss",
+                target="missing",
+                relationship_type="ally",
+                relationship_label="Ally",
+                evidence=[],
+            )
+        ],
+    )
+
+    try:
+        save_graph(graph, tmp_path / "invalid.graph.json")
+    except ValueError as exc:
+        assert "Cannot save invalid character graph" in str(exc)
+        assert "has no evidence" in str(exc)
+    else:
+        raise AssertionError("Expected invalid graph save to fail.")
 
 
 def test_extract_character_graph_accepts_minimal_character_stats_table(tmp_path):

@@ -1806,19 +1806,19 @@ def render_character_editor(character: Character) -> None:
                 try:
                     if populate_summary and not next_summary:
                         original_summary = profile.summary
-                        with st.spinner("Preparing the local writing model. First run may download model files."):
+                        with st.spinner("Preparing graph-backed summary."):
                             next_summary = graph_generated_summary(character, profile)
                         auto_generated_sections = mark_auto_generated(profile, "Character Summary")
                         updated_sections = remove_updated_section(updated_sections, "Character Summary")
                     elif repopulate_summary:
                         original_summary = profile.original_summary or profile.summary
-                        with st.spinner("Preparing the local writing model. First run may download model files."):
+                        with st.spinner("Preparing graph-backed summary."):
                             next_summary = graph_generated_summary(character, profile)
                         auto_generated_sections = mark_auto_generated(profile, "Character Summary")
                         updated_sections = remove_updated_section(updated_sections, "Character Summary")
                     elif rewrite_backstory:
                         original_backstory = profile.original_backstory or profile.backstory
-                        with st.spinner("Preparing the local writing model. First run may download model files."):
+                        with st.spinner("Preparing graph-backed backstory."):
                             next_backstory = graph_generated_backstory(character, profile)
                         auto_generated_sections = mark_auto_generated(profile, "Character Backstory")
                         updated_sections = remove_updated_section(updated_sections, "Character Backstory")

@@ -4,6 +4,7 @@ from pathlib import Path
 import requests
 
 from .environment import data_dir
+from .policy import require_codebase_owned_language_model
 from .server import status
 
 
@@ -107,6 +108,7 @@ def write_chat_request_log(config, payload: dict) -> None:
 
 
 def chat_completion(config, messages: list[dict[str, str]], server_status=None) -> str:
+    require_codebase_owned_language_model()
     outbound_messages = normalized_chat_messages(messages)
     payload = {
         "model": served_model_id(config, server_status),

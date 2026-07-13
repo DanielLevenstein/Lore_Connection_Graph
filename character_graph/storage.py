@@ -4,9 +4,14 @@ import json
 from pathlib import Path
 
 from .schema import CharacterGraph
+from .validation import validate_graph
 
 
 def save_graph(graph: CharacterGraph, path: Path | str) -> None:
+    warnings = validate_graph(graph)
+    if warnings:
+        details = "\n".join(f"- {warning}" for warning in warnings)
+        raise ValueError(f"Cannot save invalid character graph:\n{details}")
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(

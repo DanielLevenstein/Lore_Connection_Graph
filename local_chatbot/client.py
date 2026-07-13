@@ -1,6 +1,7 @@
 import requests
 
 from model_harness.models import ModelConfig
+from model_harness.policy import require_codebase_owned_language_model
 
 
 class LocalModelError(RuntimeError):
@@ -26,6 +27,7 @@ def chat_completion(
     temperature: float = 0.8,
     max_tokens: int = 512,
 ) -> str:
+    require_codebase_owned_language_model()
     endpoint = config.api_base_url.rstrip("/") + "/chat/completions"
     payload = {
         "model": config.model_id,

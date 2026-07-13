@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT_DIR))
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
 from local_chatbot.character_rewrites import (
-    RECOMMENDED_REWRITE_MODEL,
+    REWRITE_ENGINE_NAME,
     RewriteClient,
     graph_generated_backstory,
     rewrite_quality_context,
@@ -50,7 +50,7 @@ def build_report(character_path: Path = DEFAULT_CHARACTER_PATH, rewrite_client: 
     return (
         "# Semantic Improvement Report: Orin Nightbloom\n\n"
         "## Model Recommendation\n\n"
-        f"- Rewrite model: `{RECOMMENDED_REWRITE_MODEL}`\n"
+        f"- Rewrite engine: `{REWRITE_ENGINE_NAME}`\n"
         "- Evaluation: local hash-embedding source-context similarity, required concept coverage, and concision.\n"
         "- Source context similarity compares each candidate against the assembled character profile and graph evidence.\n\n"
         "## Candidate\n\n"

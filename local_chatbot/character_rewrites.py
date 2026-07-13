@@ -1,27 +1,16 @@
 from __future__ import annotations
 
 import re
-import subprocess
-import sys
 from dataclasses import dataclass
 from typing import Callable
 
 from character_graph.embeddings import HashingEmbedder, cosine_similarity
 from character_graph.schema import CharacterGraph
-from model_harness.chat import chat_completion
-from model_harness.downloads import (
-    default_download_option,
-    download_option,
-    local_model_path,
-    selected_downloaded_option,
-)
-from model_harness.models import ModelConfig, list_model_configs
-from model_harness.server import start_server
 
 from .storage import CharacterProfile, character_first_name
 
 
-RECOMMENDED_REWRITE_MODEL = "qwen2.5-3b-instruct-gguf"
+REWRITE_ENGINE_NAME = "deterministic-graph-rewrite"
 RewriteClient = Callable[[list[dict[str, str]]], str]
 
 
@@ -39,7 +28,7 @@ def graph_generated_summary(
     rewrite_client: RewriteClient | None = None,
 ) -> str:
     prompt = rewrite_prompt("summary", graph, profile)
-    return run_model_rewrite(prompt, rewrite_client=rewrite_client)
+    return run_graph_rewrite(prompt, graph, profile, "summary", rewrite_client=rewrite_client)
 
 
 def graph_generated_backstory(
@@ -48,163 +37,105 @@ def graph_generated_backstory(
     rewrite_client: RewriteClient | None = None,
 ) -> str:
     prompt = rewrite_prompt("backstory", graph, profile)
-    return run_model_rewrite(prompt, rewrite_client=rewrite_client)
+    return run_graph_rewrite(prompt, graph, profile, "backstory", rewrite_client=rewrite_client)
 
 
-def run_model_rewrite(prompt: str, rewrite_client: RewriteClient | None = None) -> str:
+def run_graph_rewrite(
+    prompt: str,
+    graph: CharacterGraph,
+    profile: CharacterProfile,
+    kind: str,
+    rewrite_client: RewriteClient | None = None,
+) -> str:
     messages = [
         {
             "role": "system",
             "content": (
-                "You rewrite roleplaying character lore. Use only facts from the supplied character sheet "
-                "and knowledge graph context. Return only the requested prose, with no preface, loader text, "
-                "or reasoning."
+                "Rewrite roleplaying character lore using only facts from the supplied character sheet "
+                "and knowledge graph context."
             ),
         },
         {"role": "user", "content": prompt},
     ]
-    try:
-        response = (rewrite_client or local_rewrite_client)(messages)
-    except Exception as exc:
-        raise RuntimeError(
-            f"Could not generate rewrite with local model `{RECOMMENDED_REWRITE_MODEL}`. "
-            "Ensure the configured GGUF model is downloaded and try again."
-        ) from exc
+    response = rewrite_client(messages) if rewrite_client else deterministic_graph_rewrite(kind, graph, profile)
     cleaned = clean_model_rewrite(response)
     if not cleaned:
-        raise RuntimeError(f"Local model `{RECOMMENDED_REWRITE_MODEL}` returned an empty rewrite.")
+        raise RuntimeError(f"{REWRITE_ENGINE_NAME} returned an empty rewrite.")
     return humanize_generated_text(cleaned)
 
 
-StatusWriter = Callable[[str], None]
+def deterministic_graph_rewrite(kind: str, graph: CharacterGraph, profile: CharacterProfile) -> str:
+    if kind == "summary":
+        return deterministic_graph_summary(graph, profile)
+    if kind == "backstory":
+        return deterministic_graph_backstory(graph, profile)
+    raise ValueError(f"Unknown rewrite kind: {kind}")
 
 
-def local_rewrite_client(messages: list[dict[str, str]], status_writer: StatusWriter | None = None) -> str:
-    config = rewrite_model_config()
-    option = ensure_rewrite_model_downloaded(config, status_writer=status_writer)
-    write_status = status_writer or default_download_status_writer
-    write_status(f"Starting local model server for `{config.name}`.")
-    server_status = start_server(config, wait_seconds=45, option=option)
-    if not server_status.healthy:
-        raise RuntimeError(
-            f"Local model server for `{config.name}` is not ready. See log: {server_status.log_path}"
-        )
-    return chat_completion(config, messages, server_status=server_status)
-
-
-def direct_local_rewrite_client(messages: list[dict[str, str]], status_writer: StatusWriter | None = None) -> str:
-    config = rewrite_model_config()
-    option = ensure_rewrite_model_downloaded(config, status_writer=status_writer)
-    if option is None:
-        raise RuntimeError(f"Local model `{RECOMMENDED_REWRITE_MODEL}` does not list downloadable GGUF options.")
-    model_path = local_model_path(config, option)
-    prompt = direct_rewrite_prompt(messages)
-    result = subprocess.run(
-        [
-            "llama",
-            "cli",
-            "--log-disable",
-            "--model",
-            str(model_path),
-            "--device",
-            "none",
-            "--gpu-layers",
-            "0",
-            "--prompt",
-            prompt,
-            "--single-turn",
-            "--no-display-prompt",
-            "--simple-io",
-            "--temperature",
-            "0.3",
-            "--predict",
-            "512",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=180,
+def deterministic_graph_summary(graph: CharacterGraph, profile: CharacterProfile) -> str:
+    first_name = profile.first_name or character_first_name(profile.name)
+    descriptors = [value for value in [profile.race, profile.character_class] if value]
+    identity = " ".join(descriptors) if descriptors else "adventurer"
+    places = story_place_names(graph)
+    relationships = story_relationship_names(graph)
+    drives = graph_drive_values(graph, profile)
+    clauses = [f"{profile.name} is {article_for(identity)} {identity}"]
+    if places:
+        clauses.append(f"shaped by {places[0]}")
+    if relationships:
+        clauses.append(f"bound to {relationships[0]}")
+    if drives:
+        clauses.append(f"driven to {drives[0]}")
+    summary = ", ".join(clauses) + "."
+    return summary.replace(
+        profile.name,
+        first_name if len(profile.name.split()) > 1 else profile.name,
+        1,
     )
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout).strip()
-        raise RuntimeError(f"Local model `{RECOMMENDED_REWRITE_MODEL}` failed: {detail}")
-    return clean_llama_cli_output(result.stdout)
 
 
-def ensure_rewrite_model_downloaded(config: ModelConfig, status_writer: StatusWriter | None = None) -> dict | None:
-    option = selected_downloaded_option(config)
-    if option:
-        return option
-    option = default_download_option(config)
-    if option:
-        write_status = status_writer or default_download_status_writer
-        write_status(download_status_bar("Downloading", option, filled=1))
-        download_option(config, option)
-        write_status(download_status_bar("Ready", option, filled=20))
-    return option
+def deterministic_graph_backstory(graph: CharacterGraph, profile: CharacterProfile) -> str:
+    first_name = profile.first_name or character_first_name(profile.name)
+    places = story_place_names(graph)
+    relationships = story_relationship_names(graph)
+    drives = graph_drive_values(graph, profile)
+    traits = primary_traits(graph)
+    identity = " ".join(value for value in [profile.race, profile.character_class] if value) or "adventurer"
+    origin = attribute_value(graph, "Home") or profile.origin
+
+    opening_parts = [f"{first_name} is {article_for(identity)} {identity}"]
+    if origin:
+        opening_parts.append(f"from {origin}")
+    if places:
+        opening_parts.append(f"whose story keeps circling back to {places[0]}")
+    opening = " ".join(opening_parts) + "."
+
+    middle_bits = []
+    if relationships:
+        middle_bits.append(f"Their ties to {', '.join(relationships[:3])} give the story its sharpest edges")
+    if traits:
+        middle_bits.append(f"{first_name} is remembered as {', '.join(traits[:3])}")
+    if not middle_bits:
+        middle_bits.append(profile.summary or f"{first_name}'s source notes keep the focus on hard-won choices")
+    middle = ". ".join(middle_bits) + "."
+
+    if drives:
+        ending = f"Now {first_name} is driven to {drives[0]}"
+        if len(drives) > 1:
+            ending += f" while still needing to {drives[1]}"
+        ending += "."
+    else:
+        ending = f"Now {first_name} carries those graph-backed connections forward without losing sight of the established lore."
+    return "\n\n".join([opening, middle, ending])
 
 
-def default_download_status_writer(message: str) -> None:
-    print(message, file=sys.stderr, flush=True)
+def article_for(value: str) -> str:
+    return "an" if value[:1].lower() in {"a", "e", "i", "o", "u"} else "a"
 
 
-def download_status_bar(label: str, option: dict, filled: int, width: int = 20) -> str:
-    filled = max(0, min(width, filled))
-    bar = "#" * filled + "-" * (width - filled)
-    filename = option.get("filename", "model")
-    return f"{label} local model [{bar}] {filename}"
-
-
-def clean_llama_cli_output(output: str) -> str:
-    lines = []
-    skip_thinking = False
-    for raw_line in output.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        if line == "[Start thinking]":
-            skip_thinking = True
-            continue
-        if line == "[End thinking]":
-            skip_thinking = False
-            continue
-        if skip_thinking:
-            continue
-        if llama_cli_noise_line(line):
-            continue
-        lines.append(raw_line.strip())
-    return "\n".join(lines).strip()
-
-
-def llama_cli_noise_line(line: str) -> bool:
-    if line in {"Loading model...", "Exiting...", "available commands:"}:
-        return True
-    if line.startswith(("build      :", "model      :", "ftype      :", "modalities :", "0.")):
-        return True
-    if line.startswith(("/exit", "/regen", "/clear", "/read", "/glob", "[ Prompt:", ">")):
-        return True
-    if set(line) <= {"▄", "▀", "█", " ", "\t"}:
-        return True
-    return False
-
-
-def direct_rewrite_prompt(messages: list[dict[str, str]]) -> str:
-    sections = []
-    for message in messages:
-        role = message.get("role", "user").strip().title()
-        content = message.get("content", "").strip()
-        if content:
-            sections.append(f"{role}:\n{content}")
-    sections.append("Assistant:")
-    return "\n\n".join(sections)
-
-
-def rewrite_model_config() -> ModelConfig:
-    configs = {config.name: config for config in list_model_configs()}
-    config = configs.get(RECOMMENDED_REWRITE_MODEL)
-    if config is None:
-        raise RuntimeError(f"Missing model config `{RECOMMENDED_REWRITE_MODEL}`.")
-    return config
+def primary_traits(graph: CharacterGraph) -> list[str]:
+    primary = graph.characters.get(graph.primary_character.id)
+    return unique_values(primary.traits if primary else [])
 
 
 def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) -> str:
