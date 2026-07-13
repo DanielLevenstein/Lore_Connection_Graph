@@ -148,12 +148,12 @@ More notes.
 
     assert prepared.startswith("# Lighthouse Log")
     assert "## 2026-07-10" in prepared
-    assert "### Harbor Trouble" in prepared
+    assert "## Harbor Trouble" in prepared
     assert "## Existing Section" in prepared
     assert [(heading.level, heading.text, heading.kind) for heading in headings] == [
         (1, "Lighthouse Log", "heading"),
         (2, "2026-07-10", "date"),
-        (3, "Harbor Trouble", "heading"),
+        (2, "Harbor Trouble", "heading"),
         (2, "Existing Section", "heading"),
     ]
 
@@ -223,7 +223,7 @@ Lizard men hide to the Flair of her cackle
     assert [(heading.level, heading.text) for heading in headings] == [(1, "Session Import")]
 
 
-def test_markdown_import_rewrites_discord_author_lines_as_h4_metadata():
+def test_markdown_import_rewrites_discord_author_lines_as_h5_metadata():
     prepared, headings = prepare_markdown_import(
         """Jane Smith [OOZE], Server Tag: OOZEOOZE — 7/10/26, 11:36 PMFriday, July 10, 2026 at 11:36 PM
 The party found a sealed brass door.
@@ -238,14 +238,14 @@ The party found another sign.
         today=date(2026, 7, 12),
     )
 
-    assert "#### 2026/07/10 - Jane Smith" in prepared
-    assert "#### 2026/07/11 - John" in prepared
-    assert "#### 2025/01/02 - Skunkman22" in prepared
+    assert "##### 2026/07/10 - Jane Smith" in prepared
+    assert "##### 2026/07/11 - John" in prepared
+    assert "##### 2025/01/02 - Skunkman22" in prepared
     assert "Server Tag" not in prepared
     assert [(heading.level, heading.text) for heading in headings] == [(1, "Session Import")]
 
 
-def test_markdown_import_moves_h3_session_headings_above_trailing_discord_metadata():
+def test_markdown_import_moves_chat_headings_below_following_higher_level_headings():
     prepared, headings = prepare_markdown_import(
         """This is the start of the #story channel.
 
@@ -266,28 +266,28 @@ The next session began.
         today=date(2026, 7, 12),
     )
 
-    assert "### Session 1" in prepared
-    assert "#### 2023/02/19 - Sean" in prepared
-    assert "#### 2023/02/20 - Sean" in prepared
-    assert "### Session 2\n#### 2023/08/03 - Sean" in prepared
+    assert "## Session 1" in prepared
+    assert "##### 2023/02/19 - Sean" in prepared
+    assert "##### 2023/02/20 - Sean" in prepared
+    assert "## Session 2\n##### 2023/08/03 - Sean" in prepared
     assert [(heading.level, heading.text) for heading in headings] == [
         (1, "Session Import"),
-        (3, "Session 1"),
-        (3, "Session 2"),
+        (2, "Session 1"),
+        (2, "Session 2"),
     ]
 
     session_1 = next(section for section in markdown_sections(prepared) if section.text == "Session 1")
     session_2 = next(section for section in markdown_sections(prepared) if section.text == "Session 2")
 
-    assert "#### 2023/02/20 - Sean" in session_1.body
+    assert "##### 2023/02/20 - Sean" in session_1.body
     assert "The party found the piano." in session_1.body
-    assert "#### 2023/08/03 - Sean" not in session_1.body
+    assert "##### 2023/08/03 - Sean" not in session_1.body
     assert "Session 2" not in session_1.body
-    assert "#### 2023/08/03 - Sean" in session_2.body
+    assert "##### 2023/08/03 - Sean" in session_2.body
     assert "The next session began." in session_2.body
 
 
-def test_markdown_import_only_moves_h3_headings_when_previous_line_is_h4():
+def test_markdown_import_does_not_move_higher_level_headings_without_preceding_chat_heading():
     prepared, headings = prepare_markdown_import(
         """Introductory campaign note.
 
@@ -301,12 +301,12 @@ The party found the piano.
         today=date(2026, 7, 12),
     )
 
-    assert "The party awoke in strange cells.\n\n### Session 2" in prepared
-    assert "### Session 2\nThe party awoke" not in prepared
+    assert "The party awoke in strange cells.\n\n## Session 2" in prepared
+    assert "## Session 2\nThe party awoke" not in prepared
     assert [(heading.level, heading.text) for heading in headings] == [
         (1, "Session Import"),
-        (3, "Session 1"),
-        (3, "Session 2"),
+        (2, "Session 1"),
+        (2, "Session 2"),
     ]
 
 

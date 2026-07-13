@@ -8,57 +8,52 @@ We need the ability to import session notes about people, places, or things with
 
 ### Design 
 For all imports without structured md headings do the following.
-1) Identify the file title or file name and set it to the H1 heading.
-2) Extract all dates in the files and convert them to H2 headings.
-3) Preserve existing Markdown heading levels, and convert inferred plain-text section headings other than the first to H3 headings.
+1) Identify the file title or file name and set it to H1 heading.
+2) Extract all dates in the files and convert them to H2 headings (Not Implemented)
+3) Preserve existing Markdown heading levels, and convert inferred plain-text section headings other than the first to H2 headings.
 4) Display a popup with a list of all extracted headings ask the user what headings they want searchable.
 5) Convert deselected non-date headings back to plain text.
+6) Chat logs are converted to H5 headings with the format "##### Date - User"
+7) When a chat-log heading appears immediately before a higher-level heading, move the chat-log heading below that higher-level heading to preserve section boundaries. Do not move ordinary H4/H5 headings.
 
-- Popup for selecting extracted headings should show a checkmark by all headings H1-H3 that is checked by default.
-- Extracted md files should be saved as a single file, with selected headings exposed as openable UI dropdown sections.
-- Date fields are always converted to H2 headings for the first iteration.
+## Section Rendering 
 
-- Entity dropdown should use the following format dropdown text "file_name.md - Date - Heading"
+When Add Previous or Next Section buttons are clicked, the text area should open with a blank section for Markdown editing.
+An auto-generated header for the new section should be created with one of the following forms.
+- "Heading Value: (Previously)"
+- "Heading Value: (Coming Next)"
+
+- The heading level for the newly added section should match the heading level of the element it was generated from. 
+
+- When the Remove Section button is clicked, a warning should be displayed saying, "Are you sure you would like to delete this section and all subsections?"
+  - A list of all H1-H4 subsections of the chosen section should be displayed below that warning.
+- When the combine section button is clicked, the old title is currently converted to level 4 or 5.
 
 ### References
 docs/screenshots/Atlantia_Lore.png
 docs/screenshots/Time_Turning.png
 docs/screenshots/import_session_notes.png
+docs/screenshots/session_note_section_controls.png
 tests/fixtures/session_notes/Family_Tree.md
+tests/fixtures/disabled_legacy_add_session_note_ui.py
 tests/fixtures/places/Atlantia_Lore.md
 
 ### Testing
 - `.venv/bin/python -m pytest tests/test_session_notes.py tests/test_entity_file_saves.py`
 - `.venv/bin/python -m pytest tests/e2e/test_session_notes_ui.py tests/e2e/test_character_sheet_roundtrip_ui.py`
 
-## Completed
-- Session note imports now review extracted searchable headings in a popup before saving uploaded Markdown.
-- Uploaded Markdown is normalized into H1 title, H2 dates, and H3 section headings, with unselected non-date headings restored to plain text.
-- Existing Markdown headings are preserved at their original levels unless the user unchecks them during import.
-- Session note dropdowns expose checked H1-H3 import headings as virtual sections while preserving the original single Markdown file.
-- Uploaded session imports save as one Markdown file in `docs/lore/session_notes` instead of splitting into date-named files.
-- Session note dropdown labels now use `file_name.md - Date - Heading`.
-- Removed unstable import controls for hiding dates, detected-date behavior, and split-session behavior.
-- Discord author export lines are rewritten as H4 metadata (`Username - Date`) without making them searchable headings yet.
-- Add and import session note flows continue through the same save path, with editable campaign/session dates preserved.
-- Updated `docs/screenshots/import_session_notes.png` for the import heading-selection UI.
-- H3 import headings now only move above the previous line when that previous line is an H4 chat-log heading.
-- `docs/specs/SESSION_IMPORT_DESIGN.md` now states the H4-only H3 boundary rule explicitly.
-- Session note section dropdown labels now show `Filename.md H#: Heading Value` so main headings and subheadings are distinguishable.
-- Selected session note sections now expose Add Previous Section, Combine Section, Add Next Section, and Remove Section actions.
-- Added section editing helpers for inserting blank previous/next sections, combining a section heading into an H5 heading, listing child sections, and deleting a section with its subsections.
-- Section editor saves now require added/edited section Markdown to start with an H1, H2, or H3 heading.
-- Removed the broken Add Session Note UI path because it saved through `save_session_notes`, which date-splits and normalizes Markdown before section editing.
-- Preserved the removed Add Session Note code as a clearly marked disabled test fixture only.
-- Added `docs/screenshots/session_note_section_controls.png` for the section controls UI.
-- First H1 title sections no longer show Add Previous Section or Combine Section controls.
-- Remove Section warnings now list H4 subsections so chat metadata is visible before deletion.
-- Testing completed:
-  - `.venv/bin/python -m pytest tests/test_session_notes.py tests/test_entity_file_saves.py`
-  - `.venv/bin/python -m pytest tests/e2e/test_session_notes_ui.py tests/e2e/test_character_sheet_roundtrip_ui.py`
 
-## Bugs Found
-- When transitioning from separating session notes by heading to separating them by heading, the default ordering of the files got messed up.
-- The Import Session Note and Add session note UI should be combined, so there is a single code path for testing purposes then we test the shit out of that one path.
-- There are two date values present in the app import date and session date. If the session date is present, we should default to ordering by it, otherwise we should order it by import date. 
-  - We need to make the session date field editable so that if a game chooses to set up a date system that doesn't match real world dates, the system will still work.
+# Future UI Improvements
+## Section Rendering 
+
+- Update section selection in the UI to show "Filename.md H1: Heading Value"
+- Add the following buttons at the top of each section
+  - Add Previous Section
+  - Add Previous Subsection
+  - Combine Section
+- Add the following buttons at the bottom of each section
+  - Add Next Section
+  - Add Next Subsection
+  - Remove Section
+
+- When the combine section button is clicked, the old titles heading level should be dropped down one level.

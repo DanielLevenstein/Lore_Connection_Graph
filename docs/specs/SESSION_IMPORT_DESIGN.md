@@ -9,19 +9,16 @@ We need the ability to import session notes about people, places, or things with
 ### Design 
 For all imports without structured md headings do the following.
 1) Identify the file title or file name and set it to H1 heading.
-2) Extract all dates in the files and convert them to H2 headings.
-3) Preserve existing Markdown heading levels, and convert inferred plain-text section headings other than the first to H3 headings.
+2) Extract all dates in the files and convert them to H2 headings (Not Implemented)
+3) Preserve existing Markdown heading levels and convert inferred plain-text section headings other than the first to H3 headings.
 4) Display a popup with a list of all extracted headings ask the user what headings they want searchable.
 5) Convert deselected non-date headings back to plain text.
-6) Chat logs are converted to H4 headings with the format "#### Date - User"
-7) When an H3 heading appears immediately after an H4 chat-log heading, move the H3 above that H4 to preserve section boundaries. Do not move H3 headings above ordinary text, blank lines, or other heading levels.
+6) Chat logs are converted to H5 headings with the format "##### Date - User"
+7) When a chat-log heading appears immediately before a higher-level heading, move the chat-log heading below that higher-level heading to preserve section boundaries. Do not move ordinary H4/H5 headings.
 
 
-## Section Rendering Cleanup
-- It's not clear from the UI what sections are main headings and what are subheadings.
-- There is not a good way to delete or combine headings without manually editing the Markdown.
+## Section Rendering Buttons
 
-### Suggested Changes
 - Update section selection in the UI to show "Filename.md H1: Heading Value"
 - Add the following buttons at the top of each section
   - Add Previous Section
@@ -39,6 +36,7 @@ An auto-generated header for the new section should be created with one of the f
   - A list of all H1-H4 subsections of the chosen section should be displayed below that warning.
 - When the combine section button is clicked, the old title should be converted to an H5 heading (`##### Value`) so it stays visible without becoming a selectable section.
 - Section editor saves should prevent added or edited sections that do not start with an H1, H2, or H3 heading.
+- When the combine section button is clicked, the old title is currently converted to level 4 or 5.
 
 ### References
 docs/screenshots/Atlantia_Lore.png

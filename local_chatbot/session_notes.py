@@ -140,7 +140,7 @@ def normalize_import_headings(text: str, title: str = "", today: date | None = N
         stripped = line.strip()
         discord_heading = discord_author_heading_text(stripped)
         if discord_heading:
-            normalized.append(f"#### {discord_heading}")
+            normalized.append(f"##### {discord_heading}")
             if stripped:
                 seen_content = True
             continue
@@ -177,7 +177,7 @@ def normalize_import_headings(text: str, title: str = "", today: date | None = N
                 normalized.append(f"# {heading_text}")
                 found_document_title = True
             else:
-                normalized.append(f"### {heading_text}")
+                normalized.append(f"## {heading_text}")
             seen_content = True
             continue
         normalized.append(line)
@@ -188,7 +188,7 @@ def normalize_import_headings(text: str, title: str = "", today: date | None = N
         normalized.insert(0, f"# {document_title}")
         if len(normalized) > 1 and normalized[1].strip():
             normalized.insert(1, "")
-    return "\n".join(move_h3_headings_up_one_line(normalized)).strip()
+    return "\n".join(move_chat_headings_below_higher_level_headings(normalized)).strip()
 
 
 def import_headings(text: str, today: date | None = None) -> list[ImportHeading]:
@@ -391,14 +391,24 @@ def combine_markdown_section(path: Path, section_key: str) -> tuple[SessionNote,
     return note, parent.key if parent else ""
 
 
-def move_h3_headings_up_one_line(lines: list[str]) -> list[str]:
+def move_chat_headings_below_higher_level_headings(lines: list[str]) -> list[str]:
     reordered = list(lines)
-    for index in range(1, len(reordered)):
+    for index in range(0, len(reordered) - 1):
         current_heading = markdown_heading_parts(reordered[index].strip())
-        previous_heading = markdown_heading_parts(reordered[index - 1].strip())
-        if current_heading and previous_heading and current_heading[0] == 3 and previous_heading[0] == 4:
-            reordered[index - 1], reordered[index] = reordered[index], reordered[index - 1]
+        following_heading = markdown_heading_parts(reordered[index + 1].strip())
+        if (
+            current_heading
+            and following_heading
+            and is_chat_log_heading(current_heading)
+            and following_heading[0] < current_heading[0]
+        ):
+            reordered[index], reordered[index + 1] = reordered[index + 1], reordered[index]
     return reordered
+
+
+def is_chat_log_heading(heading: tuple[int, str]) -> bool:
+    level, heading_text = heading
+    return level >= 4 and bool(re.match(r"^20\d{2}/\d{2}/\d{2}\s+-\s+\S", heading_text))
 
 
 def import_markdown_text(
