@@ -159,6 +159,18 @@ More notes.
     ]
 
 
+def test_prepare_markdown_import_expands_single_newlines_for_markdown_paragraphs():
+    prepared, _headings = prepare_markdown_import(
+        "Lighthouse Log\nFirst observation line.\nSecond observation line.\n\nFinal paragraph.",
+        title="Lighthouse Log",
+        today=date(2026, 7, 12),
+    )
+
+    assert "# Lighthouse Log\n\nFirst observation line.\n\nSecond observation line." in prepared
+    assert "Second observation line.\n\nFinal paragraph." in prepared
+    assert "\n\n\n" not in prepared
+
+
 def test_markdown_import_demotes_unselected_searchable_headings_to_h4(tmp_path, monkeypatch):
     monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
 
@@ -186,7 +198,7 @@ Searchable material.
     text = imported[0].path.read_text(encoding="utf-8")
     assert imported[0].path.name == "Session_Import.md"
     assert "## July 2026" in text
-    assert "#### Secret Thread\nPrivate material." in text
+    assert "#### Secret Thread\n\nPrivate material." in text
     assert "## Secret Thread" not in text.splitlines()
     assert "## Public Thread" in text
 
@@ -279,7 +291,7 @@ The next session began.
     assert "### Session 1" in prepared
     assert "##### 2023/02/19 - Sean" in prepared
     assert "##### 2023/02/20 - Sean" in prepared
-    assert "## August 2023\n### Session 2\n##### 2023/08/03 - Sean" in prepared
+    assert "## August 2023\n\n### Session 2\n\n##### 2023/08/03 - Sean" in prepared
     assert [(heading.level, heading.text) for heading in headings] == [
         (1, "Session Import"),
         (2, "February 2023"),
@@ -313,8 +325,8 @@ The group follows the directions and arrive at a hut.
     )
 
     assert "## March 2024" in prepared
-    assert "### 2024/03/18 - Camryn\nThe next morning" in prepared
-    assert "### 2024/03/18 - Camryn\nThe group follows" not in prepared
+    assert "### 2024/03/18 - Camryn\n\nThe next morning" in prepared
+    assert "### 2024/03/18 - Camryn\n\nThe group follows" not in prepared
     assert "The group follows the directions and arrive at a hut." in prepared
     assert [(heading.level, heading.text) for heading in headings] == [
         (1, "Session Import"),
@@ -397,8 +409,8 @@ The town held a spring festival.
         today=date(2026, 7, 12),
     )
 
-    assert "### Town Overview\nAtlantia grew around the harbor.\n\n## March 2024" in prepared
-    assert "## March 2024\n### Town Overview" not in prepared
+    assert "### Town Overview\n\nAtlantia grew around the harbor.\n\n## March 2024" in prepared
+    assert "## March 2024\n\n### Town Overview" not in prepared
     assert "__LCG_INFERRED_IMPORT_HEADING__" not in prepared
     assert [(heading.level, heading.text, heading.kind) for heading in headings] == [
         (1, "Atlantia Lore", "structure"),
@@ -535,7 +547,7 @@ The party opened the lighthouse door.
         (2, "July 2026", "Harbor Trouble"),
         (2, "July 2026", "Lighthouse Door"),
     ]
-    assert sections[2].body == "## Harbor Trouble\nThe party found a sealed brass door."
+    assert sections[2].body == "## Harbor Trouble\n\nThe party found a sealed brass door."
 
 
 def test_markdown_sections_expose_user_promoted_h2_headings():

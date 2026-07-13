@@ -127,11 +127,16 @@ def prepare_markdown_import(
     selected_heading_keys: set[str] | None = None,
     today: date | None = None,
 ) -> tuple[str, list[ImportHeading]]:
-    normalized = normalize_import_headings(text, title=title, today=today)
+    normalized = expand_single_newlines(normalize_import_headings(text, title=title, today=today))
     headings = import_headings(normalized, today=today)
     if selected_heading_keys is None:
         return normalized, headings
     return restore_unselected_import_headings(normalized, selected_heading_keys, today=today), headings
+
+
+def expand_single_newlines(text: str) -> str:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    return re.sub(r"(?<!\n)\n(?!\n)", "\n\n", normalized)
 
 
 def normalize_import_headings(text: str, title: str = "", today: date | None = None) -> str:

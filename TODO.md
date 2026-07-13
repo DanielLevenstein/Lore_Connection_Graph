@@ -29,6 +29,7 @@ For all imports without structured md headings do the following.
 - Hid H4-H6 headings from the selection dialog and section UI.
 - Demoted unchecked selectable H2/H3 headings to hidden H4 organization headings.
 - Removed exact duplicate heading lines at every heading level while preserving the following content.
+- Expanded single newlines to Markdown paragraph breaks during import preparation so text formatting survives txt-to-md conversion.
 - Added screenshot: `docs/screenshots/import_session_notes_date_detection.png`.
 - Updated screenshot: `docs/screenshots/session_notes_duplicate_headings.png`.
 - Tested:
