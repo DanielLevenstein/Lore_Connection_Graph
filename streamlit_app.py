@@ -93,7 +93,7 @@ ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE
 ENABLE_EXTERNAL_CHARACTER_IMPORT = "LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"
 MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
 LORE_BACKUP_IMPORT_SOURCE_KEY = "lore_backup_import_source"
-
+TEST_FIXUTES_DIRECTORY = "tests/fixtures"
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
 ensure_base_dirs()
 backup_lore_files()
@@ -1094,7 +1094,7 @@ def render_lore_import_tools() -> None:
         st.subheader("Bulk Lore Directory")
         source_dir = st.text_input(
             "Source Directory",
-            value=str(WORLD_BUILDING_IMPORT_DIR),
+            value=str(TEST_FIXUTES_DIRECTORY),
             help="Choose a directory under world_building/import that contains character_sheets, places, and session_notes folders.",
             key="lore_directory_import_source",
         )
