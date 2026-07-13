@@ -45,7 +45,7 @@ The repository uses committed project docs plus one ignored local workspace root
 
 - Only files under `world_building/lore` are treated as canonical authored campaign lore.
 - Files under `world_building/import` are raw inputs and can be re-imported or reorganized.
-- Files under `world_building/backup` are auto generated backups which can be used for restoring old campaign notes.
+- Files under `world_building/backup` are auto generated backups of lore and metadata which can be used for restoring old campaign notes and derived local state.
 - Files under `world_building/meta_data` are derived or runtime data and can be rebuilt or regenerated from the lore and model configuration.
 
 ## Project Layout

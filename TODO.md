@@ -43,6 +43,7 @@ Lore backups can be restored using the Lore Import functionality.
 ### Backup Functionality
 - Added `world_building/backup` as the local lore backup directory.
 - Refresh backups whenever the Streamlit app loads.
+- Include `world_building/meta_data` files in backups and backup restores.
 - Removed the backup timestamp button.
 - Added `Import Testing Lore`, `Create Lore Backup`, `Import Lore Backup`, and `Bulk Lore Removal` actions under `Lore Import`.
 - Bulk lore removal creates a backup before wiping local lore.

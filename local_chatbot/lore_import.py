@@ -10,6 +10,7 @@ from .paths import (
     CHARACTERS_DIR,
     GENERATED_LORE_DIR,
     LORE_DIR,
+    META_DATA_DIR,
     PLACES_DIR,
     SESSION_NOTES_DIR,
     WORLD_BUILDING_BACKUP_DIR,
@@ -22,10 +23,11 @@ class LoreImportSummary:
     characters: int = 0
     places: int = 0
     session_notes: int = 0
+    metadata: int = 0
 
     @property
     def total(self) -> int:
-        return self.characters + self.places + self.session_notes
+        return self.characters + self.places + self.session_notes + self.metadata
 
 
 @dataclass(frozen=True)
@@ -78,10 +80,14 @@ def import_lore_directory(source_dir: Path, overwrite: bool = True) -> LoreImpor
             shutil.copyfile(source_path, destination_path)
             counts[bucket] += 1
 
+    metadata_source = source_dir / "meta_data"
+    metadata_count = copy_directory_files(metadata_source, META_DATA_DIR, overwrite=overwrite)
+
     return LoreImportSummary(
         characters=counts["characters"],
         places=counts["places"],
         session_notes=counts["session_notes"],
+        metadata=metadata_count,
     )
 
 
@@ -91,8 +97,9 @@ def clear_local_lore() -> LoreImportSummary:
         characters=count_files(CHARACTERS_DIR),
         places=count_files(PLACES_DIR),
         session_notes=count_files(SESSION_NOTES_DIR),
+        metadata=count_files(META_DATA_DIR, pattern="*"),
     )
-    for lore_dir in unique_paths(LORE_DIR, GENERATED_LORE_DIR, CHARACTER_METADATA_DIR):
+    for lore_dir in unique_paths(LORE_DIR, GENERATED_LORE_DIR, CHARACTER_METADATA_DIR, META_DATA_DIR):
         clear_directory_contents(lore_dir)
     ensure_base_dirs()
     return summary
@@ -112,14 +119,8 @@ def backup_lore_files(
     target_dir = create_backup_snapshot_dir(backup_dir, updated_at) if snapshot else backup_dir
 
     file_count = 0
-    if source_dir.exists():
-        for source_path in sorted(source_dir.rglob("*.md")):
-            if not source_path.is_file() or source_path.name.startswith("."):
-                continue
-            destination_path = target_dir / source_path.relative_to(source_dir)
-            destination_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source_path, destination_path)
-            file_count += 1
+    file_count += copy_directory_files(source_dir, target_dir, pattern="*.md", overwrite=True)
+    file_count += copy_directory_files(META_DATA_DIR, target_dir / "meta_data", overwrite=True, include_dotfiles=False)
 
     write_backup_stamp(target_dir, updated_at)
     write_backup_stamp(backup_dir, updated_at)
@@ -181,7 +182,7 @@ def backup_option_sort_key(option: LoreBackupOption) -> float:
 
 
 def backup_contains_lore(path: Path) -> bool:
-    return any((path / subdirectory).exists() for subdirectory in LORE_SUBDIRECTORIES)
+    return any((path / subdirectory).exists() for subdirectory in LORE_SUBDIRECTORIES) or (path / "meta_data").exists()
 
 
 def create_backup_snapshot_dir(backup_dir: Path, updated_at: datetime) -> Path:
@@ -212,10 +213,10 @@ def unique_paths(*paths: Path) -> list[Path]:
     return unique
 
 
-def count_files(directory: Path) -> int:
+def count_files(directory: Path, pattern: str = "*.md") -> int:
     if not directory.exists():
         return 0
-    return sum(1 for path in directory.rglob("*.md") if path.is_file())
+    return sum(1 for path in directory.rglob(pattern) if path.is_file() and not path.name.startswith("."))
 
 
 def clear_directory_contents(directory: Path) -> None:
@@ -234,3 +235,30 @@ def lore_markdown_files(source_dir: Path) -> list[Path]:
         for path in sorted(source_dir.glob("*.md"))
         if not path.name.startswith(".") and "TEMPLATE" not in path.name.upper()
     ]
+
+
+def copy_directory_files(
+    source_dir: Path,
+    destination_dir: Path,
+    pattern: str = "*",
+    overwrite: bool = True,
+    include_dotfiles: bool = True,
+) -> int:
+    if not source_dir.exists():
+        return 0
+
+    file_count = 0
+    for source_path in sorted(source_dir.rglob(pattern)):
+        if not source_path.is_file():
+            continue
+        if not include_dotfiles and any(part.startswith(".") for part in source_path.relative_to(source_dir).parts):
+            continue
+        destination_path = destination_dir / source_path.relative_to(source_dir)
+        if source_path.resolve() == destination_path.resolve():
+            continue
+        if destination_path.exists() and not overwrite:
+            continue
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination_path)
+        file_count += 1
+    return file_count

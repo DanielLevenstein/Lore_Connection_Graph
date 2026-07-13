@@ -19,7 +19,13 @@ def load_graph(path: Path | str) -> CharacterGraph | None:
     source = Path(path)
     if not source.exists():
         return None
-    payload = json.loads(source.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{source} must contain valid graph JSON.") from exc
     if not isinstance(payload, dict):
         raise ValueError(f"{source} must contain a JSON object.")
-    return CharacterGraph.from_dict(payload)
+    try:
+        return CharacterGraph.from_dict(payload)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"{source} does not contain a valid character graph.") from exc

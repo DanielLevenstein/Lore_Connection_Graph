@@ -27,9 +27,9 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 | Candidate | Overall | Similarity |Coverage | Concision |
 | --------- | ------: | ---------: | ------: | --------: |
-| Post-transform | 0.8384 | 0.7347 | 0.8889 | 0.9062 |
-| Pre-transform | 0.4758 | 0.7881 | 0.4444 | 0.0000 |
+| Post-transform story | 0.8384 | 0.7347 | 0.8889 | 0.9062 |
+| Pre-transform backstory | 0.4758 | 0.7881 | 0.4444 | 0.0000 |
 
 ## Result
 
-The post-transform story improves the overall quality score by `0.3626`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
+The post-transform story improves the semantic quality score by `0.3626`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.

@@ -1,6 +1,8 @@
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from character_graph.storage import load_graph
 import local_chatbot.lore_import as lore_import
 from local_chatbot.lore_import import (
     backup_lore_files,
@@ -15,13 +17,43 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 FIXTURES_DIR = ROOT_DIR / "tests" / "fixtures"
 
 
+def minimal_graph_json(name: str, source_file: str) -> str:
+    node_id = name.lower().replace(" ", "_")
+    return json.dumps(
+        {
+            "schema_version": "0.3.0",
+            "primary_character": {
+                "id": node_id,
+                "name": name,
+                "source_file": source_file,
+            },
+            "characters": {
+                node_id: {
+                    "name": name,
+                    "role": "primary character",
+                    "summary": "",
+                    "source_spans": [],
+                }
+            },
+            "attributes": {},
+            "places": {},
+            "relationships": [],
+            "evidence": [],
+            "embeddings": {},
+        },
+        indent=2,
+    )
+
+
 def test_import_lore_directory_copies_fixture_subdirectories(tmp_path, monkeypatch):
     characters_dir = tmp_path / "docs" / "lore" / "character_sheets"
     places_dir = tmp_path / "docs" / "lore" / "places"
     session_notes_dir = tmp_path / "docs" / "lore" / "session_notes"
+    meta_data_dir = tmp_path / "world_building" / "meta_data"
     monkeypatch.setattr(lore_import, "CHARACTERS_DIR", characters_dir)
     monkeypatch.setattr(lore_import, "PLACES_DIR", places_dir)
     monkeypatch.setattr(lore_import, "SESSION_NOTES_DIR", session_notes_dir)
+    monkeypatch.setattr(lore_import, "META_DATA_DIR", meta_data_dir)
     monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
 
     summary = import_lore_directory(FIXTURES_DIR)
@@ -46,6 +78,7 @@ def test_import_lore_directory_can_skip_existing_files(tmp_path, monkeypatch):
     monkeypatch.setattr(lore_import, "CHARACTERS_DIR", tmp_path / "docs" / "lore" / "character_sheets")
     monkeypatch.setattr(lore_import, "PLACES_DIR", places_dir)
     monkeypatch.setattr(lore_import, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+    monkeypatch.setattr(lore_import, "META_DATA_DIR", tmp_path / "world_building" / "meta_data")
     monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
 
     summary = import_lore_directory(FIXTURES_DIR, overwrite=False)
@@ -57,16 +90,19 @@ def test_import_lore_directory_can_skip_existing_files(tmp_path, monkeypatch):
 def test_clear_local_lore_cleans_configured_lore_dir(tmp_path, monkeypatch):
     lore_dir = tmp_path / "data" / "lore"
     character_metadata_dir = tmp_path / "data" / "character_metadata"
+    meta_data_dir = tmp_path / "world_building" / "meta_data"
     characters_dir = lore_dir / "character_sheets"
     places_dir = lore_dir / "places"
     session_notes_dir = lore_dir / "session_notes"
     generated_character_dir = character_metadata_dir / "Draft"
     stale_profile = generated_character_dir / "PROFILE.json"
     stale_memory = generated_character_dir / "MEMORY.md"
+    stale_graph = meta_data_dir / "character_graph" / "Jory_Ravenmark.graph.json"
     monkeypatch.setattr(lore_import, "CHARACTERS_DIR", characters_dir)
     monkeypatch.setattr(lore_import, "LORE_DIR", lore_dir)
     monkeypatch.setattr(lore_import, "GENERATED_LORE_DIR", lore_dir)
     monkeypatch.setattr(lore_import, "CHARACTER_METADATA_DIR", character_metadata_dir)
+    monkeypatch.setattr(lore_import, "META_DATA_DIR", meta_data_dir)
     monkeypatch.setattr(lore_import, "PLACES_DIR", places_dir)
     monkeypatch.setattr(lore_import, "SESSION_NOTES_DIR", session_notes_dir)
     monkeypatch.setattr(
@@ -74,58 +110,92 @@ def test_clear_local_lore_cleans_configured_lore_dir(tmp_path, monkeypatch):
         "ensure_base_dirs",
         lambda: [
             path.mkdir(parents=True, exist_ok=True)
-            for path in (characters_dir, places_dir, session_notes_dir, lore_dir, character_metadata_dir)
+            for path in (characters_dir, places_dir, session_notes_dir, lore_dir, character_metadata_dir, meta_data_dir)
         ],
     )
 
     import_lore_directory(FIXTURES_DIR)
     generated_character_dir.mkdir(parents=True)
+    stale_graph.parent.mkdir(parents=True)
     stale_profile.write_text("{}", encoding="utf-8")
     stale_memory.write_text("Draft memory.", encoding="utf-8")
+    stale_graph.write_text("{}", encoding="utf-8")
 
     summary = clear_local_lore()
 
     assert summary.characters == 3
     assert summary.places == 1
     assert summary.session_notes == 2
+    assert summary.metadata == 1
     assert not (characters_dir / "Jory_Ravenmark.md").exists()
     assert not (places_dir / "Atlantia_Lore.md").exists()
     assert not (session_notes_dir / "Family_Tree.md").exists()
     assert not stale_profile.exists()
     assert not stale_memory.exists()
+    assert not stale_graph.exists()
     assert characters_dir.exists()
     assert places_dir.exists()
     assert session_notes_dir.exists()
     assert lore_dir.exists()
     assert character_metadata_dir.exists()
+    assert meta_data_dir.exists()
 
 
 def test_backup_lore_files_copies_current_lore_and_records_date(tmp_path, monkeypatch):
     lore_dir = tmp_path / "world_building" / "lore"
+    meta_data_dir = tmp_path / "world_building" / "meta_data"
     backup_dir = tmp_path / "world_building" / "backup"
     character_file = lore_dir / "character_sheets" / "Jory_Ravenmark.md"
     place_file = lore_dir / "places" / "Atlantia_Lore.md"
+    graph_file = meta_data_dir / "character_graph" / "Jory_Ravenmark.graph.json"
     character_file.parent.mkdir(parents=True)
     place_file.parent.mkdir(parents=True)
+    graph_file.parent.mkdir(parents=True)
     character_file.write_text("# Jory Ravenmark\n", encoding="utf-8")
     place_file.write_text("# Atlantia\n", encoding="utf-8")
+    graph_file.write_text(minimal_graph_json("Jory Ravenmark", "Jory_Ravenmark.md"), encoding="utf-8")
+    monkeypatch.setattr(lore_import, "META_DATA_DIR", meta_data_dir)
     monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
     timestamp = datetime(2026, 7, 13, 9, 30, tzinfo=timezone.utc)
 
     summary = backup_lore_files(lore_dir, backup_dir, updated_at=timestamp)
 
-    assert summary.files == 2
+    assert summary.files == 3
     assert summary.backup_dir == backup_dir.resolve()
     assert summary.updated_at == timestamp
     assert (
         backup_dir / "character_sheets" / "Jory_Ravenmark.md"
     ).read_text(encoding="utf-8") == "# Jory Ravenmark\n"
     assert (backup_dir / "places" / "Atlantia_Lore.md").read_text(encoding="utf-8") == "# Atlantia\n"
+    copied_graph = load_graph(backup_dir / "meta_data" / "character_graph" / "Jory_Ravenmark.graph.json")
+    assert copied_graph is not None
+    assert copied_graph.primary_character.name == "Jory Ravenmark"
     assert read_lore_backup_date(backup_dir) == timestamp
+
+
+def test_import_lore_directory_restores_metadata_from_backup(tmp_path, monkeypatch):
+    backup_dir = tmp_path / "world_building" / "backup"
+    meta_data_dir = tmp_path / "world_building" / "meta_data"
+    graph_file = backup_dir / "meta_data" / "character_graph" / "Jory_Ravenmark.graph.json"
+    graph_file.parent.mkdir(parents=True)
+    graph_file.write_text(minimal_graph_json("Jory Ravenmark", "Jory_Ravenmark.md"), encoding="utf-8")
+    monkeypatch.setattr(lore_import, "CHARACTERS_DIR", tmp_path / "world_building" / "lore" / "character_sheets")
+    monkeypatch.setattr(lore_import, "PLACES_DIR", tmp_path / "world_building" / "lore" / "places")
+    monkeypatch.setattr(lore_import, "SESSION_NOTES_DIR", tmp_path / "world_building" / "lore" / "session_notes")
+    monkeypatch.setattr(lore_import, "META_DATA_DIR", meta_data_dir)
+    monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
+
+    summary = import_lore_directory(backup_dir)
+
+    assert summary.metadata == 1
+    restored_graph = load_graph(meta_data_dir / "character_graph" / "Jory_Ravenmark.graph.json")
+    assert restored_graph is not None
+    assert restored_graph.primary_character.name == "Jory Ravenmark"
 
 
 def test_backup_lore_files_updates_existing_backup_without_deleting_missing_files(tmp_path, monkeypatch):
     lore_dir = tmp_path / "world_building" / "lore"
+    meta_data_dir = tmp_path / "world_building" / "meta_data"
     backup_dir = tmp_path / "world_building" / "backup"
     old_backup_file = backup_dir / "session_notes" / "Old_Note.md"
     current_note = lore_dir / "session_notes" / "Current_Note.md"
@@ -133,6 +203,7 @@ def test_backup_lore_files_updates_existing_backup_without_deleting_missing_file
     current_note.parent.mkdir(parents=True)
     old_backup_file.write_text("# Old Note\n", encoding="utf-8")
     current_note.write_text("# Current Note\n", encoding="utf-8")
+    monkeypatch.setattr(lore_import, "META_DATA_DIR", meta_data_dir)
     monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
 
     summary = backup_lore_files(lore_dir, backup_dir)
@@ -144,10 +215,12 @@ def test_backup_lore_files_updates_existing_backup_without_deleting_missing_file
 
 def test_backup_lore_files_can_create_selectable_snapshot(tmp_path, monkeypatch):
     lore_dir = tmp_path / "world_building" / "lore"
+    meta_data_dir = tmp_path / "world_building" / "meta_data"
     backup_dir = tmp_path / "world_building" / "backup"
     character_file = lore_dir / "character_sheets" / "Jory_Ravenmark.md"
     character_file.parent.mkdir(parents=True)
     character_file.write_text("# Jory Ravenmark\n", encoding="utf-8")
+    monkeypatch.setattr(lore_import, "META_DATA_DIR", meta_data_dir)
     monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
     timestamp = datetime(2026, 7, 13, 9, 30, tzinfo=timezone.utc)
 

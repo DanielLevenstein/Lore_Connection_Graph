@@ -1118,7 +1118,7 @@ def render_lore_import_tools() -> None:
         if action_cols[1].button("Create Lore Backup", icon=":material/backup:", key="create_lore_backup"):
             summary = backup_lore_files(snapshot=True)
             st.session_state["lore_import_status"] = (
-                f"Created Backup For {summary.files} Lore File{'s' if summary.files != 1 else ''}."
+                f"Created Backup For {summary.files} File{'s' if summary.files != 1 else ''}."
             )
             st.rerun()
         if action_cols[2].button("Import Lore Backup", icon=":material/restore_page:", key="import_lore_backup"):
@@ -1154,8 +1154,9 @@ def render_lore_backup_restore_dialog(overwrite_existing: bool) -> None:
         backup_source = Path(st.session_state[LORE_BACKUP_IMPORT_SOURCE_KEY])
         summary = import_lore_directory(backup_source, overwrite=overwrite_existing)
         st.session_state["lore_import_status"] = (
-            f"Restored {summary.total} Backup Lore File{'s' if summary.total != 1 else ''} "
-            f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
+            f"Restored {summary.total} Backup File{'s' if summary.total != 1 else ''} "
+            f"({summary.characters} Characters, {summary.places} Places, "
+            f"{summary.session_notes} Session Notes, {summary.metadata} Metadata Files)."
         )
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
@@ -1173,8 +1174,9 @@ def render_bulk_lore_removal_warning() -> None:
         backup_lore_files(snapshot=True)
         summary = clear_local_lore()
         st.session_state["lore_import_status"] = (
-            f"Deleted {summary.total} Local Lore File{'s' if summary.total != 1 else ''} "
-            f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
+            f"Deleted {summary.total} Local File{'s' if summary.total != 1 else ''} "
+            f"({summary.characters} Characters, {summary.places} Places, "
+            f"{summary.session_notes} Session Notes, {summary.metadata} Metadata Files)."
         )
         for key in ("active_character", "active_place", "active_session_note"):
             st.session_state.pop(key, None)

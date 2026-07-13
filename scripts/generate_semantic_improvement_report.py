@@ -47,12 +47,12 @@ def build_report(character_path: Path = DEFAULT_CHARACTER_PATH) -> str:
         "## Scores\n\n"
         "| Candidate | Overall | Similarity |Coverage | Concision |\n"
         "| --------- | ------: | ---------: | ------: | --------: |\n"
-        f"| Post-transform | {generated_score.score:.4f} | {generated_score.semantic_similarity:.4f} | "
+        f"| Post-transform story | {generated_score.score:.4f} | {generated_score.semantic_similarity:.4f} | "
         f"{generated_score.concept_coverage:.4f} | {generated_score.concision:.4f} |\n"
-        f"| Pre-transform | {original_score.score:.4f} | {original_score.semantic_similarity:.4f} | "
+        f"| Pre-transform backstory | {original_score.score:.4f} | {original_score.semantic_similarity:.4f} | "
         f"{original_score.concept_coverage:.4f} | {original_score.concision:.4f} |\n\n"
         "## Result\n\n"
-        f"The post-transform story improves the overall quality score by `{delta:.4f}`. "
+        f"The post-transform story improves the semantic quality score by `{delta:.4f}`. "
         "It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.\n"
     )
 
