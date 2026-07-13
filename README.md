@@ -4,8 +4,8 @@ A local Streamlit app for creating tabletop character sheets, organizing campaig
 
 The app treats authored markdown in `world_building/lore` as the source of truth. Character sheets can be edited through the UI, places can be created as lore files, and derived graph JSON can be regenerated from the Markdown whenever needed.
 
-- `world_building/` and `meta_data/` are intentionally ignored by git so each player can keep their own campaign data
-- Generated runtime files are stored in `mata_data` while user-readable application docs are stored in `world_building/lore`
+- `world_building/` is intentionally ignored by git so each player can keep their own campaign data
+- Generated runtime files are stored in `world_building/meta_data` while user-readable application docs are stored in `world_building/lore`
 - Templates, specifications, and parsing rules are committed under `docs/`
 - test lore examples live under `tests/fixtures`.
 
@@ -41,12 +41,12 @@ streamlit run streamlit_app.py
 
 ## Storage Source Of Truth
 
-The repository uses three top-level storage roots:
+The repository uses committed project docs plus one ignored local workspace root:
 
 - Only files under `world_building/lore` are treated as canonical authored campaign lore.
 - Files under `world_building/import` are raw inputs and can be re-imported or reorganized.
 - Files under `world_building/backup` are auto generated backups which can be used for restoring old campaign notes.
-- Files under `meta_data` are derived or runtime data and can be rebuilt or regenerated from the lore and model configuration.
+- Files under `world_building/meta_data` are derived or runtime data and can be rebuilt or regenerated from the lore and model configuration.
 
 ## Project Layout
 
@@ -60,16 +60,18 @@ world_building/lore/character_sheets/*/BACKSTORY.md
                                             Alternate character sheet format
 world_building/lore/places/*.md             Authored place lore
 world_building/backup/                      Latest local Markdown backup
-meta_data/character_metadata/*/PROFILE.json Runtime character metadata
-meta_data/character_metadata/*/MEMORY.md    Runtime memory notes
-meta_data/character_metadata/*/chatlogs/*.log
+world_building/meta_data/character_metadata/*/PROFILE.json
+                                            Runtime character metadata
+world_building/meta_data/character_metadata/*/MEMORY.md
+                                            Runtime memory notes
+world_building/meta_data/character_metadata/*/chatlogs/*.log
                                             Runtime play logs
-meta_data/character_graph/*.graph.json      Derived per-character graph JSON
-meta_data/model/                            Local model downloads and runtime data
+world_building/meta_data/character_graph/*.graph.json
+                                            Derived per-character graph JSON
+world_building/meta_data/model/             Local model downloads and runtime data
 ```
 
-Everything under `world_building/` is local campaign material and should not be committed.
-Everything under `meta_data/` is local runtime or generated output and should not be committed.
+Everything under `world_building/` is local campaign material, runtime data, or generated output and should not be committed.
 
 ## Specs
 

@@ -2,7 +2,7 @@
 
 Places are authored markdown files stored in `world_building/lore/places`.
 
-`world_building/lore/places` is the source of truth for editable place Markdown. Raw files to be imported should stay under `world_building/import`, and derived graph/runtime data belongs under `meta_data`.
+`world_building/lore/places` is the source of truth for editable place Markdown. Raw files to be imported should stay under `world_building/import`, and derived graph/runtime data belongs under `world_building/meta_data`.
 
 ## Supported Format
 
@@ -38,4 +38,4 @@ Freeform details.
 - `Place Details` is freeform prose or tables.
 - `Place Connections` is a bullet list of character, place, faction, or object references.
 - Files in `world_building/lore/places` are player-authored source files and should stay local because `world_building/` is ignored by git.
-- Generated or derived graph JSON remains under `meta_data/` and can be rebuilt.
+- Generated or derived graph JSON remains under `world_building/meta_data/` and can be rebuilt.

@@ -12,8 +12,8 @@ The combined knowledge graph is a campaign-level view built from authored lore i
 - `world_building/lore/character_sheets` is the source for available character sheets.
 - `world_building/lore/places` is the source for available places.
 - `world_building/lore` is ignored by git and should contain user-local campaign data.
-- `meta_data/character_graph` stores derived per-character graph JSON and can be rebuilt.
-- `meta_data/character_metadata` stores runtime profile metadata, memory notes, and chat logs.
+- `world_building/meta_data/character_graph` stores derived per-character graph JSON and can be rebuilt.
+- `world_building/meta_data/character_metadata` stores runtime profile metadata, memory notes, and chat logs.
 - Generated characters are written to `world_building/lore/character_sheets` only after the player saves them.
 
 ## Visibility

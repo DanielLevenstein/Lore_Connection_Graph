@@ -4,7 +4,7 @@
 
 The Character Association Graph is a derived index built from each character's human-authored `BACKSTORY.md`. Its config defines three broad connection buckets: relationships, attributes, and places. The extractor only auto-populates facts the markdown can be expected to provide reliably: the character name, race, and class.
 
-The markdown backstory in `world_building/lore/character_sheets` remains the canonical source of truth. The graph JSON in `meta_data/character_graph` is regenerated derived data and can be discarded or rebuilt when the backstory changes.
+The markdown backstory in `world_building/lore/character_sheets` remains the canonical source of truth. The graph JSON in `world_building/meta_data/character_graph` is regenerated derived data and can be discarded or rebuilt when the backstory changes.
 
 ## Current Scope
 
@@ -187,7 +187,7 @@ Keeping these helpers outside `streamlit_app.py` makes the display formatting te
 
 ## Storage Integration
 
-Storage follows the project-wide source-of-truth split: `docs/` holds committed specifications and templates, `world_building/lore` holds editable campaign Markdown, `world_building/import` holds raw source imports, and `meta_data` holds derived/runtime application data.
+Storage follows the project-wide source-of-truth split: `docs/` holds committed specifications and templates, `world_building/lore` holds editable campaign Markdown, `world_building/import` holds raw source imports, and `world_building/meta_data` holds derived/runtime application data.
 
 Authored character markdown files live under:
 
@@ -209,7 +209,7 @@ world_building/lore/character_sheets/Character_Name.md
 Graph JSON now lives under:
 
 ```text
-meta_data/character_graph/<name>.graph.json
+world_building/meta_data/character_graph/<name>.graph.json
 ```
 
 `local_chatbot.paths` defines `CHARACTER_GRAPHS_DIR` and creates it in `ensure_base_dirs()`.

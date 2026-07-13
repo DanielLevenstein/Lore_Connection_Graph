@@ -55,7 +55,7 @@ def isolated_character_app(tmp_path):
     characters_dir = docs_lore_dir / "character_sheets"
     places_dir = docs_lore_dir / "places"
     session_notes_dir = docs_lore_dir / "session_notes"
-    meta_data_dir = tmp_path / "meta_data"
+    meta_data_dir = world_building_dir / "meta_data"
     shutil.copytree(FIXTURE_CHARACTER_SHEETS_DIR, characters_dir)
     places_dir.mkdir(parents=True)
     session_notes_dir.mkdir(parents=True)
@@ -69,7 +69,6 @@ def isolated_character_app(tmp_path):
     env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(characters_dir)
     env["LOCAL_CHATBOT_PLACES_DIR"] = str(places_dir)
     env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(session_notes_dir)
-    env["LOCAL_CHATBOT_META_DATA_DIR"] = str(meta_data_dir)
     process = subprocess.Popen(
         [
             str(streamlit_executable()),

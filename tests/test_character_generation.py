@@ -1061,7 +1061,7 @@ def test_present_pronouns_stat_updates_in_stats_table(tmp_path, monkeypatch):
 
 def test_app_uses_world_building_lore_as_local_source_of_truth():
     assert CHARACTERS_DIR == ROOT_DIR / "world_building" / "lore" / "character_sheets"
-    assert CHARACTER_METADATA_DIR == ROOT_DIR / "meta_data" / "character_metadata"
+    assert CHARACTER_METADATA_DIR == ROOT_DIR / "world_building" / "meta_data" / "character_metadata"
     assert (FIXTURE_CHARACTER_SHEETS_DIR / "Orin_Nightbloom.md").exists()
 
 

@@ -42,7 +42,7 @@ def isolated_session_notes_app(tmp_path):
     world_building_dir = tmp_path / "world_building"
     docs_lore_dir = world_building_dir / "lore"
     import_dir = world_building_dir / "import"
-    meta_data_dir = tmp_path / "meta_data"
+    meta_data_dir = world_building_dir / "meta_data"
     docs_lore_dir.mkdir(parents=True)
     import_dir.mkdir(parents=True)
     meta_data_dir.mkdir()
@@ -55,7 +55,6 @@ def isolated_session_notes_app(tmp_path):
     env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(docs_lore_dir / "character_sheets")
     env["LOCAL_CHATBOT_PLACES_DIR"] = str(docs_lore_dir / "places")
     env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(docs_lore_dir / "session_notes")
-    env["LOCAL_CHATBOT_META_DATA_DIR"] = str(meta_data_dir)
     env["LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"] = "1"
     process = subprocess.Popen(
         [
@@ -85,14 +84,13 @@ def isolated_session_notes_app(tmp_path):
 
 
 def import_session_note_file(page, path: Path, imported_file_name: str = "") -> None:
-    page.get_by_role("tab", name="Session Notes", exact=True).click()
+    open_session_note_import(page)
     upload_button = page.get_by_role("button", name="upload_file Upload Session Note")
-    if not upload_button.is_visible():
-        page.get_by_text("Import Session Note", exact=True).last.click()
-    expect(upload_button).to_be_visible(timeout=10000)
-    file_input = page.get_by_label("File", exact=True).locator("input[type=file]")
+    file_uploader = page.get_by_label("File", exact=True)
+    file_input = file_uploader.locator("input[type=file]")
     file_input.set_input_files([])
     file_input.set_input_files(str(path))
+    expect(page.get_by_text(path.name)).to_be_visible(timeout=10000)
     if imported_file_name:
         page.get_by_role("textbox", name="Imported File Name").fill(imported_file_name)
     upload_button.click()
@@ -101,10 +99,18 @@ def import_session_note_file(page, path: Path, imported_file_name: str = "") -> 
     expect(page.get_by_text("Saved 1 Session Note File.")).to_be_visible(timeout=10000)
 
 
+def open_session_note_import(page) -> None:
+    page.get_by_role("tab", name="Session Notes", exact=True).click()
+    upload_button = page.get_by_role("button", name="upload_file Upload Session Note")
+    if not upload_button.is_visible():
+        page.get_by_text("Import Session Note", exact=True).last.click()
+    expect(upload_button).to_be_visible(timeout=10000)
+
+
 def test_ui_removes_broken_add_session_note_path(isolated_session_notes_app):
     app_url, _docs_lore_dir = isolated_session_notes_app
     app_source = (ROOT_DIR / "streamlit_app.py").read_text(encoding="utf-8")
-    disabled_fixture = (ROOT_DIR / "tests" / "fixtures" / "disabled_legacy_add_session_note_ui.py").read_text(encoding="utf-8")
+    disabled_fixture = (ROOT_DIR / "tests" / "fixtures" / "legacy_add_session_note_ui.py").read_text(encoding="utf-8")
 
     assert "save_new_session_notes" not in app_source
     assert "save_new_session_notes" in disabled_fixture
@@ -114,10 +120,11 @@ def test_ui_removes_broken_add_session_note_path(isolated_session_notes_app):
         page = browser.new_page(viewport={"width": 1280, "height": 1000})
         page.goto(app_url, wait_until="networkidle")
 
-        page.get_by_role("tab", name="Session Notes", exact=True).click()
+        open_session_note_import(page)
         expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
         expect(page.get_by_text("Add Session Note", exact=True)).to_have_count(0)
         expect(page.get_by_text("Import Session Note", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("button", name="upload_file Upload Session Note")).to_be_visible(timeout=10000)
         browser.close()
 
 
@@ -152,11 +159,12 @@ Session 13:
         page = browser.new_page(viewport={"width": 1280, "height": 1000})
         page.goto(app_url, wait_until="networkidle")
 
-        page.get_by_role("tab", name="Session Notes", exact=True).click()
-        page.get_by_text("Import Session Note", exact=True).last.click()
-        expect(page.get_by_role("button", name="upload_file Upload Session Note")).to_be_visible(timeout=10000)
-        page.get_by_label("File", exact=True).locator("input[type=file]").set_input_files(str(import_file))
-        page.get_by_role("button", name="upload_file Upload Session Note").click()
+        open_session_note_import(page)
+        file_uploader = page.get_by_label("File", exact=True)
+        file_uploader.locator("input[type=file]").set_input_files(str(import_file))
+        expect(page.get_by_text(import_file.name)).to_be_visible(timeout=10000)
+        upload_button = page.get_by_role("button", name="upload_file Upload Session Note")
+        upload_button.click()
         expect(page.get_by_role("heading", name="Select Searchable Headings")).to_be_visible(timeout=10000)
         page.get_by_role("button", name="check Save Selected Headings").click()
         expect(page.get_by_text("Saved 1 Session Note File.")).to_be_visible(timeout=10000)
@@ -197,11 +205,13 @@ def test_ui_imports_freeform_lore_markdown_without_requiring_dates(isolated_sess
         page = browser.new_page(viewport={"width": 1280, "height": 1000})
         page.goto(app_url, wait_until="networkidle")
 
-        page.get_by_role("tab", name="Session Notes", exact=True).click()
-        page.get_by_text("Import Session Note", exact=True).click()
-        page.get_by_label("File", exact=True).locator("input[type=file]").set_input_files(str(import_file))
+        open_session_note_import(page)
+        file_uploader = page.get_by_label("File", exact=True)
+        file_uploader.locator("input[type=file]").set_input_files(str(import_file))
+        expect(page.get_by_text(import_file.name)).to_be_visible(timeout=10000)
         page.get_by_role("textbox", name="Imported File Name").fill("Imported Atlantia.md")
-        page.get_by_role("button", name="upload_file Upload Session Note").click()
+        upload_button = page.get_by_role("button", name="upload_file Upload Session Note")
+        upload_button.click()
         expect(page.get_by_role("heading", name="Select Searchable Headings")).to_be_visible(timeout=10000)
         expect(page.get_by_label("H1 Atlantia Lore")).to_be_checked(timeout=10000)
         expect(page.get_by_label("H2 The Watch Tower")).to_be_checked(timeout=10000)
@@ -348,11 +358,11 @@ The group follows the directions and arrive at a hut.
         page = browser.new_page(viewport={"width": 1280, "height": 1000})
         page.goto(app_url, wait_until="networkidle")
 
-        page.get_by_role("tab", name="Session Notes", exact=True).click()
-        page.get_by_text("Import Session Note", exact=True).click()
+        open_session_note_import(page)
         upload_button = page.get_by_role("button", name="upload_file Upload Session Note")
-        expect(upload_button).to_be_visible(timeout=10000)
-        page.get_by_label("File", exact=True).locator("input[type=file]").set_input_files(str(import_file))
+        file_uploader = page.get_by_label("File", exact=True)
+        file_uploader.locator("input[type=file]").set_input_files(str(import_file))
+        expect(page.get_by_text(import_file.name)).to_be_visible(timeout=10000)
         upload_button.click(force=True)
         expect(page.get_by_role("heading", name="Select Searchable Headings")).to_be_visible(timeout=10000)
         expect(page.get_by_label("H2 March 2024")).to_be_checked(timeout=10000)
@@ -545,7 +555,7 @@ def test_ui_last_section_removal_prompts_for_file_delete(isolated_session_notes_
     notes_dir.mkdir(parents=True)
     note_path = notes_dir / "Single_Section.md"
     note_path.write_text(
-        """# Single Section
+        """## Only Section
 
 Only one searchable section exists.
 """,
@@ -559,7 +569,7 @@ Only one searchable section exists.
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
         page.get_by_role("combobox", name="Session Note").click()
-        page.get_by_role("option", name="Single_Section.md H1: Single Section", exact=True).click()
+        page.get_by_role("option", name="Single_Section.md H2: Only Section", exact=True).click()
         page.get_by_role("button", name="event_note Open Session Note").click()
         page.get_by_role("button", name="delete Remove Section").click()
         expect(page.get_by_text("This is the last section in this file. Do you want to delete the full session note file?")).to_be_visible(timeout=10000)
@@ -642,6 +652,10 @@ def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
         expect(page.get_by_text("Import Lore Backup")).to_be_visible(timeout=10000)
         expect(page.get_by_label("Backup")).to_be_visible(timeout=10000)
         expect(page.get_by_role("button", name="restore_page Restore Selected Backup")).to_be_visible()
+        page.get_by_role("button", name="restore_page Restore Selected Backup").click()
+        expect(page.get_by_text("Restored 6 Backup Lore Files")).to_be_visible(timeout=10000)
+        page.get_by_text("Lore Import", exact=True).first.click()
+        expect(page.get_by_role("textbox", name="Source Directory")).to_have_value(str(fixture_dir), timeout=10000)
         browser.close()
 
     assert (characters_dir / "Jory_Ravenmark.md").exists()
@@ -651,7 +665,7 @@ def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
 
 def test_ui_bulk_lore_removal_confirms_before_cleaning_lore(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
-    character_metadata_dir = docs_lore_dir.parent.parent / "meta_data" / "character_metadata"
+    character_metadata_dir = docs_lore_dir.parent / "meta_data" / "character_metadata"
     characters_dir = docs_lore_dir / "character_sheets"
     places_dir = docs_lore_dir / "places"
     notes_dir = docs_lore_dir / "session_notes"
@@ -705,11 +719,14 @@ def test_ui_imports_external_character_sheet(isolated_session_notes_app):
 
         page.get_by_role("tab", name="Characters", exact=True).click()
         page.get_by_text("Import External Character Sheet", exact=True).first.click()
-        page.get_by_label("Character Sheet File").locator("input[type=file]").set_input_files(str(external_sheet))
+        file_uploader = page.get_by_label("Character Sheet File")
+        file_uploader.locator("input[type=file]").set_input_files(str(external_sheet))
         expect(page.get_by_text("external_sheet.pdf")).to_be_visible(timeout=10000)
+        page.wait_for_timeout(1000)
         import_sheet_button = page.get_by_role("button", name="upload_file Import Character Sheet")
         expect(import_sheet_button).to_be_visible(timeout=10000)
         import_sheet_button.click(force=True)
+        expect(page.get_by_text("Imported External Character Sheet: external_sheet.pdf.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("tab", name="Characters", exact=True)).to_have_attribute(
             "aria-selected",
             "true",

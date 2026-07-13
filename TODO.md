@@ -18,12 +18,11 @@ The main flaw the lore move is we are attempting to use the data directory for b
 Move the local lore source directory from `docs/lore` to `data/lore` so docs can stay focused on committed templates, specs, reports, and screenshots.
 
 ### New proposal
-Create 3 root levels data directories [docs, world_building, meta_data]
+Create root-level docs and world_building directories.
 - Store specification and design docs in docs
-- Store lore folder in world_building
-- Store character graph and local model in meta_data
+- Store lore, imports, backups, character graph data, and local model data in world_building
 
-Add two subdirectories to the world_building directory [import, lore] 
+Add three subdirectories to the world_building directory [import, lore, meta_data]
 - this will separate raw import files from generated Markdown and provides a path to create an export directory later if we want a way of extracting info from the system.
 - On the session notes page import UI should show the world_building directory as the base directory for md imports.
 
@@ -48,3 +47,8 @@ Lore backups can be restored using the Lore Import functionality.
 - Added `Import Testing Lore`, `Create Lore Backup`, `Import Lore Backup`, and `Bulk Lore Removal` actions under `Lore Import`.
 - Bulk lore removal creates a backup before wiping local lore.
 - Documented backup behavior in README.
+
+### Lore Directory Move
+- Kept authored lore under `world_building/lore` and raw imports under `world_building/import`.
+- Moved runtime metadata, graph data, and local model data under `world_building/meta_data`.
+- Updated tests and documentation to use the nested metadata path.

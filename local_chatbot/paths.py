@@ -4,8 +4,9 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = ROOT_DIR / "config"
-DATA_DIR = Path(os.environ.get("LOCAL_CHATBOT_DATA_DIR", ROOT_DIR / "meta_data")).resolve()
 WORLD_BUILDING_DIR = Path(os.environ.get("LOCAL_CHATBOT_WORLD_BUILDING_DIR", ROOT_DIR / "world_building")).resolve()
+DEFAULT_META_DATA_DIR = WORLD_BUILDING_DIR / "meta_data"
+DATA_DIR = Path(os.environ.get("LOCAL_CHATBOT_DATA_DIR", DEFAULT_META_DATA_DIR)).resolve()
 WORLD_BUILDING_IMPORT_DIR = Path(
     os.environ.get("LOCAL_CHATBOT_WORLD_BUILDING_IMPORT_DIR", WORLD_BUILDING_DIR / "import")
 ).resolve()
@@ -15,7 +16,7 @@ WORLD_BUILDING_BACKUP_DIR = Path(
 META_DATA_DIR = Path(
     os.environ.get(
         "LOCAL_CHATBOT_META_DATA_DIR",
-        os.environ.get("LOCAL_CHATBOT_DATA_DIR", ROOT_DIR / "meta_data"),
+        os.environ.get("LOCAL_CHATBOT_DATA_DIR", DEFAULT_META_DATA_DIR),
     )
 ).resolve()
 LORE_DIR = Path(

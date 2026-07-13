@@ -6,7 +6,7 @@
 ## Session Notes Import
 We need the ability to import session notes about people, places, or things without having to follow a specific Markdown file format.
 
-Raw import files should be staged from `world_building/import`. Imported, normalized, human-editable Markdown is saved under `world_building/lore/session_notes`, which is the source of truth for session-note lore after import. Runtime metadata and generated indexes stay under `meta_data`.
+Raw import files should be staged from `world_building/import`. Imported, normalized, human-editable Markdown is saved under `world_building/lore/session_notes`, which is the source of truth for session-note lore after import. Runtime metadata and generated indexes stay under `world_building/meta_data`.
 
 ### Design 
 For all imports without structured md headings do the following.
