@@ -80,7 +80,7 @@ from local_chatbot.session_notes import (
     write_session_note,
 )
 from local_chatbot.lore_import import clear_local_lore, import_lore_directory
-from local_chatbot.paths import LORE_DIR
+from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_IMPORT_DIR
 
 ENABLE_CHARACTER_REWRITE = "1"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
@@ -1079,8 +1079,8 @@ def render_lore_import_tools() -> None:
         st.subheader("Bulk Lore Directory")
         source_dir = st.text_input(
             "Source Directory",
-            value=str(LORE_DIR),
-            help="Choose the root directory that contains character_sheets, places, and session_notes folders.",
+            value=str(WORLD_BUILDING_IMPORT_DIR),
+            help="Choose a directory under world_building/import that contains character_sheets, places, and session_notes folders.",
             key="lore_directory_import_source",
         )
         overwrite_existing = st.checkbox(

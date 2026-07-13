@@ -2,9 +2,13 @@
 
 A local Streamlit app for creating tabletop character sheets, organizing campaign lore, and visualizing relationships as knowledge graphs.
 
-The app treats authored markdown in `data/lore` as the source of truth. Character sheets can be edited through the UI, places can be created as lore files, and derived graph JSON can be regenerated from the Markdown whenever needed.
+The app treats authored markdown in `world_building/lore` as the source of truth. Character sheets can be edited through the UI, places can be created as lore files, and derived graph JSON can be regenerated from the Markdown whenever needed.
 
-`data/lore/` is intentionally ignored by git so each player can keep their own campaign data out of the repository. Templates and parsing rules are committed under `docs/`; test lore examples live under `tests/fixtures`.
+- `world_building/` and `meta_data/` are intentionally ignored by git so each player can keep their own campaign data 
+- Generated runtime files are stored in `mata_data` while user-readable application docs are stored in `world_building/lore`
+- Templates, specifications, and parsing rules are committed under `docs/`
+- test lore examples live under `tests/fixtures`.
+
 
 ## What It Does
 
@@ -33,23 +37,37 @@ streamlit run streamlit_app.py
 
 ## Project Screenshots
 
+## Storage Source Of Truth
+
+The repository uses three top-level storage roots:
+
+- `docs/` is the committed documentation root for specifications, design notes, templates, reports, and screenshots.
+- `world_building/` is the local user-facing document store. Raw import files belong in `world_building/import`; normalized, editable campaign Markdown belongs in `world_building/lore`.
+- `meta_data/` is the local internal application store for generated indexes, runtime character metadata, chat logs, memory notes, and local model files.
+
+Only files under `world_building/lore` are treated as canonical authored campaign lore. Files under `world_building/import` are raw inputs and can be re-imported or reorganized. Files under `meta_data` are derived or runtime data and can be rebuilt or regenerated from the lore and model configuration.
+
 ## Project Layout
 
 ```text
 config/model/*.json                         Model configuration files
 docs/CHARACTER_TEMPLATE.md                  Character sheet template
 docs/PLACE_TEMPLATE.md                      Place lore template
-data/lore/character_sheets/*.md             Authored character sheets
-data/lore/character_sheets/*/BACKSTORY.md   Alternate character sheet format
-data/lore/places/*.md                       Authored place lore
-data/character_metadata/*/PROFILE.json   Runtime character metadata
-data/character_metadata/*/MEMORY.md      Runtime memory notes
-data/character_metadata/*/chatlogs/*.log Runtime play logs
-data/character_graph/*.graph.json           Derived per-character graph JSON
+world_building/import/                      Raw markdown/text import staging area
+world_building/lore/character_sheets/*.md   Authored character sheets
+world_building/lore/character_sheets/*/BACKSTORY.md
+                                            Alternate character sheet format
+world_building/lore/places/*.md             Authored place lore
+meta_data/character_metadata/*/PROFILE.json Runtime character metadata
+meta_data/character_metadata/*/MEMORY.md    Runtime memory notes
+meta_data/character_metadata/*/chatlogs/*.log
+                                            Runtime play logs
+meta_data/character_graph/*.graph.json      Derived per-character graph JSON
+meta_data/model/                            Local model downloads and runtime data
 ```
 
-Everything under `data/` is local runtime or generated output and should not be committed.
-Everything under `data/lore/` is local authored campaign lore and should not be committed.
+Everything under `world_building/` is local campaign material and should not be committed.
+Everything under `meta_data/` is local runtime or generated output and should not be committed.
 
 ## Specs
 

@@ -39,18 +39,23 @@ def wait_for_streamlit(url: str, process: subprocess.Popen, timeout: int = 30) -
 
 @pytest.fixture()
 def isolated_session_notes_app(tmp_path):
-    docs_lore_dir = tmp_path / "docs" / "lore"
-    data_dir = tmp_path / "data"
+    world_building_dir = tmp_path / "world_building"
+    docs_lore_dir = world_building_dir / "lore"
+    import_dir = world_building_dir / "import"
+    meta_data_dir = tmp_path / "meta_data"
     docs_lore_dir.mkdir(parents=True)
-    data_dir.mkdir()
+    import_dir.mkdir(parents=True)
+    meta_data_dir.mkdir()
 
     env = os.environ.copy()
     env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+    env["LOCAL_CHATBOT_WORLD_BUILDING_DIR"] = str(world_building_dir)
+    env["LOCAL_CHATBOT_WORLD_BUILDING_IMPORT_DIR"] = str(import_dir)
     env["LOCAL_CHATBOT_LORE_DIR"] = str(docs_lore_dir)
     env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(docs_lore_dir / "character_sheets")
     env["LOCAL_CHATBOT_PLACES_DIR"] = str(docs_lore_dir / "places")
     env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(docs_lore_dir / "session_notes")
-    env["LOCAL_CHATBOT_DATA_DIR"] = str(data_dir)
+    env["LOCAL_CHATBOT_META_DATA_DIR"] = str(meta_data_dir)
     env["LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"] = "1"
     process = subprocess.Popen(
         [
@@ -607,6 +612,7 @@ The group follows the directions and arrive at a hut.
 
 def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
+    import_dir = docs_lore_dir.parent / "import"
     characters_dir = docs_lore_dir / "character_sheets"
     places_dir = docs_lore_dir / "places"
     notes_dir = docs_lore_dir / "session_notes"
@@ -620,7 +626,7 @@ def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
         page.get_by_text("Lore Import", exact=True).first.click()
         lore_import = page.locator("[data-testid=stExpander]").filter(has_text="Lore Import").first
         source_directory = page.get_by_role("textbox", name="Source Directory")
-        expect(source_directory).to_have_value(str(docs_lore_dir), timeout=10000)
+        expect(source_directory).to_have_value(str(import_dir), timeout=10000)
         expect(lore_import.get_by_label("Character Sheet File")).to_have_count(0)
         source_directory.fill(str(fixture_dir))
         page.get_by_role("button", name="folder_copy Import Lore Directory").click()
@@ -634,7 +640,7 @@ def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
 
 def test_ui_bulk_lore_removal_confirms_before_cleaning_lore(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
-    character_metadata_dir = docs_lore_dir.parent.parent / "data" / "character_metadata"
+    character_metadata_dir = docs_lore_dir.parent.parent / "meta_data" / "character_metadata"
     characters_dir = docs_lore_dir / "character_sheets"
     places_dir = docs_lore_dir / "places"
     notes_dir = docs_lore_dir / "session_notes"

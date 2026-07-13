@@ -2,15 +2,19 @@
 
 ## Purpose
 
-The combined knowledge graph is a campaign-level view built from authored lore in `data/lore`. It connects character sheets, place files, and secondary references into one navigable graph without requiring the player to manually load each character file.
+The combined knowledge graph is a campaign-level view built from authored lore in `world_building/lore`. It connects character sheets, place files, and secondary references into one navigable graph without requiring the player to manually load each character file.
 
 ## Source Of Truth
 
-- `data/lore/character_sheets` is the source for available character sheets.
-- `data/lore/places` is the source for available places.
-- `data/lore` is ignored by git and should contain user-local campaign data.
-- `data/character_graph` stores derived per-character graph JSON and can be rebuilt.
-- Generated characters are written to `data/lore/character_sheets` only after the player saves them.
+- `docs/` stores committed specifications, designs, templates, reports, and screenshots.
+- `world_building/import` is the staging area for raw import files.
+- `world_building/lore` is the canonical user-facing campaign Markdown store.
+- `world_building/lore/character_sheets` is the source for available character sheets.
+- `world_building/lore/places` is the source for available places.
+- `world_building/lore` is ignored by git and should contain user-local campaign data.
+- `meta_data/character_graph` stores derived per-character graph JSON and can be rebuilt.
+- `meta_data/character_metadata` stores runtime profile metadata, memory notes, and chat logs.
+- Generated characters are written to `world_building/lore/character_sheets` only after the player saves them.
 
 ## Visibility
 
@@ -22,11 +26,11 @@ LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH=1
 
 ## Inputs
 
-When generating the combined graph, the app should parse all supported lore files under `data/lore`:
+When generating the combined graph, the app should parse all supported lore files under `world_building/lore`:
 
-- `data/lore/character_sheets/*.md`
-- `data/lore/character_sheets/*/BACKSTORY.md`
-- `data/lore/places/*.md`
+- `world_building/lore/character_sheets/*.md`
+- `world_building/lore/character_sheets/*/BACKSTORY.md`
+- `world_building/lore/places/*.md`
 
 ## Graph Semantics
 

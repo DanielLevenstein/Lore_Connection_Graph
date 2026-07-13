@@ -151,7 +151,7 @@ Undo should:
 - Regenerate the graph after restoring the sheet.
 - Remain visible and usable whether or not `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES` is enabled.
 
-Future durable undo can store snapshots under `data/lore/character_sheets/<character>/undo/`, but the current session stack is sufficient for the first implementation.
+Future durable undo can store snapshots under `world_building/lore/character_sheets/<character>/undo/`, but the current session stack is sufficient for the first implementation.
 
 ## UI Flow
 
