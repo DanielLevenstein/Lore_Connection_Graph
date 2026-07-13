@@ -209,11 +209,11 @@ def test_session_note_file_save_overwrites_and_reloads_by_date(tmp_path, monkeyp
     assert second_save[0].path.name == "2026-07-10_Session_Notes.md"
     assert session_notes.read_session_note(second_save[0].path) == (
         "# Session Notes - 2026-07-10 - Session Notes\n\n"
-        "2026-07-10\n"
+        "## 2026-07-10\n"
         "The party found a silver key and a brass map.\n"
     )
     assert session_notes.read_session_note_body(second_save[0].path) == (
-        "2026-07-10\n"
+        "## 2026-07-10\n"
         "The party found a silver key and a brass map."
     )
 

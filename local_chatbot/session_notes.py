@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 from .paths import SESSION_NOTES_DIR
 
@@ -15,7 +16,12 @@ MONTH_DATE_PATTERN = re.compile(
     r"\s+(?P<day>\d{1,2})(?:,\s*(?P<year>20\d{2}))?\b",
     re.IGNORECASE,
 )
-DISCORD_AUTHOR_DATE_PATTERN = re.compile(r"—\s*\d{1,2}/\d{1,2}/\d{2},\s*.+$")
+DISCORD_AUTHOR_DATE_PATTERN = re.compile(r"—\s*\d{1,2}/\d{1,2}/(?:\d{2}|20\d{2}),\s*.+$")
+DISCORD_AUTHOR_HEADING_PATTERN = re.compile(
+    r"^(?P<username>.+?)\s*(?:\[[^\]]+\])?\s*,?\s*(?:Server Tag:[^—]*)?—",
+    re.IGNORECASE,
+)
+DISCORD_SHORT_DATE_PATTERN = re.compile(r"—\s*(?P<month>\d{1,2})/(?P<day>\d{1,2})/(?P<year>\d{2}|20\d{2}),")
 DISCORD_CONTINUATION_PATTERN = re.compile(r"^\[[^\]]+\](?P<date>.+)$")
 DISCORD_DATE_DIVIDER_PATTERN = re.compile(
     r"^(?P<month>January|February|March|April|May|June|July|August|September|October|November|December)"
@@ -49,18 +55,40 @@ MONTHS = {
 
 @dataclass(frozen=True)
 class SessionNote:
-    note_date: date | None
+    note_date: date | str | None
     body: str
     path: Path
     title: str = ""
 
 
-def session_note_path(note_date: date, title: str = "") -> Path:
-    return SESSION_NOTES_DIR / f"{note_date.isoformat()}_{safe_session_note_title(title or 'Session Notes')}.md"
+@dataclass(frozen=True)
+class ImportHeading:
+    key: str
+    level: int
+    text: str
+    kind: str
+
+
+@dataclass(frozen=True)
+class MarkdownSection:
+    key: str
+    level: int
+    text: str
+    date_text: str
+    body: str
+    start_line: int = 0
+    end_line: int = 0
+
+
+def session_note_path(note_date: date | str, title: str = "") -> Path:
+    date_slug = note_date.isoformat() if isinstance(note_date, date) else safe_session_note_title(note_date)
+    return SESSION_NOTES_DIR / f"{date_slug}_{safe_session_note_title(title or 'Session Notes')}.md"
 
 
 def safe_session_note_title(title: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9]+", "_", title.strip()).strip("_")
+    if cleaned.lower() == "session_importer":
+        return "Session_importer"
     return cleaned or "Session_Notes"
 
 
@@ -87,19 +115,347 @@ def import_lore_document_text(text: str, title: str = "") -> SessionNote:
     return SessionNote(note_date=None, body=body, path=path, title=inferred_title)
 
 
+def prepare_markdown_import(
+    text: str,
+    title: str = "",
+    selected_heading_keys: set[str] | None = None,
+    today: date | None = None,
+) -> tuple[str, list[ImportHeading]]:
+    normalized = normalize_import_headings(text, title=title, today=today)
+    headings = import_headings(normalized, today=today)
+    if selected_heading_keys is None:
+        return normalized, headings
+    return restore_unselected_import_headings(normalized, selected_heading_keys, today=today), headings
+
+
+def normalize_import_headings(text: str, title: str = "", today: date | None = None) -> str:
+    default_year = (today or date.today()).year
+    lines = text.strip().splitlines()
+    document_title = clean_import_title(title.strip()) or markdown_title(text) or "Session Notes"
+    normalized: list[str] = []
+    found_document_title = False
+    seen_content = False
+
+    for line in lines:
+        stripped = line.strip()
+        discord_heading = discord_author_heading_text(stripped)
+        if discord_heading:
+            normalized.append(f"##### {discord_heading}")
+            if stripped:
+                seen_content = True
+            continue
+        heading = markdown_heading_parts(stripped)
+        date_text = standalone_date_text(stripped, default_year)
+        if date_text:
+            normalized.append(f"## {date_text}")
+            continue
+        if heading:
+            level, heading_text = heading
+            if not found_document_title and level == 1:
+                normalized.append(f"# {heading_text}")
+                found_document_title = True
+                seen_content = True
+            else:
+                normalized.append(f"{'#' * level} {heading_text}")
+                seen_content = True
+            continue
+        if (
+            stripped
+            and not found_document_title
+            and not seen_content
+            and safe_session_note_title(stripped).lower() == safe_session_note_title(document_title).lower()
+        ):
+            normalized.append(f"# {document_title}")
+            found_document_title = True
+            seen_content = True
+            continue
+        if looks_like_plain_section_heading(stripped):
+            heading_text = stripped.rstrip(":")
+            if not found_document_title and not seen_content:
+                if safe_session_note_title(heading_text).lower() == safe_session_note_title(document_title).lower():
+                    heading_text = document_title
+                normalized.append(f"# {heading_text}")
+                found_document_title = True
+            else:
+                normalized.append(f"## {heading_text}")
+            seen_content = True
+            continue
+        normalized.append(line)
+        if stripped:
+            seen_content = True
+
+    if not found_document_title:
+        normalized.insert(0, f"# {document_title}")
+        if len(normalized) > 1 and normalized[1].strip():
+            normalized.insert(1, "")
+    return "\n".join(move_chat_headings_below_higher_level_headings(normalized)).strip()
+
+
+def import_headings(text: str, today: date | None = None) -> list[ImportHeading]:
+    default_year = (today or date.today()).year
+    headings: list[ImportHeading] = []
+    for line in text.splitlines():
+        heading = markdown_heading_parts(line.strip())
+        if not heading:
+            continue
+        level, heading_text = heading
+        if level > 3:
+            continue
+        kind = "date" if standalone_date_text(heading_text, default_year) else "heading"
+        key = f"{len(headings)}:{kind}:{safe_session_note_title(heading_text)}"
+        headings.append(ImportHeading(key=key, level=level, text=heading_text, kind=kind))
+    return headings
+
+
+def clean_import_title(title: str) -> str:
+    return title.replace("_", " ").strip()
+
+
+def restore_unselected_import_headings(
+    text: str,
+    selected_heading_keys: set[str],
+    today: date | None = None,
+) -> str:
+    heading_order = import_headings(text, today=today)
+    key_by_index = {index: heading.key for index, heading in enumerate(heading_order)}
+    heading_index = 0
+    output: list[str] = []
+    for line in text.splitlines():
+        heading = markdown_heading_parts(line.strip())
+        if not heading or heading[0] > 3:
+            output.append(line)
+            continue
+        _level, heading_text = heading
+        key = key_by_index.get(heading_index)
+        heading_index += 1
+        is_date_heading = standalone_date_text(heading_text, (today or date.today()).year)
+        if key and key not in selected_heading_keys and not is_date_heading:
+            output.append(heading_text)
+        else:
+            output.append(line)
+    return "\n".join(output).strip()
+
+
+def markdown_sections(text: str, today: date | None = None) -> list[MarkdownSection]:
+    default_year = (today or date.today()).year
+    lines = text.splitlines()
+    heading_positions: list[tuple[int, int, str]] = []
+    for index, line in enumerate(lines):
+        heading = markdown_heading_parts(line.strip())
+        if heading and heading[0] <= 3:
+            heading_positions.append((index, heading[0], heading[1]))
+
+    sections: list[MarkdownSection] = []
+    current_date = ""
+    for position, (line_index, level, heading_text) in enumerate(heading_positions):
+        if level == 2 and standalone_date_text(heading_text, default_year):
+            current_date = heading_text
+        next_index = len(lines)
+        for following_index, following_level, _following_text in heading_positions[position + 1 :]:
+            if following_level <= level:
+                next_index = following_index
+                break
+        body = "\n".join(lines[line_index:next_index]).strip()
+        section_date = heading_text if level == 2 and standalone_date_text(heading_text, default_year) else current_date
+        key = f"{position}:{level}:{safe_session_note_title(heading_text)}"
+        sections.append(
+            MarkdownSection(
+                key=key,
+                level=level,
+                text=heading_text,
+                date_text=section_date,
+                body=body,
+                start_line=line_index,
+                end_line=next_index,
+            )
+        )
+    return sections
+
+
+def read_markdown_section(path: Path, section_key: str) -> str:
+    for section in markdown_sections(read_session_note(path)):
+        if section.key == section_key:
+            return section.body
+    return read_session_note(path).strip()
+
+
+def child_markdown_sections(text: str, section_key: str) -> list[MarkdownSection]:
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None:
+        return []
+    lines = text.splitlines()
+    children: list[MarkdownSection] = []
+    for index in range(section.start_line + 1, section.end_line):
+        heading = markdown_heading_parts(lines[index].strip())
+        if not heading:
+            continue
+        level, heading_text = heading
+        if section.level < level <= 4:
+            children.append(
+                MarkdownSection(
+                    key=f"{index}:{level}:{safe_session_note_title(heading_text)}",
+                    level=level,
+                    text=heading_text,
+                    date_text=section.date_text,
+                    body=lines[index].strip(),
+                    start_line=index,
+                    end_line=index + 1,
+                )
+            )
+    return children
+
+
+def starts_with_searchable_markdown_heading(text: str) -> bool:
+    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    heading = markdown_heading_parts(first_line)
+    return bool(heading and heading[0] <= 3)
+
+
+def write_markdown_section(path: Path, section_key: str, body: str) -> SessionNote:
+    text = read_session_note(path)
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None:
+        return write_lore_document(path, body)
+
+    lines = text.splitlines()
+    replacement = body.strip().splitlines()
+    updated_lines = lines[: section.start_line] + replacement + lines[section.end_line :]
+    updated = "\n".join(updated_lines).strip()
+    path.write_text(f"{updated}\n", encoding="utf-8")
+    title = markdown_title(updated) or path.stem.replace("_", " ")
+    return SessionNote(note_date=None, body=updated, path=path, title=title)
+
+
+def insert_markdown_section(path: Path, section_key: str, placement: str) -> tuple[SessionNote, str]:
+    text = read_session_note(path)
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None:
+        return write_lore_document(path, text), ""
+
+    label = "Previously" if placement == "previous" else "Coming Next"
+    heading = f"{'#' * section.level} {section.text}: ({label})"
+    lines = text.splitlines()
+    insertion_index = section.start_line if placement == "previous" else section.end_line
+    insertion = [heading, ""]
+    if insertion_index > 0 and lines[insertion_index - 1].strip():
+        insertion.insert(0, "")
+    updated_lines = lines[:insertion_index] + insertion + lines[insertion_index:]
+    updated = "\n".join(updated_lines).strip()
+    note = write_lore_document(path, updated)
+    new_section = next(
+        (
+            candidate
+            for candidate in markdown_sections(updated)
+            if candidate.text == f"{section.text}: ({label})" and candidate.level == section.level
+        ),
+        None,
+    )
+    return note, new_section.key if new_section else ""
+
+
+def remove_markdown_section(path: Path, section_key: str) -> SessionNote:
+    text = read_session_note(path)
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None:
+        return write_lore_document(path, text)
+
+    lines = text.splitlines()
+    updated_lines = lines[: section.start_line] + lines[section.end_line :]
+    updated = "\n".join(updated_lines).strip()
+    return write_lore_document(path, updated)
+
+
+def combine_markdown_section(path: Path, section_key: str) -> tuple[SessionNote, str]:
+    text = read_session_note(path)
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None or section.start_line == 0:
+        return write_lore_document(path, text), section_key
+
+    lines = text.splitlines()
+    lines[section.start_line] = f"##### {section.text}"
+    updated = "\n".join(lines).strip()
+    note = write_lore_document(path, updated)
+    parent = next(
+        (
+            candidate
+            for candidate in reversed(markdown_sections(updated))
+            if candidate.start_line < section.start_line and candidate.level < section.level
+        ),
+        None,
+    )
+    return note, parent.key if parent else ""
+
+
+def move_chat_headings_below_higher_level_headings(lines: list[str]) -> list[str]:
+    reordered = list(lines)
+    for index in range(0, len(reordered) - 1):
+        current_heading = markdown_heading_parts(reordered[index].strip())
+        following_heading = markdown_heading_parts(reordered[index + 1].strip())
+        if (
+            current_heading
+            and following_heading
+            and is_chat_log_heading(current_heading)
+            and following_heading[0] < current_heading[0]
+        ):
+            reordered[index], reordered[index + 1] = reordered[index + 1], reordered[index]
+    return reordered
+
+
+def is_chat_log_heading(heading: tuple[int, str]) -> bool:
+    level, heading_text = heading
+    return level >= 4 and bool(re.match(r"^20\d{2}/\d{2}/\d{2}\s+-\s+\S", heading_text))
+
+
 def import_markdown_text(
     text: str,
     title: str = "",
     include_detected_dates: bool = False,
     split_sessions: bool = True,
+    session_date: str = "",
+    selected_heading_keys: set[str] | None = None,
+    save_as_single_file: bool = False,
     today: date | None = None,
 ) -> list[SessionNote]:
+    if save_as_single_file:
+        text, _headings = prepare_markdown_import(
+            text,
+            title=title,
+            selected_heading_keys=selected_heading_keys,
+            today=today,
+        )
+        return [import_lore_document_text(text, title=title)]
     if include_detected_dates:
         imported = import_discord_session_notes_text(text, split_sessions=split_sessions)
         if imported:
             return imported
+        if selected_heading_keys is None:
+            text = normalize_date_fields_to_markdown_headings(text, today)
+        else:
+            text, _headings = prepare_markdown_import(
+                text,
+                title=title,
+                selected_heading_keys=selected_heading_keys,
+                today=today,
+            )
         if text_has_session_dates(text, today):
             return save_session_notes(text, today=today, title=title)
+    else:
+        if selected_heading_keys is None:
+            text = normalize_date_fields_to_markdown_headings(text, today)
+        else:
+            text, _headings = prepare_markdown_import(
+                text,
+                title=title,
+                selected_heading_keys=selected_heading_keys,
+                today=today,
+            )
+    if session_date.strip():
+        return save_session_notes(text, today=today, title=title, session_date=session_date)
     return [import_lore_document_text(text, title=title)]
 
 
@@ -110,6 +466,7 @@ def text_has_session_dates(text: str, today: date | None = None) -> bool:
 
 def split_session_notes(text: str, today: date | None = None) -> list[tuple[date, str]]:
     today = today or date.today()
+    text = normalize_date_fields_to_markdown_headings(text, today)
     lines = text.strip().splitlines()
     if not lines:
         return [(today, "")]
@@ -138,10 +495,16 @@ def split_session_notes(text: str, today: date | None = None) -> list[tuple[date
     return [(note_date, "\n".join(buckets[note_date]).strip()) for note_date in order]
 
 
-def save_session_notes(text: str, today: date | None = None, title: str = "") -> list[SessionNote]:
+def save_session_notes(
+    text: str,
+    today: date | None = None,
+    title: str = "",
+    session_date: str = "",
+) -> list[SessionNote]:
     SESSION_NOTES_DIR.mkdir(parents=True, exist_ok=True)
+    text = normalize_date_fields_to_markdown_headings(text, today)
     notes: list[SessionNote] = []
-    for note_date, note_title, body in extract_session_notes(text, today, title):
+    for note_date, note_title, body in extract_session_notes(text, today, title, session_date):
         path = session_note_path(note_date, note_title)
         content = render_session_note(note_date, body, note_title)
         path.write_text(content, encoding="utf-8")
@@ -149,9 +512,20 @@ def save_session_notes(text: str, today: date | None = None, title: str = "") ->
     return notes
 
 
-def extract_session_notes(text: str, today: date | None = None, title: str = "") -> list[tuple[date, str, str]]:
-    extracted: list[tuple[date, str, str]] = []
-    for note_date, body in split_session_notes(text, today):
+def extract_session_notes(
+    text: str,
+    today: date | None = None,
+    title: str = "",
+    session_date: str = "",
+) -> list[tuple[date | str, str, str]]:
+    extracted: list[tuple[date | str, str, str]] = []
+    explicit_session_date = parse_editable_session_date(session_date)
+    dated_bodies: list[tuple[date | str, str]]
+    if explicit_session_date:
+        dated_bodies = [(explicit_session_date, text.strip())]
+    else:
+        dated_bodies = split_session_notes(text, today)
+    for note_date, body in dated_bodies:
         for inferred_title, session_body in split_session_note_bodies(body):
             extracted.append((note_date, inferred_title, session_body))
     if title.strip() and len(extracted) == 1:
@@ -225,6 +599,23 @@ def split_discord_session_notes(text: str, split_sessions: bool = True) -> list[
     return notes
 
 
+def discord_author_heading_text(line: str) -> str:
+    match = DISCORD_AUTHOR_HEADING_PATTERN.match(line)
+    if not match:
+        return ""
+    author_date = discord_author_line_date(line)
+    if not author_date:
+        return ""
+    username = clean_discord_username(match.group("username"))
+    if not username:
+        return ""
+    return f"{author_date:%Y/%m/%d} - {username}"
+
+
+def clean_discord_username(username: str) -> str:
+    return " ".join(username.strip().rstrip(",").split())
+
+
 def split_session_note_bodies(body: str) -> list[tuple[str, str]]:
     matches = list(re.finditer(r"(?im)^Session\s+(.+?):\s*$", body))
     if not matches:
@@ -243,7 +634,7 @@ def split_session_note_bodies(body: str) -> list[tuple[str, str]]:
 def discord_author_line_date(line: str) -> date | None:
     if not DISCORD_AUTHOR_DATE_PATTERN.search(line):
         return None
-    return discord_full_date(line) or date_from_line(line, date.today().year)
+    return discord_full_date(line) or discord_short_date(line) or date_from_line(line, date.today().year)
 
 
 def discord_continuation_date(line: str) -> date | None:
@@ -260,6 +651,19 @@ def discord_date_divider(line: str) -> date | None:
         return None
     month = MONTHS[match.group("month").lower()]
     return date(int(match.group("year")), month, int(match.group("day")))
+
+
+def discord_short_date(line: str) -> date | None:
+    match = DISCORD_SHORT_DATE_PATTERN.search(line)
+    if not match:
+        return None
+    year = int(match.group("year"))
+    if year < 100:
+        year += 2000
+    try:
+        return date(year, int(match.group("month")), int(match.group("day")))
+    except ValueError:
+        return None
 
 
 def discord_full_date(line: str) -> date | None:
@@ -310,15 +714,17 @@ def list_session_notes() -> list[Path]:
             if path.name != "DISCORD.md" and "TEMPLATE" not in path.name.upper()
         ],
         key=session_note_sort_key,
-        reverse=True,
     )
 
 
-def session_note_sort_key(path: Path) -> tuple[int, date, str]:
-    try:
-        return (1, session_note_date_from_path(path), path.name.lower())
-    except ValueError:
-        return (0, date.min, path.name.lower())
+def session_note_sort_key(path: Path) -> tuple[Any, ...]:
+    session_date = read_session_note_date_text(path)
+    if session_date:
+        parsed_date = date_from_line(session_date, date.today().year)
+        if parsed_date:
+            return (0, 0, -parsed_date.toordinal(), natural_sort_key(read_session_note_title(path)), path.name.lower())
+        return (0, 1, natural_sort_key(session_date), natural_sort_key(read_session_note_title(path)), path.name.lower())
+    return (1, -path_import_timestamp(path), natural_sort_key(path.stem), path.name.lower())
 
 
 def has_session_note_date(path: Path) -> bool:
@@ -343,19 +749,26 @@ def read_session_note_body(path: Path) -> str:
     return text.strip()
 
 
-def read_session_note_title(path: Path) -> str:
+def parse_session_note_heading(path: Path) -> tuple[str, str]:
     text = read_session_note(path)
     first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
-    if not first_line.lower().startswith("# session notes -"):
-        return ""
+    match = re.match(r"^#\s+Session Notes\s+-\s+(?P<session_date>.+?)(?:\s+-\s+(?P<title>.+))?$", first_line)
+    if match:
+        return match.group("session_date").strip(), (match.group("title") or "").strip()
     try:
-        note_date = session_note_date_from_path(path).isoformat()
+        return session_note_date_from_path(path).isoformat(), ""
     except ValueError:
-        return ""
-    prefix = f"# Session Notes - {note_date} - "
-    if first_line.lower().startswith(prefix.lower()):
-        return first_line[len(prefix):].strip()
-    return ""
+        return "", ""
+
+
+def read_session_note_date_text(path: Path) -> str:
+    session_date, _title = parse_session_note_heading(path)
+    return session_date
+
+
+def read_session_note_title(path: Path) -> str:
+    _session_date, title = parse_session_note_heading(path)
+    return title
 
 
 def markdown_title(text: str) -> str:
@@ -366,6 +779,28 @@ def markdown_title(text: str) -> str:
     return ""
 
 
+def markdown_heading_parts(line: str) -> tuple[int, str] | None:
+    match = re.fullmatch(r"(#{1,6})\s+(.+?)\s*", line)
+    if not match:
+        return None
+    return len(match.group(1)), match.group(2).strip()
+
+
+def looks_like_plain_section_heading(line: str) -> bool:
+    if not line or len(line) > 80:
+        return False
+    if line.startswith(("-", "*", "|", ">")):
+        return False
+    if not line.endswith(":"):
+        return False
+    line = line.rstrip(":").strip()
+    if re.search(r"[.!?]$", line):
+        return False
+    if standalone_date_text(line, date.today().year):
+        return False
+    return bool(re.fullmatch(r"[A-Z][A-Za-z0-9'’&/ -]+", line))
+
+
 def session_note_date_from_path(path: Path) -> date:
     match = re.search(r"(?P<year>20\d{2})-(?P<month>\d{1,2})-(?P<day>\d{1,2})", path.stem)
     if not match:
@@ -373,8 +808,10 @@ def session_note_date_from_path(path: Path) -> date:
     return date(int(match.group("year")), int(match.group("month")), int(match.group("day")))
 
 
-def write_session_note(path: Path, body: str, title: str = "") -> SessionNote:
-    note_date = session_note_date_from_path(path)
+def write_session_note(path: Path, body: str, title: str = "", session_date: str = "") -> SessionNote:
+    note_date = parse_editable_session_date(session_date) or parse_editable_session_date(read_session_note_date_text(path))
+    if not note_date:
+        note_date = session_note_date_from_path(path)
     path.write_text(render_session_note(note_date, body, title), encoding="utf-8")
     return SessionNote(note_date=note_date, body=body.strip(), path=path, title=title.strip())
 
@@ -389,9 +826,10 @@ def delete_session_note(path: Path) -> None:
     path.unlink(missing_ok=True)
 
 
-def render_session_note(note_date: date, body: str, title: str = "") -> str:
+def render_session_note(note_date: date | str, body: str, title: str = "") -> str:
+    session_date = note_date.isoformat() if isinstance(note_date, date) else note_date.strip()
     title_suffix = f" - {title.strip()}" if title.strip() else ""
-    return f"# Session Notes - {note_date.isoformat()}{title_suffix}\n\n{body.strip()}\n"
+    return f"# Session Notes - {session_date}{title_suffix}\n\n{body.strip()}\n"
 
 
 def append_lines(buckets: dict[date, list[str]], order: list[date], note_date: date, lines: list[str]) -> None:
@@ -399,6 +837,31 @@ def append_lines(buckets: dict[date, list[str]], order: list[date], note_date: d
         buckets[note_date] = []
         order.append(note_date)
     buckets[note_date].extend(lines)
+
+
+def parse_editable_session_date(session_date: str) -> date | str | None:
+    cleaned = session_date.strip()
+    if not cleaned:
+        return None
+    parsed = date_from_line(cleaned, date.today().year)
+    return parsed or cleaned
+
+
+def natural_sort_key(value: str) -> tuple[Any, ...]:
+    parts: list[Any] = []
+    for part in re.split(r"(\d+)", value.lower()):
+        if part.isdigit():
+            parts.append((0, int(part)))
+        elif part:
+            parts.append((1, part))
+    return tuple(parts)
+
+
+def path_import_timestamp(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0
 
 
 def date_from_line(line: str, default_year: int) -> date | None:
@@ -416,3 +879,34 @@ def date_from_line(line: str, default_year: int) -> date | None:
         except ValueError:
             return None
     return None
+
+
+def normalize_date_fields_to_markdown_headings(text: str, today: date | None = None) -> str:
+    default_year = (today or date.today()).year
+    normalized_lines: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        date_text = standalone_date_text(stripped, default_year)
+        if date_text:
+            normalized_lines.append(f"## {date_text}")
+        else:
+            normalized_lines.append(line)
+    return "\n".join(normalized_lines).strip()
+
+
+def standalone_date_text(line: str, default_year: int) -> str:
+    heading_match = re.fullmatch(r"#{1,6}\s*(?P<date_text>.+)", line)
+    date_text = heading_match.group("date_text").strip() if heading_match else line
+    if not date_text:
+        return ""
+    if not date_from_line(date_text, default_year):
+        return ""
+    exact_patterns = (
+        r"20\d{2}-\d{1,2}-\d{1,2}",
+        r"\d{1,2}/\d{1,2}(?:/20\d{2})?",
+        r"(?:January|February|March|April|May|June|July|August|September|October|November|December)"
+        r"\s+\d{1,2}(?:,\s*20\d{2})?",
+    )
+    if any(re.fullmatch(pattern, date_text, re.IGNORECASE) for pattern in exact_patterns):
+        return date_text
+    return ""

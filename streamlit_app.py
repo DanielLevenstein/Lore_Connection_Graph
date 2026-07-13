@@ -1,6 +1,6 @@
-import os
 from dataclasses import replace
 from pathlib import Path
+import os
 
 import streamlit as st
 
@@ -29,6 +29,7 @@ from local_chatbot.storage import (
     CharacterProfile,
     Place,
     PlaceProfile,
+    append_character_connections,
     character_family_name,
     character_first_name,
     create_character,
@@ -44,7 +45,9 @@ from local_chatbot.storage import (
     read_character_profile,
     read_text,
     regenerate_character_graph,
+    remove_character_connections,
     start_chatlog,
+    write_character_connections,
     write_character_profile,
     write_place_markdown,
 )
@@ -53,24 +56,32 @@ from local_chatbot.character_rewrites import (
     graph_generated_summary as build_graph_generated_summary,
 )
 from local_chatbot.session_notes import (
+    child_markdown_sections,
+    combine_markdown_section,
     import_markdown_text,
     delete_session_note,
+    insert_markdown_section,
+    markdown_sections,
+    prepare_markdown_import,
     list_session_notes,
+    read_markdown_section,
     read_session_note,
     read_session_note_body,
+    read_session_note_date_text,
     read_session_note_title,
-    save_session_notes,
-    session_note_date_from_path,
+    remove_markdown_section,
+    starts_with_searchable_markdown_heading,
     write_lore_document,
+    write_markdown_section,
     write_session_note,
 )
 from local_chatbot.lore_import import clear_local_lore, import_lore_directory
 from local_chatbot.paths import DOCS_LORE_DIR
 
 ENABLE_CHARACTER_REWRITE = "1"
+ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 ENABLE_EXTERNAL_CHARACTER_IMPORT = "LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"
-MAIN_NAVIGATION_TAB_KEY = "main_navigation_tab"
-MAIN_NAVIGATION_WIDGET_KEY = "main_navigation_tab_widget"
+MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
 ensure_base_dirs()
@@ -106,11 +117,6 @@ def set_active_character(character: Character) -> None:
         st.session_state.chatlog_path = str(start_chatlog(character))
 
 
-def set_main_navigation_tab(tab: str) -> None:
-    st.session_state[MAIN_NAVIGATION_TAB_KEY] = tab
-    st.session_state[MAIN_NAVIGATION_WIDGET_KEY] = tab
-
-
 def get_active_character() -> Character | None:
     name = st.session_state.get("active_character")
     if not name:
@@ -140,6 +146,26 @@ def get_active_session_note():
     return next((path for path in list_session_notes() if path.name == name), None)
 
 
+def set_active_session_note_section(section_key: str = "") -> None:
+    if section_key:
+        st.session_state.active_session_note_section = section_key
+    else:
+        st.session_state.pop("active_session_note_section", None)
+
+
+def request_main_navigation_tab(tab_name: str) -> None:
+    if tab_name not in MAIN_NAVIGATION_TABS:
+        return
+    st.session_state["main_navigation_tab_default"] = tab_name
+    st.session_state["main_navigation_tab_revision"] = st.session_state.get("main_navigation_tab_revision", 0) + 1
+
+
+def sync_main_navigation_tab(tab_key: str) -> None:
+    selected = st.session_state.get(tab_key)
+    if selected in MAIN_NAVIGATION_TABS:
+        st.session_state["main_navigation_tab_default"] = selected
+
+
 def display_character_name(character: Character) -> str:
     profile = read_character_profile(character)
     return clean_display_name(profile.name or character.name)
@@ -154,9 +180,8 @@ def display_place_option(place: Place) -> str:
 
 
 def display_session_note_name(path, show_dates: bool = False) -> str:
-    try:
-        note_date = session_note_date_from_path(path).isoformat()
-    except ValueError:
+    note_date = read_session_note_date_text(path)
+    if not note_date:
         title = markdown_document_title(read_session_note(path))
         return clean_display_name(title or path.stem.replace("session_notes_", "").replace("_", " "))
     title = read_session_note_title(path)
@@ -166,7 +191,28 @@ def display_session_note_name(path, show_dates: bool = False) -> str:
 
 
 def display_session_note_option(path, show_dates: bool = False) -> str:
-    return f"{display_session_note_name(path, show_dates=show_dates)} ({path.name})"
+    note_date = read_session_note_date_text(path)
+    heading = display_session_note_name(path, show_dates=False)
+    if note_date and show_dates:
+        return f"{path.name} - {note_date} - {heading}"
+    return f"{path.name} - {heading}"
+
+
+def session_note_select_options(paths, show_dates: bool = False) -> list[dict[str, str]]:
+    options: list[dict[str, str]] = []
+    for path in paths:
+        note_date = read_session_note_date_text(path)
+        if note_date:
+            options.append({"label": display_session_note_option(path, show_dates=show_dates), "path": path.name, "section": ""})
+        sections = markdown_sections(read_session_note(path))
+        if not sections:
+            if not note_date:
+                options.append({"label": display_session_note_option(path, show_dates=show_dates), "path": path.name, "section": ""})
+            continue
+        for section in sections:
+            label = f"{path.name} H{section.level}: {section.text}"
+            options.append({"label": label, "path": path.name, "section": section.key})
+    return options
 
 
 def markdown_document_title(text: str) -> str:
@@ -191,6 +237,10 @@ def clean_display_name(name: str) -> str:
 
 def graph_rewrites_enabled() -> bool:
     return ENABLE_CHARACTER_REWRITE
+
+
+def attribute_graph_override_enabled() -> bool:
+    return os.environ.get(ENABLE_ATTRIBUTE_GRAPH_OVERRIDE) == "1"
 
 
 def external_character_import_enabled() -> bool:
@@ -471,6 +521,39 @@ def render_relationship_graph(character: Character) -> None:
         attributes_tab = st.tabs(["Attributes"])[0]
         with attributes_tab:
             st.table(evidence, hide_index=True, width="stretch")
+            if attribute_graph_override_enabled():
+                render_attribute_graph_override_editor(character, evidence)
+
+
+def render_attribute_graph_override_editor(character: Character, evidence: list[dict[str, str]]) -> None:
+    with st.expander("Override Attribute Graph", expanded=False):
+        st.caption("When a Character Connections table is present, graph regeneration uses these rows instead of inferred attributes.")
+        override_key = f"attribute_graph_override_{character.name}"
+        with st.form(f"attribute_graph_override_form_{character.name}"):
+            edited_rows = st.data_editor(
+                evidence,
+                num_rows="dynamic",
+                key=override_key,
+                column_order=("Table", "Item", "Value", "Evidence"),
+                width="stretch",
+            )
+            action_cols = st.columns(2)
+            save_override = action_cols[0].form_submit_button(
+                "Save Attribute Graph Override",
+                icon=":material/edit_note:",
+            )
+            clear_override = action_cols[1].form_submit_button(
+                "Use Extracted Graph Again",
+                icon=":material/auto_awesome:",
+            )
+        if save_override:
+            write_character_connections(character, edited_rows, manual_override=True)
+            st.success("Attribute Graph Override Saved.")
+            st.rerun()
+        if clear_override:
+            remove_character_connections(character)
+            st.success("Attribute Graph Override Cleared.")
+            st.rerun()
 
 
 def attribute_graph_display_rows(profile: CharacterProfile) -> list[dict[str, str]]:
@@ -504,6 +587,19 @@ def render_combined_character_graph() -> None:
     place_sources = [(compact(place.name), place.name, str(place.path)) for place in places]
     with st.expander("Combined Knowledge Graph", expanded=False):
         render_pending_lore_drafts()
+        if st.button("Regenerate All Lore Graphs", icon=":material/sync:", key="regen_all_lore_graphs"):
+            failures = []
+            for character in characters:
+                try:
+                    regenerate_character_graph(character)
+                except (OSError, ValueError) as exc:
+                    failures.append(f"{display_character_name(character)}: {exc}")
+            if failures:
+                st.error("Could Not Regenerate Every Lore Graph. " + " ".join(failures))
+            else:
+                st.success("All Lore Graphs Regenerated.")
+                st.rerun()
+
         if not graphs and not place_sources:
             st.info("Add Character Or Place Lore To See The Combined Graph.")
             return
@@ -513,6 +609,7 @@ def render_combined_character_graph() -> None:
         character_nodes = [node for node in combined.characters.values() if node.node_type == "character"]
         character_tabs = st.tabs([node.name for node in character_nodes] or ["Lore"])
         primary_ids = {compact(character.name) for character in characters}
+        characters_by_id = {compact(character.name): character for character in characters}
         for tab, node in zip(character_tabs, character_nodes):
             with tab:
                 character_id = node.id
@@ -534,6 +631,15 @@ def render_combined_character_graph() -> None:
                 if scoped_detail_rows:
                     st.subheader("Character Graph Details")
                     st.table(scoped_detail_rows, hide_index=True, width="stretch")
+                if st.button(
+                    "Add Character Connections",
+                    icon=":material/account_tree:",
+                    key=f"append_connections_{character_id}",
+                    disabled=character_id not in characters_by_id,
+                ):
+                    append_character_connections(characters_by_id[character_id], connection_rows_for_character(combined, character_id))
+                    st.success("Character Connections Added.")
+                    st.rerun()
 
         secondary_characters = [
             node
@@ -657,6 +763,34 @@ def render_pending_lore_drafts() -> None:
         render_place_creator_form("graph_pending_place", st.session_state.pending_place_profile)
 
 
+def connection_rows_for_character(combined, character_id: str) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for edge in combined.edges:
+        source = combined.characters.get(edge.source)
+        target = combined.characters.get(edge.target)
+        if not source or not target:
+            continue
+        if compact(source.name) == character_id:
+            rows.append(
+                {
+                    "Source": "Character Sheet",
+                    "Relationship": edge.relationship_label,
+                    "Name": target.name,
+                    "Evidence": " ".join(edge.evidence),
+                }
+            )
+        elif compact(target.name) == character_id:
+            rows.append(
+                {
+                    "Source": "Place" if source.node_type == "place" else "Character Sheet",
+                    "Relationship": edge.relationship_label,
+                    "Name": source.name,
+                    "Evidence": " ".join(edge.evidence),
+                }
+            )
+    return rows
+
+
 def render_character_creator(key_prefix: str = "new_character", draft_profile: CharacterProfile | None = None) -> None:
     draft_profile = draft_profile or CharacterProfile(
         name="",
@@ -742,12 +876,7 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
                 key=f"{key_prefix}_details",
             )
 
-        submitted = st.form_submit_button(
-            "Create Character",
-            icon=":material/person_add:",
-            on_click=set_main_navigation_tab,
-            args=("Characters",),
-        )
+        submitted = st.form_submit_button("Create Character", icon=":material/person_add:")
         if submitted:
             if not all([name.strip(), race.strip(), character_class.strip(), backstory.strip()]):
                 st.error("Complete Name, Race, Class, And Backstory.")
@@ -822,12 +951,7 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
             height=220,
             key=f"{key_prefix}_markdown",
         )
-        submitted = st.form_submit_button(
-            "Create Place",
-            icon=":material/add_location_alt:",
-            on_click=set_main_navigation_tab,
-            args=("Places",),
-        )
+        submitted = st.form_submit_button("Create Place", icon=":material/add_location_alt:")
         if submitted:
             if not all([name.strip(), markdown.strip()]):
                 st.error("Complete Name And Place Markdown.")
@@ -890,13 +1014,7 @@ def render_place_panel() -> None:
             key="main_existing_place",
         )
         selected_place = places[display_names.index(selected_place_label)]
-        if st.button(
-            "Open Place",
-            icon=":material/location_on:",
-            key="main_open_place",
-            on_click=set_main_navigation_tab,
-            args=("Places",),
-        ):
+        if st.button("Open Place", icon=":material/location_on:", key="main_open_place"):
             set_active_place(selected_place)
             st.rerun()
         if "active_place" not in st.session_state:
@@ -931,24 +1049,9 @@ def render_place_info(place: Place) -> None:
                 key=f"place_markdown_{place.name}_{editor_revision}",
             )
             action_cols = st.columns(3)
-            save_requested = action_cols[0].form_submit_button(
-                "Save Place",
-                icon=":material/save:",
-                on_click=set_main_navigation_tab,
-                args=("Places",),
-            )
-            delete_requested = action_cols[1].form_submit_button(
-                "Delete Place",
-                icon=":material/delete_forever:",
-                on_click=set_main_navigation_tab,
-                args=("Places",),
-            )
-            undo_requested = action_cols[2].form_submit_button(
-                "Undo Changes",
-                icon=":material/undo:",
-                on_click=set_main_navigation_tab,
-                args=("Places",),
-            )
+            save_requested = action_cols[0].form_submit_button("Save Place", icon=":material/save:")
+            delete_requested = action_cols[1].form_submit_button("Delete Place", icon=":material/delete_forever:")
+            undo_requested = action_cols[2].form_submit_button("Undo Changes", icon=":material/undo:")
             if undo_requested:
                 undo_place_changes(place)
             if delete_requested:
@@ -1023,6 +1126,45 @@ def render_bulk_lore_removal_warning() -> None:
         st.rerun()
 
 
+@st.dialog("Select Searchable Headings")
+def render_session_import_heading_dialog(
+    notes: str,
+    source_name: str,
+) -> None:
+    import_title = os.path.splitext(source_name)[0]
+    _normalized, headings = prepare_markdown_import(notes, title=import_title)
+    st.write("Choose which extracted headings should remain searchable.")
+    selected_heading_keys: set[str] = set()
+    for heading in headings:
+        label = f"H{heading.level} {heading.text}"
+        if st.checkbox(
+            label,
+            value=True,
+            disabled=heading.kind == "date",
+            key=f"import_heading_{heading.key}",
+        ):
+            selected_heading_keys.add(heading.key)
+    action_cols = st.columns(2)
+    if action_cols[0].button("Save Selected Headings", icon=":material/check:", width="stretch"):
+        request_main_navigation_tab("Session Notes")
+        push_session_notes_undo()
+        saved = import_markdown_text(
+            notes,
+            title=import_title,
+            selected_heading_keys=selected_heading_keys,
+            save_as_single_file=True,
+        )
+        st.session_state["session_notes_saved_count"] = len(saved)
+        if saved:
+            set_active_session_note(saved[0].path)
+            set_active_session_note_section()
+        st.session_state["clear_session_notes_draft"] = True
+        st.rerun()
+    if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
+        request_main_navigation_tab("Session Notes")
+        st.rerun()
+
+
 def render_session_notes() -> None:
     st.title("Session Notes")
     saved_count = st.session_state.pop("session_notes_saved_count", 0)
@@ -1031,159 +1173,211 @@ def render_session_notes() -> None:
     session_notes_status = st.session_state.pop("session_notes_status", "")
     if session_notes_status:
         st.success(session_notes_status)
-    show_dates = st.checkbox("Show Dates", value=False, key="show_session_note_dates")
+    session_notes_error = st.session_state.pop("session_notes_error", "")
+    if session_notes_error:
+        st.error(session_notes_error)
+    show_dates = True
 
     note_files = list_session_notes()
     if note_files:
-        display_names = [display_session_note_option(path, show_dates=show_dates) for path in note_files]
+        select_options = session_note_select_options(note_files, show_dates=show_dates)
+        display_names = [option["label"] for option in select_options]
         current = st.session_state.get("active_session_note", note_files[0].name)
-        current_index = next((index for index, path in enumerate(note_files) if path.name == current), 0)
+        current_section = st.session_state.get("active_session_note_section", "")
+        current_index = next(
+            (
+                index
+                for index, option in enumerate(select_options)
+                if option["path"] == current and option["section"] == current_section
+            ),
+            next((index for index, option in enumerate(select_options) if option["path"] == current), 0),
+        )
         selected_note_label = st.selectbox(
             "Session Note",
             display_names,
             index=current_index,
             key="main_existing_session_note",
         )
-        selected_note = note_files[display_names.index(selected_note_label)]
-        if st.button(
-            "Open Session Note",
-            icon=":material/event_note:",
-            key="main_open_session_note",
-            on_click=set_main_navigation_tab,
-            args=("Session Notes",),
-        ):
+        selected_option = select_options[display_names.index(selected_note_label)]
+        selected_note = next(path for path in note_files if path.name == selected_option["path"])
+        if st.button("Open Session Note", icon=":material/event_note:", key="main_open_session_note"):
             set_active_session_note(selected_note)
+            set_active_session_note_section(selected_option["section"])
             st.rerun()
         if "active_session_note" not in st.session_state:
             set_active_session_note(selected_note)
+            set_active_session_note_section(selected_option["section"])
     else:
         st.info("Create Your First Session Note To Begin.")
 
     active_note = get_active_session_note()
     if active_note:
-        render_session_note_editor(active_note, show_dates=show_dates)
-
-    st.subheader("New Session Notes")
-    with st.expander("Import File", expanded=False):
+        render_session_note_editor(
+            active_note,
+            show_dates=show_dates,
+            section_key=st.session_state.get("active_session_note_section", ""),
+        )
+    uploaded_file_state = st.session_state.get("markdown_import")
+    import_expanded = st.session_state.get("session_notes_import_expanded", False) or uploaded_file_state is not None
+    with st.expander(
+        "Import Session Note",
+        expanded=import_expanded,
+    ):
+        if st.session_state.pop("clear_session_notes_import", False):
+            st.session_state["markdown_import_source_name"] = ""
         uploaded_notes = st.file_uploader(
             "File",
             type=["md", "txt"],
             key="markdown_import",
         )
-        imported_file_name = st.text_input(
+        title = st.text_input(
             "Imported File Name",
-            value="",
-            placeholder=uploaded_notes.name if uploaded_notes is not None else "Optional source filename",
+            placeholder=uploaded_notes.name if uploaded_notes is not None else "Optional title or source filename",
             key="markdown_import_source_name",
         )
-        include_detected_dates = st.checkbox(
-            "Use Detected Dates As RP Calendar Dates",
-            value=False,
-            key="include_markdown_import_dates",
-        )
-        split_import_sessions = st.checkbox(
-            "Split Session Headings Into Separate Notes",
-            value=True,
-            key="split_markdown_import_session_headings",
-        )
-        if st.button(
-            "Import Notes",
-            icon=":material/upload_file:",
-            key="import_markdown",
-            on_click=set_main_navigation_tab,
-            args=("Session Notes",),
-        ):
+        if st.button("Upload Session Note", icon=":material/upload_file:", key="upload_session_notes"):
+            st.session_state["session_notes_import_expanded"] = True
+            source_name = title.strip() or (uploaded_notes.name if uploaded_notes is not None else "")
             if uploaded_notes is None:
-                st.error("Choose A Markdown File Before Importing.")
+                st.error("Choose A Markdown Or Text File Before Uploading.")
                 return
             try:
-                import_text = uploaded_notes.getvalue().decode("utf-8")
+                notes = uploaded_notes.getvalue().decode("utf-8")
             except UnicodeDecodeError:
                 st.error("Import File Must Be UTF-8 Text.")
                 return
-            if not import_text.strip():
-                st.error("Import File Must Include Markdown Text.")
-                return
-            push_session_notes_undo()
-            import_title = os.path.splitext(imported_file_name.strip() or uploaded_notes.name)[0]
-            imported = import_markdown_text(
-                import_text,
-                title=import_title,
-                include_detected_dates=include_detected_dates,
-                split_sessions=split_import_sessions,
-            )
-            st.session_state["session_notes_saved_count"] = len(imported)
-            set_active_session_note(imported[0].path)
-            st.rerun()
-
-    with st.expander("Add Session Note", expanded=False):
-        if st.session_state.pop("clear_session_notes_draft", False):
-            st.session_state["session_notes_draft"] = ""
-            st.session_state["session_notes_title"] = ""
-        title = st.text_input(
-            "Title",
-            placeholder="Optional session title",
-            key="session_notes_title",
-        )
-        notes = st.text_area(
-            "Session Notes",
-            height=180,
-            placeholder="Write campaign memory in Markdown. Include dates to split notes into dated files.",
-            key="session_notes_draft",
-        )
-        action_cols = st.columns(2)
-        if action_cols[0].button(
-            "Save Session Notes",
-            icon=":material/note_add:",
-            key="save_session_notes",
-            on_click=set_main_navigation_tab,
-            args=("Session Notes",),
-        ):
             if not notes.strip():
-                st.error("Add Session Notes Before Saving.")
+                st.error("Import File Must Include Session Notes.")
                 return
-            push_session_notes_undo()
-            saved = save_session_notes(notes, title=title)
-            st.session_state["session_notes_saved_count"] = len(saved)
-            if saved:
-                set_active_session_note(saved[0].path)
-            st.session_state["clear_session_notes_draft"] = True
-            st.rerun()
-        if action_cols[1].button(
-            "Undo Changes",
-            icon=":material/undo:",
-            key="undo_session_notes",
-            on_click=set_main_navigation_tab,
-            args=("Session Notes",),
-        ):
-            undo_session_notes_changes()
+            request_main_navigation_tab("Session Notes")
+            render_session_import_heading_dialog(
+                notes,
+                source_name,
+            )
+            return
 
 
-def render_session_note_editor(path, show_dates: bool = False) -> None:
-    note_label = display_session_note_name(path, show_dates=show_dates)
-    try:
-        note_date = session_note_date_from_path(path).isoformat()
-    except ValueError:
-        note_date = ""
+def render_session_note_editor(path, show_dates: bool = False, section_key: str = "") -> None:
+    note_label = display_session_note_name(path, show_dates=False)
+    note_date = read_session_note_date_text(path)
     note_title = read_session_note_title(path) if note_date else ""
     note_body = read_session_note_body(path) if note_date else read_session_note(path).strip()
+    sections = markdown_sections(read_session_note(path))
+    selected_section = next((section for section in sections if section.key == section_key), None)
+    display_body = read_markdown_section(path, section_key) if section_key else note_body
+    editor_state_key = f"{path.name}:{section_key or 'full'}"
+    editor_is_open = not selected_section or st.session_state.get("active_session_note_editor") == editor_state_key
+    is_first_title_section = bool(selected_section and selected_section.level == 1 and selected_section.start_line == 0)
     if markdown_document_title(note_body) != note_label:
         st.subheader(note_label)
-    if note_body:
-        st.markdown(note_body)
-    expander_label = "Edit Session Note" if note_date else "Edit Lore Document"
-    with st.expander(expander_label, expanded=False):
+    if selected_section:
+        top_action_cols = st.columns(3)
+        if not is_first_title_section and top_action_cols[0].button(
+            "Add Previous Section",
+            icon=":material/vertical_align_top:",
+            key=f"add_previous_section_{path.name}_{section_key}",
+        ):
+            push_session_notes_undo()
+            _note, new_section_key = insert_markdown_section(path, section_key, "previous")
+            set_active_session_note(path)
+            set_active_session_note_section(new_section_key)
+            st.session_state["active_session_note_editor"] = f"{path.name}:{new_section_key or 'full'}"
+            st.session_state["session_notes_status"] = "Previous Section Added."
+            st.rerun()
+        if not is_first_title_section and top_action_cols[1].button(
+            "Combine Section",
+            icon=":material/call_merge:",
+            key=f"combine_section_{path.name}_{section_key}",
+        ):
+            push_session_notes_undo()
+            _note, parent_section_key = combine_markdown_section(path, section_key)
+            set_active_session_note(path)
+            set_active_session_note_section(parent_section_key)
+            st.session_state["session_notes_status"] = "Section Combined."
+            st.rerun()
+        if top_action_cols[2].button(
+            "Add Next Section",
+            icon=":material/vertical_align_bottom:",
+            key=f"top_add_next_section_{path.name}_{section_key}",
+        ):
+            push_session_notes_undo()
+            _note, new_section_key = insert_markdown_section(path, section_key, "next")
+            set_active_session_note(path)
+            set_active_session_note_section(new_section_key)
+            st.session_state["active_session_note_editor"] = f"{path.name}:{new_section_key or 'full'}"
+            st.session_state["session_notes_status"] = "Next Section Added."
+            st.rerun()
+    if display_body:
+        st.markdown(display_body)
+    if selected_section:
+        bottom_action_cols = st.columns(3)
+        if bottom_action_cols[0].button(
+            "Edit Section",
+            icon=":material/edit:",
+            key=f"edit_section_{path.name}_{section_key}",
+        ):
+            st.session_state["active_session_note_editor"] = editor_state_key
+            st.rerun()
+        if bottom_action_cols[1].button(
+            "Add Next Section",
+            icon=":material/vertical_align_bottom:",
+            key=f"add_next_section_{path.name}_{section_key}",
+        ):
+            push_session_notes_undo()
+            _note, new_section_key = insert_markdown_section(path, section_key, "next")
+            set_active_session_note(path)
+            set_active_session_note_section(new_section_key)
+            st.session_state["active_session_note_editor"] = f"{path.name}:{new_section_key or 'full'}"
+            st.session_state["session_notes_status"] = "Next Section Added."
+            st.rerun()
+        if bottom_action_cols[2].button(
+            "Remove Section",
+            icon=":material/delete:",
+            key=f"remove_section_{path.name}_{section_key}",
+        ):
+            st.session_state["pending_delete_session_section"] = {"path": path.name, "section": section_key}
+            st.rerun()
+        pending_delete = st.session_state.get("pending_delete_session_section", {})
+        if pending_delete.get("path") == path.name and pending_delete.get("section") == section_key:
+            st.warning("Are you sure you would like to delete this section and all sub sections?")
+            child_sections = child_markdown_sections(read_session_note(path), section_key)
+            if child_sections:
+                st.write("Subsections that will be deleted:")
+                for child in child_sections:
+                    st.write(f"- H{child.level}: {child.text}")
+
+            confirm_cols = st.columns(2)
+            if confirm_cols[0].button(
+                "Delete Section",
+                icon=":material/delete_forever:",
+                key=f"confirm_remove_section_{path.name}_{section_key}",
+            ):
+                push_session_notes_undo()
+                remove_markdown_section(path, section_key)
+                set_active_session_note(path)
+                set_active_session_note_section()
+                st.session_state.pop("active_session_note_editor", None)
+                st.session_state.pop("pending_delete_session_section", None)
+                st.session_state["session_notes_status"] = "Section Removed."
+                st.rerun()
+            if confirm_cols[1].button(
+                "Cancel",
+                icon=":material/close:",
+                key=f"cancel_remove_section_{path.name}_{section_key}",
+            ):
+                st.session_state.pop("pending_delete_session_section", None)
+                st.rerun()
+    if editor_is_open:
         editor_revision = st.session_state.get(f"session_note_editor_revision_{path.name}", 0)
+        section_token = section_key.replace(":", "_") if section_key else "full"
         with st.form(f"edit_session_note_{path.name}"):
-            if note_date and show_dates:
-                st.text_input("Date", value=note_date, disabled=True)
-                title = st.text_input(
-                    "Title",
-                    value=note_title,
-                    placeholder="Optional session title",
-                    key=f"session_note_title_{path.name}_{editor_revision}",
+            if note_date:
+                session_date = st.text_input(
+                    "Session Date",
+                    value=note_date,
+                    placeholder="Campaign date",
+                    key=f"session_note_date_{path.name}_{editor_revision}",
                 )
-            elif note_date:
                 title = st.text_input(
                     "Title",
                     value=note_title,
@@ -1191,51 +1385,53 @@ def render_session_note_editor(path, show_dates: bool = False) -> None:
                     key=f"session_note_title_{path.name}_{editor_revision}",
                 )
             body = st.text_area(
-                "Session Note" if note_date else "Lore Document",
-                value=note_body,
+                "Session Note",
+                value=display_body,
                 height=220,
-                key=f"session_note_body_{path.name}_{editor_revision}",
+                key=f"session_note_body_{path.name}_{section_token}_{editor_revision}",
             )
             action_cols = st.columns(3)
-            save_requested = action_cols[0].form_submit_button(
-                "Save Session Note",
-                icon=":material/save:",
-                on_click=set_main_navigation_tab,
-                args=("Session Notes",),
-            )
+            save_requested = action_cols[0].form_submit_button("Save Session Note", icon=":material/save:")
             delete_requested = action_cols[1].form_submit_button(
-                "Delete Session Note",
+                "Delete Section" if section_key else "Delete Session Note",
                 icon=":material/delete_forever:",
-                on_click=set_main_navigation_tab,
-                args=("Session Notes",),
             )
-            undo_requested = action_cols[2].form_submit_button(
-                "Undo Changes",
-                icon=":material/undo:",
-                on_click=set_main_navigation_tab,
-                args=("Session Notes",),
-            )
+            undo_requested = action_cols[2].form_submit_button("Undo Changes", icon=":material/undo:")
             if undo_requested:
                 undo_session_notes_changes()
             if delete_requested:
                 push_session_notes_undo()
-                delete_session_note(path)
-                st.session_state.pop(f"session_note_editor_revision_{path.name}", None)
-                st.session_state.pop("active_session_note", None)
-                st.session_state["session_notes_status"] = "Session Note Deleted."
+                if section_key:
+                    remove_markdown_section(path, section_key)
+                    set_active_session_note(path)
+                    set_active_session_note_section()
+                    st.session_state["session_notes_status"] = "Section Removed."
+                else:
+                    delete_session_note(path)
+                    st.session_state.pop(f"session_note_editor_revision_{path.name}", None)
+                    st.session_state.pop("active_session_note", None)
+                    st.session_state["session_notes_status"] = "Session Note Deleted."
                 st.rerun()
             if save_requested:
                 if not body.strip():
                     st.error("Add Markdown Details Before Saving.")
                     return
+                if section_key and not starts_with_searchable_markdown_heading(body):
+                    st.session_state["session_notes_error"] = "Section Markdown Must Start With An H1, H2, Or H3 Heading."
+                    st.session_state["active_session_note_editor"] = editor_state_key
+                    st.rerun()
                 push_session_notes_undo()
                 if note_date:
-                    write_session_note(path, body, title)
+                    write_session_note(path, body, title, session_date=session_date)
+                    st.session_state["session_notes_status"] = "Session Note Saved."
+                elif section_key:
+                    write_markdown_section(path, section_key, body)
                     st.session_state["session_notes_status"] = "Session Note Saved."
                 else:
                     write_lore_document(path, body)
-                    st.session_state["session_notes_status"] = "Lore Document Saved."
+                    st.session_state["session_notes_status"] = "Session Note Saved."
                 st.session_state[f"session_note_editor_revision_{path.name}"] = editor_revision + 1
+                st.session_state.pop("active_session_note_editor", None)
                 st.rerun()
 
 
@@ -1259,13 +1455,7 @@ def render_character_panel() -> None:
             key="main_existing_character",
         )
         selected_character = characters[display_names.index(selected_character_label)]
-        if st.button(
-            "Open Character",
-            icon=":material/chat:",
-            key="main_open_character",
-            on_click=set_main_navigation_tab,
-            args=("Characters",),
-        ):
+        if st.button("Open Character", icon=":material/chat:", key="main_open_character"):
             set_active_character(selected_character)
             st.rerun()
         if "active_character" not in st.session_state:
@@ -1299,13 +1489,7 @@ def render_external_character_sheet_import() -> None:
             placeholder="Optional display name",
             key="external_character_sheet_name",
         )
-        if st.button(
-            "Import Character Sheet",
-            icon=":material/upload_file:",
-            key="import_external_character_sheet",
-            on_click=set_main_navigation_tab,
-            args=("Characters",),
-        ):
+        if st.button("Import Character Sheet", icon=":material/upload_file:", key="import_external_character_sheet"):
             if external_sheet is None:
                 st.error("Choose A PDF Or Image Character Sheet Before Importing.")
                 return
@@ -1318,6 +1502,7 @@ def render_external_character_sheet_import() -> None:
             except ValueError as exc:
                 st.error(str(exc))
                 return
+            request_main_navigation_tab("Characters")
             st.session_state["character_panel_status"] = f"Imported External Character Sheet: {imported.path.name}."
             st.rerun()
 
@@ -1395,7 +1580,7 @@ def render_character_editor(character: Character) -> None:
             save_requested = action_cols[0].form_submit_button(
                 "Save Character",
                 icon=":material/save:",
-                on_click=set_main_navigation_tab,
+                on_click=request_main_navigation_tab,
                 args=("Characters",),
             )
             populate_summary = False
@@ -1405,13 +1590,13 @@ def render_character_editor(character: Character) -> None:
                 repopulate_summary = action_cols[1].form_submit_button(
                     "Repopulate Summary",
                     icon=":material/sync:",
-                    on_click=set_main_navigation_tab,
+                    on_click=request_main_navigation_tab,
                     args=("Characters",),
                 )
                 rewrite_backstory = action_cols[2].form_submit_button(
                     "Rewrite Backstory",
                     icon=":material/edit_note:",
-                    on_click=set_main_navigation_tab,
+                    on_click=request_main_navigation_tab,
                     args=("Characters",),
                 )
                 delete_col = action_cols[3]
@@ -1422,13 +1607,13 @@ def render_character_editor(character: Character) -> None:
             delete_requested = delete_col.form_submit_button(
                 "Delete Character",
                 icon=":material/delete_forever:",
-                on_click=set_main_navigation_tab,
+                on_click=request_main_navigation_tab,
                 args=("Characters",),
             )
             undo_requested = undo_col.form_submit_button(
                 "Undo Changes",
                 icon=":material/undo:",
-                on_click=set_main_navigation_tab,
+                on_click=request_main_navigation_tab,
                 args=("Characters",),
             )
             if undo_requested:
@@ -1550,13 +1735,15 @@ st.caption("Create Character Sheets And Explore Relationship Graphs From Local L
 
 render_lore_import_tools()
 
-if MAIN_NAVIGATION_WIDGET_KEY in st.session_state:
-    st.session_state[MAIN_NAVIGATION_TAB_KEY] = st.session_state[MAIN_NAVIGATION_WIDGET_KEY]
-
+main_navigation_default = st.session_state.get("main_navigation_tab_default", "Characters")
+main_navigation_revision = st.session_state.get("main_navigation_tab_revision", 0)
+main_navigation_key = f"main_navigation_tab_{main_navigation_revision}"
 characters_tab, places_tab, session_notes_tab = st.tabs(
-    ["Characters", "Places", "Session Notes"],
-    default=st.session_state.get(MAIN_NAVIGATION_TAB_KEY, "Characters"),
-    key=MAIN_NAVIGATION_WIDGET_KEY,
+    MAIN_NAVIGATION_TABS,
+    default=main_navigation_default,
+    key=main_navigation_key,
+    on_change=sync_main_navigation_tab,
+    args=(main_navigation_key,),
 )
 
 with characters_tab:
