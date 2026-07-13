@@ -131,7 +131,8 @@ Session 13:
         page.goto(app_url, wait_until="networkidle")
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
-        page.get_by_text("Import Session Note", exact=True).click()
+        page.get_by_text("Import Session Note", exact=True).last.click()
+        expect(page.get_by_role("button", name="upload_file Upload Session Note")).to_be_visible(timeout=10000)
         page.get_by_label("File", exact=True).locator("input[type=file]").set_input_files(str(import_file))
         page.get_by_role("button", name="upload_file Upload Session Note").click()
         expect(page.get_by_role("heading", name="Select Searchable Headings")).to_be_visible(timeout=10000)
@@ -209,6 +210,45 @@ def test_ui_imports_freeform_lore_markdown_without_requiring_dates(isolated_sess
     assert "## The Watch Tower" in text
 
 
+def test_ui_import_dialog_keeps_month_year_dates_and_hides_h4_headings(isolated_session_notes_app):
+    app_url, docs_lore_dir = isolated_session_notes_app
+    notes_dir = docs_lore_dir / "session_notes"
+    import_file = docs_lore_dir / "dated_import.md"
+    import_file.write_text(
+        """### 2024/03/18 - Camryn
+The next morning they meet with the towns mayor and assistant.
+
+### 2024/03/18 - Camryn
+The group follows the directions and arrive at a hut.
+""",
+        encoding="utf-8",
+    )
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        page.get_by_role("tab", name="Session Notes", exact=True).click()
+        page.get_by_text("Import Session Note", exact=True).click()
+        page.get_by_label("File", exact=True).locator("input[type=file]").set_input_files(str(import_file))
+        page.get_by_role("button", name="upload_file Upload Session Note").click()
+        expect(page.get_by_role("heading", name="Select Searchable Headings")).to_be_visible(timeout=10000)
+        expect(page.get_by_label("H2 March 2024")).to_be_checked(timeout=10000)
+        expect(page.get_by_label("H3 2024/03/18 - Camryn")).to_be_checked(timeout=10000)
+        expect(page.get_by_label("H4 2024/03/18 - Camryn")).to_have_count(0)
+        page.get_by_role("button", name="check Save Selected Headings").click()
+        expect(page.get_by_text("Saved 1 Session Note File.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="March 2024", exact=True)).to_be_visible(timeout=10000)
+        browser.close()
+
+    imported = notes_dir / "dated_import.md"
+    text = imported.read_text(encoding="utf-8")
+    assert "## March 2024" in text
+    assert text.count("### 2024/03/18 - Camryn") == 1
+    assert "The group follows the directions and arrive at a hut." in text
+
+
 def test_ui_section_controls_add_and_confirm_remove(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
     notes_dir = docs_lore_dir / "session_notes"
@@ -274,7 +314,7 @@ The party opened the lighthouse door.
     assert "### Locked Door\nThe lock has silver runes." in text
 
 
-def test_ui_demotes_duplicate_headings_on_session_notes_load(isolated_session_notes_app):
+def test_ui_removes_duplicate_headings_on_session_notes_load(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
     notes_dir = docs_lore_dir / "session_notes"
     notes_dir.mkdir(parents=True)
@@ -302,7 +342,8 @@ The group follows the directions and arrive at a hut.
 
     text = note_path.read_text(encoding="utf-8")
     assert "### 2024/03/18 - Camryn\nThe next morning" in text
-    assert "#### 2024/03/18 - Camryn\nThe group follows" in text
+    assert "### 2024/03/18 - Camryn\nThe group follows" not in text
+    assert "The group follows the directions and arrive at a hut." in text
 
 
 def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):

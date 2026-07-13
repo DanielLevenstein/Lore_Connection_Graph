@@ -148,18 +148,18 @@ More notes.
     )
 
     assert prepared.startswith("# Lighthouse Log")
-    assert "## 2026-07-10" in prepared
-    assert "## Harbor Trouble" in prepared
+    assert "## July 2026" in prepared
+    assert "### Harbor Trouble" in prepared
     assert "## Existing Section" in prepared
     assert [(heading.level, heading.text, heading.kind) for heading in headings] == [
-        (1, "Lighthouse Log", "heading"),
-        (2, "2026-07-10", "date"),
-        (2, "Harbor Trouble", "heading"),
+        (1, "Lighthouse Log", "structure"),
+        (2, "July 2026", "date"),
+        (3, "Harbor Trouble", "heading"),
         (2, "Existing Section", "heading"),
     ]
 
 
-def test_markdown_import_restores_unselected_searchable_headings_to_plain_text(tmp_path, monkeypatch):
+def test_markdown_import_demotes_unselected_searchable_headings_to_h4(tmp_path, monkeypatch):
     monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
 
     source = """# Session Import
@@ -185,13 +185,13 @@ Searchable material.
 
     text = imported[0].path.read_text(encoding="utf-8")
     assert imported[0].path.name == "Session_Import.md"
-    assert "## 2026-07-10" in text
-    assert "\nSecret Thread\n" in text
-    assert "#### Secret Thread" not in text
+    assert "## July 2026" in text
+    assert "#### Secret Thread\nPrivate material." in text
+    assert "## Secret Thread" not in text.splitlines()
     assert "## Public Thread" in text
 
 
-def test_markdown_import_keeps_dates_as_h2_even_when_not_selected(tmp_path, monkeypatch):
+def test_markdown_import_demotes_unselected_date_headings_to_h4(tmp_path, monkeypatch):
     monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
 
     imported = import_markdown_text(
@@ -203,7 +203,9 @@ def test_markdown_import_keeps_dates_as_h2_even_when_not_selected(tmp_path, monk
     )
 
     text = imported[0].path.read_text(encoding="utf-8")
-    assert "## 2026-07-10" in text
+    assert "# Session Import" in text
+    assert "#### July 2026" in text
+    assert "## July 2026" not in text.splitlines()
 
 
 def test_markdown_import_does_not_treat_poem_lines_as_headings():
@@ -242,8 +244,14 @@ The party found another sign.
     assert "##### 2026/07/10 - Jane Smith" in prepared
     assert "##### 2026/07/11 - John" in prepared
     assert "##### 2025/01/02 - Skunkman22" in prepared
+    assert "## July 2026" in prepared
+    assert "## January 2025" in prepared
     assert "Server Tag" not in prepared
-    assert [(heading.level, heading.text) for heading in headings] == [(1, "Session Import")]
+    assert [(heading.level, heading.text) for heading in headings] == [
+        (1, "Session Import"),
+        (2, "July 2026"),
+        (2, "January 2025"),
+    ]
 
 
 def test_markdown_import_moves_chat_headings_below_following_higher_level_headings():
@@ -267,28 +275,32 @@ The next session began.
         today=date(2026, 7, 12),
     )
 
-    assert "## Session 1" in prepared
+    assert "## February 2023" in prepared
+    assert "### Session 1" in prepared
     assert "##### 2023/02/19 - Sean" in prepared
     assert "##### 2023/02/20 - Sean" in prepared
-    assert "## Session 2\n##### 2023/08/03 - Sean" in prepared
+    assert "## August 2023\n### Session 2\n##### 2023/08/03 - Sean" in prepared
     assert [(heading.level, heading.text) for heading in headings] == [
         (1, "Session Import"),
-        (2, "Session 1"),
-        (2, "Session 2"),
+        (2, "February 2023"),
+        (3, "Session 1"),
+        (2, "August 2023"),
+        (3, "Session 2"),
     ]
 
-    session_1 = next(section for section in markdown_sections(prepared) if section.text == "Session 1")
-    session_2 = next(section for section in markdown_sections(prepared) if section.text == "Session 2")
+    session_1 = next(section for section in markdown_sections(prepared) if section.text == "February 2023")
+    session_2 = next(section for section in markdown_sections(prepared) if section.text == "August 2023")
 
     assert "##### 2023/02/20 - Sean" in session_1.body
     assert "The party found the piano." in session_1.body
     assert "##### 2023/08/03 - Sean" not in session_1.body
-    assert "Session 2" not in session_1.body
+    assert "August 2023" not in session_1.body
+    assert "### Session 2" in session_2.body
     assert "##### 2023/08/03 - Sean" in session_2.body
     assert "The next session began." in session_2.body
 
 
-def test_markdown_import_demotes_duplicate_searchable_headings_to_h4():
+def test_markdown_import_removes_duplicate_discovered_headings():
     prepared, headings = prepare_markdown_import(
         """### 2024/03/18 - Camryn
 The next morning they meet with the towns mayor and assistant.
@@ -300,20 +312,124 @@ The group follows the directions and arrive at a hut.
         today=date(2026, 7, 12),
     )
 
+    assert "## March 2024" in prepared
     assert "### 2024/03/18 - Camryn\nThe next morning" in prepared
-    assert "#### 2024/03/18 - Camryn\nThe group follows" in prepared
+    assert "### 2024/03/18 - Camryn\nThe group follows" not in prepared
+    assert "The group follows the directions and arrive at a hut." in prepared
     assert [(heading.level, heading.text) for heading in headings] == [
         (1, "Session Import"),
+        (2, "March 2024"),
         (3, "2024/03/18 - Camryn"),
     ]
 
     sections = markdown_sections(prepared, today=date(2026, 7, 12))
-    camryn_sections = [section for section in sections if section.text == "2024/03/18 - Camryn"]
-    assert [(section.level, section.text) for section in camryn_sections] == [(3, "2024/03/18 - Camryn")]
-    assert "#### 2024/03/18 - Camryn" in camryn_sections[0].body
+    march_section = next(section for section in sections if section.text == "March 2024")
+    assert "### 2024/03/18 - Camryn" in march_section.body
 
 
-def test_session_note_file_heading_normalizer_demotes_existing_duplicates(tmp_path):
+def test_markdown_import_detects_inline_dates_as_month_year_headings():
+    prepared, headings = prepare_markdown_import(
+        """Travel Notes
+
+The party reached Greybend on March 18, 2024.
+They returned on 2024-03-19 with the medallion.
+""",
+        title="Travel Notes",
+        today=date(2026, 7, 12),
+    )
+
+    assert prepared.count("## March 2024") == 1
+    assert "The party reached Greybend on March 18, 2024." in prepared
+    assert [(heading.level, heading.text, heading.kind) for heading in headings] == [
+        (1, "Travel Notes", "structure"),
+        (2, "March 2024", "date"),
+    ]
+
+
+def test_markdown_import_preserves_atlantia_lore_h2_headings():
+    source = """# Atlantia Lore
+
+## Town Overview
+Atlantia grew around the harbor.
+
+## The Harbor
+The harbor is the town's busiest edge.
+"""
+
+    prepared, headings = prepare_markdown_import(source, title="Imported Atlantia", today=date(2026, 7, 12))
+
+    assert "## Town Overview" in prepared
+    assert "## The Harbor" in prepared
+    assert "### Town Overview" not in prepared
+    assert "### The Harbor" not in prepared
+    assert [(heading.level, heading.text, heading.kind) for heading in headings] == [
+        (1, "Atlantia Lore", "structure"),
+        (2, "Town Overview", "heading"),
+        (2, "The Harbor", "heading"),
+    ]
+
+
+def test_markdown_import_keeps_orphan_discovered_h3_as_h3():
+    prepared, headings = prepare_markdown_import(
+        """### Town Overview
+Atlantia grew around the harbor.
+""",
+        title="Atlantia Lore",
+        today=date(2026, 7, 12),
+    )
+
+    assert "### Town Overview" in prepared
+    assert [(heading.level, heading.text, heading.kind) for heading in headings] == [
+        (1, "Atlantia Lore", "structure"),
+        (3, "Town Overview", "heading"),
+    ]
+
+
+def test_markdown_import_keeps_user_markdown_h3_before_following_date():
+    prepared, headings = prepare_markdown_import(
+        """### Town Overview
+Atlantia grew around the harbor.
+
+March 18, 2024
+The town held a spring festival.
+""",
+        title="Atlantia Lore",
+        today=date(2026, 7, 12),
+    )
+
+    assert "### Town Overview\nAtlantia grew around the harbor.\n\n## March 2024" in prepared
+    assert "## March 2024\n### Town Overview" not in prepared
+    assert "__LCG_INFERRED_IMPORT_HEADING__" not in prepared
+    assert [(heading.level, heading.text, heading.kind) for heading in headings] == [
+        (1, "Atlantia Lore", "structure"),
+        (3, "Town Overview", "heading"),
+        (2, "March 2024", "date"),
+    ]
+
+
+def test_markdown_import_keeps_h4_headings_hidden_from_selection(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+
+    source = """### 2024/03/18 - Camryn
+The next morning they meet with the towns mayor and assistant.
+"""
+    _prepared, headings = prepare_markdown_import(source, title="Session Import", today=date(2026, 7, 12))
+    selected = {heading.key for heading in headings if heading.text != "2024/03/18 - Camryn"}
+
+    imported = import_markdown_text(
+        source,
+        title="Session Import",
+        selected_heading_keys=selected,
+        save_as_single_file=True,
+        today=date(2026, 7, 12),
+    )
+
+    text = imported[0].path.read_text(encoding="utf-8")
+    assert "## March 2024" in text
+    assert "#### 2024/03/18 - Camryn" in text
+
+
+def test_session_note_file_heading_normalizer_removes_existing_duplicates(tmp_path):
     path = tmp_path / "Session_Import.md"
     path.write_text(
         """# Session Import
@@ -337,9 +453,33 @@ This duplicate date also stays searchable.
     text = path.read_text(encoding="utf-8")
 
     assert "### 2024/03/18 - Camryn\nThe next morning" in text
-    assert "#### 2024/03/18 - Camryn\nThe group follows" in text
-    assert text.count("## 2024-03-18") == 2
+    assert "### 2024/03/18 - Camryn\nThe group follows" not in text
+    assert "The group follows the directions and arrive at a hut." in text
+    assert text.count("## 2024-03-18") == 1
+    assert "This duplicate date also stays searchable." in text
     assert not normalize_session_note_file_headings(path, today=date(2026, 7, 12))
+
+
+def test_session_note_file_heading_normalizer_removes_exact_h5_duplicates(tmp_path):
+    path = tmp_path / "Session_Import.md"
+    path.write_text(
+        """# Session Import
+
+##### 2024/03/18 - Camryn
+First message.
+
+##### 2024/03/18 - Camryn
+Second message.
+""",
+        encoding="utf-8",
+    )
+
+    assert normalize_session_note_file_headings(path, today=date(2026, 7, 12))
+    text = path.read_text(encoding="utf-8")
+
+    assert text.count("##### 2024/03/18 - Camryn") == 1
+    assert "First message." in text
+    assert "Second message." in text
 
 
 def test_markdown_import_does_not_move_higher_level_headings_without_preceding_chat_heading():
@@ -356,12 +496,12 @@ The party found the piano.
         today=date(2026, 7, 12),
     )
 
-    assert "The party awoke in strange cells.\n\n## Session 2" in prepared
-    assert "## Session 2\nThe party awoke" not in prepared
+    assert "The party awoke in strange cells.\n\n### Session 2" in prepared
+    assert "### Session 2\nThe party awoke" not in prepared
     assert [(heading.level, heading.text) for heading in headings] == [
         (1, "Session Import"),
-        (2, "Session 1"),
-        (2, "Session 2"),
+        (3, "Session 1"),
+        (3, "Session 2"),
     ]
 
 
@@ -391,9 +531,9 @@ The party opened the lighthouse door.
 
     assert [(section.level, section.date_text, section.text) for section in sections] == [
         (1, "", "Session Import"),
-        (2, "2026-07-10", "2026-07-10"),
-        (2, "2026-07-10", "Harbor Trouble"),
-        (2, "2026-07-10", "Lighthouse Door"),
+        (2, "July 2026", "July 2026"),
+        (2, "July 2026", "Harbor Trouble"),
+        (2, "July 2026", "Lighthouse Door"),
     ]
     assert sections[2].body == "## Harbor Trouble\nThe party found a sealed brass door."
 
@@ -507,8 +647,9 @@ The party opened the lighthouse door.
     assert [path.name for path in session_notes.list_session_notes()] == ["Session_importer.md"]
     text = imported[0].path.read_text(encoding="utf-8")
     assert "# Session Importer" in text
-    assert "## 2026-07-10" in text
-    assert "## 2026-07-11" in text
+    assert "## July 2026" in text
+    assert "The party found a sealed brass door." in text
+    assert "The party opened the lighthouse door." in text
 
 
 def test_legacy_session_note_body_only_strips_date_heading(tmp_path):

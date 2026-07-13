@@ -1136,7 +1136,7 @@ def render_session_import_heading_dialog(
         if st.checkbox(
             label,
             value=True,
-            disabled=heading.kind == "date",
+            disabled=heading.kind == "structure",
             key=f"import_heading_{heading.key}",
         ):
             selected_heading_keys.add(heading.key)
