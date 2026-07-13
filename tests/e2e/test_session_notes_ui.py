@@ -627,10 +627,21 @@ def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
         lore_import = page.locator("[data-testid=stExpander]").filter(has_text="Lore Import").first
         source_directory = page.get_by_role("textbox", name="Source Directory")
         expect(source_directory).to_have_value(str(import_dir), timeout=10000)
+        expect(lore_import.get_by_label("Last Backup")).to_be_visible()
+        expect(lore_import.get_by_role("button", name="event_available Backup Updated")).to_have_count(0)
+        expect(lore_import.get_by_role("button", name="folder_copy Import Testing Lore")).to_be_visible()
+        expect(lore_import.get_by_role("button", name="backup Create Lore Backup")).to_be_visible()
+        expect(lore_import.get_by_role("button", name="restore_page Import Lore Backup")).to_be_visible()
+        expect(lore_import.get_by_role("button", name="delete_forever Bulk Lore Removal")).to_be_visible()
         expect(lore_import.get_by_label("Character Sheet File")).to_have_count(0)
         source_directory.fill(str(fixture_dir))
-        page.get_by_role("button", name="folder_copy Import Lore Directory").click()
+        page.get_by_role("button", name="folder_copy Import Testing Lore").click()
         expect(page.get_by_text("Imported 6 Lore Files")).to_be_visible(timeout=10000)
+        page.get_by_text("Lore Import", exact=True).first.click()
+        page.get_by_role("button", name="restore_page Import Lore Backup").click()
+        expect(page.get_by_text("Import Lore Backup")).to_be_visible(timeout=10000)
+        expect(page.get_by_label("Backup")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("button", name="restore_page Restore Selected Backup")).to_be_visible()
         browser.close()
 
     assert (characters_dir / "Jory_Ravenmark.md").exists()
@@ -644,6 +655,7 @@ def test_ui_bulk_lore_removal_confirms_before_cleaning_lore(isolated_session_not
     characters_dir = docs_lore_dir / "character_sheets"
     places_dir = docs_lore_dir / "places"
     notes_dir = docs_lore_dir / "session_notes"
+    backup_dir = docs_lore_dir.parent / "backup"
     fixture_dir = ROOT_DIR / "tests" / "fixtures"
     generated_draft = character_metadata_dir / "Draft" / "PROFILE.json"
     generated_draft.parent.mkdir(parents=True)
@@ -656,7 +668,7 @@ def test_ui_bulk_lore_removal_confirms_before_cleaning_lore(isolated_session_not
 
         page.get_by_text("Lore Import", exact=True).first.click()
         page.get_by_role("textbox", name="Source Directory").fill(str(fixture_dir))
-        page.get_by_role("button", name="folder_copy Import Lore Directory").click()
+        page.get_by_role("button", name="folder_copy Import Testing Lore").click()
         expect(page.get_by_text("Imported 6 Lore Files")).to_be_visible(timeout=10000)
         page.get_by_text("Lore Import", exact=True).first.click()
         page.get_by_role("button", name="delete_forever Bulk Lore Removal").click()
@@ -671,6 +683,14 @@ def test_ui_bulk_lore_removal_confirms_before_cleaning_lore(isolated_session_not
     assert not (notes_dir / "Family_Tree.md").exists()
     assert not (notes_dir / "Time_Turning.md").exists()
     assert not generated_draft.exists()
+    assert (backup_dir / "character_sheets" / "Jory_Ravenmark.md").exists()
+    assert (backup_dir / "places" / "Atlantia_Lore.md").exists()
+    assert (backup_dir / "session_notes" / "Family_Tree.md").exists()
+    assert any(
+        (path / "character_sheets" / "Jory_Ravenmark.md").exists()
+        for path in backup_dir.iterdir()
+        if path.is_dir() and path.name not in {"character_sheets", "places", "session_notes"}
+    )
 
 def test_ui_imports_external_character_sheet(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app

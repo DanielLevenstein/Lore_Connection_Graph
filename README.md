@@ -4,11 +4,13 @@ A local Streamlit app for creating tabletop character sheets, organizing campaig
 
 The app treats authored markdown in `world_building/lore` as the source of truth. Character sheets can be edited through the UI, places can be created as lore files, and derived graph JSON can be regenerated from the Markdown whenever needed.
 
-- `world_building/` and `meta_data/` are intentionally ignored by git so each player can keep their own campaign data 
+- `world_building/` and `meta_data/` are intentionally ignored by git so each player can keep their own campaign data
 - Generated runtime files are stored in `mata_data` while user-readable application docs are stored in `world_building/lore`
 - Templates, specifications, and parsing rules are committed under `docs/`
 - test lore examples live under `tests/fixtures`.
 
+Backup lore files are stored in `world_building/backup` and are updated everytime the app is loaded.
+A manual backup button has been added in the `Lore Import` Section for your convenience.
 
 ## What It Does
 
@@ -41,11 +43,10 @@ streamlit run streamlit_app.py
 
 The repository uses three top-level storage roots:
 
-- `docs/` is the committed documentation root for specifications, design notes, templates, reports, and screenshots.
-- `world_building/` is the local user-facing document store. Raw import files belong in `world_building/import`; normalized, editable campaign Markdown belongs in `world_building/lore`.
-- `meta_data/` is the local internal application store for generated indexes, runtime character metadata, chat logs, memory notes, and local model files.
-
-Only files under `world_building/lore` are treated as canonical authored campaign lore. Files under `world_building/import` are raw inputs and can be re-imported or reorganized. Files under `meta_data` are derived or runtime data and can be rebuilt or regenerated from the lore and model configuration.
+- Only files under `world_building/lore` are treated as canonical authored campaign lore.
+- Files under `world_building/import` are raw inputs and can be re-imported or reorganized.
+- Files under `world_building/backup` are auto generated backups which can be used for restoring old campaign notes.
+- Files under `meta_data` are derived or runtime data and can be rebuilt or regenerated from the lore and model configuration.
 
 ## Project Layout
 
@@ -58,6 +59,7 @@ world_building/lore/character_sheets/*.md   Authored character sheets
 world_building/lore/character_sheets/*/BACKSTORY.md
                                             Alternate character sheet format
 world_building/lore/places/*.md             Authored place lore
+world_building/backup/                      Latest local Markdown backup
 meta_data/character_metadata/*/PROFILE.json Runtime character metadata
 meta_data/character_metadata/*/MEMORY.md    Runtime memory notes
 meta_data/character_metadata/*/chatlogs/*.log

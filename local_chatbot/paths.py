@@ -9,6 +9,9 @@ WORLD_BUILDING_DIR = Path(os.environ.get("LOCAL_CHATBOT_WORLD_BUILDING_DIR", ROO
 WORLD_BUILDING_IMPORT_DIR = Path(
     os.environ.get("LOCAL_CHATBOT_WORLD_BUILDING_IMPORT_DIR", WORLD_BUILDING_DIR / "import")
 ).resolve()
+WORLD_BUILDING_BACKUP_DIR = Path(
+    os.environ.get("LOCAL_CHATBOT_WORLD_BUILDING_BACKUP_DIR", WORLD_BUILDING_DIR / "backup")
+).resolve()
 META_DATA_DIR = Path(
     os.environ.get(
         "LOCAL_CHATBOT_META_DATA_DIR",
@@ -38,6 +41,7 @@ def ensure_base_dirs() -> None:
     DATA_DIR.mkdir(exist_ok=True)
     WORLD_BUILDING_DIR.mkdir(parents=True, exist_ok=True)
     WORLD_BUILDING_IMPORT_DIR.mkdir(parents=True, exist_ok=True)
+    WORLD_BUILDING_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     META_DATA_DIR.mkdir(parents=True, exist_ok=True)
     LORE_DIR.mkdir(parents=True, exist_ok=True)
     CHARACTERS_DIR.mkdir(parents=True, exist_ok=True)

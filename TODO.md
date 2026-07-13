@@ -29,6 +29,22 @@ Add two subdirectories to the world_building directory [import, lore]
 
 ### Backup Functionality
 Backup lore files are stored in `world_building/backup` and are updated everytime the app is loaded.
-A backup date button has been added under the `Lore Import` section for your convenience.
+Lore backups can be restored using the Lore Import functionality. 
 
-Update README with these notes once the feature is implemented. 
+- Remove the existing backup button with a date timestamp
+- Add the following buttons under the `Lore Import` heading
+[Import Testing Lore, Create Lore Backup, Import Lore Backup, Bulk Lore Removal]
+- Make sure the `Bulk Lore Removal` button quietly creates a backup before the wipe. 
+
+### Testing
+- Add focused tests for lore backup copying, timestamp recording, Lore Import UI visibility, and backup creation before bulk removal.
+
+## Completed
+
+### Backup Functionality
+- Added `world_building/backup` as the local lore backup directory.
+- Refresh backups whenever the Streamlit app loads.
+- Removed the backup timestamp button.
+- Added `Import Testing Lore`, `Create Lore Backup`, `Import Lore Backup`, and `Bulk Lore Removal` actions under `Lore Import`.
+- Bulk lore removal creates a backup before wiping local lore.
+- Documented backup behavior in README.

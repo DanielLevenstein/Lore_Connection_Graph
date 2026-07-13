@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 import os
 
@@ -79,8 +79,14 @@ from local_chatbot.session_notes import (
     write_markdown_section,
     write_session_note,
 )
-from local_chatbot.lore_import import clear_local_lore, import_lore_directory
-from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_IMPORT_DIR
+from local_chatbot.lore_import import (
+    backup_lore_files,
+    clear_local_lore,
+    import_lore_directory,
+    list_lore_backups,
+    read_lore_backup_date,
+)
+from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, WORLD_BUILDING_IMPORT_DIR
 
 ENABLE_CHARACTER_REWRITE = "1"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
@@ -89,6 +95,7 @@ MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
 ensure_base_dirs()
+backup_lore_files()
 
 st.markdown(
     """
@@ -1076,6 +1083,13 @@ def render_lore_import_tools() -> None:
         st.success(import_status)
 
     with st.expander("Lore Import", expanded=False):
+        backup_date = read_lore_backup_date()
+        st.text_input(
+            "Last Backup",
+            value=format_backup_date(backup_date) if backup_date else "No Backup Created",
+            disabled=True,
+            key="last_lore_backup_date",
+        )
         st.subheader("Bulk Lore Directory")
         source_dir = st.text_input(
             "Source Directory",
@@ -1088,8 +1102,8 @@ def render_lore_import_tools() -> None:
             value=True,
             key="lore_directory_import_overwrite",
         )
-        action_cols = st.columns(2)
-        if action_cols[0].button("Import Lore Directory", icon=":material/folder_copy:", key="import_lore_directory"):
+        action_cols = st.columns(4)
+        if action_cols[0].button("Import Testing Lore", icon=":material/folder_copy:", key="import_testing_lore"):
             try:
                 summary = import_lore_directory(Path(source_dir), overwrite=overwrite_existing)
             except FileNotFoundError:
@@ -1100,8 +1114,49 @@ def render_lore_import_tools() -> None:
                 f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
             )
             st.rerun()
-        if action_cols[1].button("Bulk Lore Removal", icon=":material/delete_forever:", key="bulk_lore_removal"):
+        if action_cols[1].button("Create Lore Backup", icon=":material/backup:", key="create_lore_backup"):
+            summary = backup_lore_files(snapshot=True)
+            st.session_state["lore_import_status"] = (
+                f"Created Backup For {summary.files} Lore File{'s' if summary.files != 1 else ''}."
+            )
+            st.rerun()
+        if action_cols[2].button("Import Lore Backup", icon=":material/restore_page:", key="import_lore_backup"):
+            render_lore_backup_restore_dialog(overwrite_existing)
+        if action_cols[3].button("Bulk Lore Removal", icon=":material/delete_forever:", key="bulk_lore_removal"):
             render_bulk_lore_removal_warning()
+
+
+def format_backup_date(value: datetime | None) -> str:
+    if value is None:
+        return "Unknown"
+    return value.astimezone().strftime("%Y-%m-%d %H:%M")
+
+
+@st.dialog("Import Lore Backup")
+def render_lore_backup_restore_dialog(overwrite_existing: bool) -> None:
+    backup_options = list_lore_backups(WORLD_BUILDING_BACKUP_DIR)
+    if not backup_options:
+        st.warning("No Lore Backups Are Available.")
+        if st.button("Close", icon=":material/close:", width="stretch"):
+            st.rerun()
+        return
+
+    selected_backup = st.selectbox(
+        "Backup",
+        backup_options,
+        format_func=lambda option: option.label,
+        key="selected_lore_backup",
+    )
+    action_cols = st.columns(2)
+    if action_cols[0].button("Restore Selected Backup", icon=":material/restore_page:", width="stretch"):
+        summary = import_lore_directory(selected_backup.path, overwrite=overwrite_existing)
+        st.session_state["lore_import_status"] = (
+            f"Restored {summary.total} Backup Lore File{'s' if summary.total != 1 else ''} "
+            f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
+        )
+        st.rerun()
+    if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
+        st.rerun()
 
 
 @st.dialog("Bulk Lore Removal")
@@ -1112,6 +1167,7 @@ def render_bulk_lore_removal_warning() -> None:
     st.write("This will clean the configured lore directory and generated lore data.")
     action_cols = st.columns(2)
     if action_cols[0].button("Yes, Delete Local Lore", icon=":material/delete_forever:", width="stretch"):
+        backup_lore_files(snapshot=True)
         summary = clear_local_lore()
         st.session_state["lore_import_status"] = (
             f"Deleted {summary.total} Local Lore File{'s' if summary.total != 1 else ''} "

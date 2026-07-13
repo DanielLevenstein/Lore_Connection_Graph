@@ -1,7 +1,14 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 import local_chatbot.lore_import as lore_import
-from local_chatbot.lore_import import clear_local_lore, import_lore_directory
+from local_chatbot.lore_import import (
+    backup_lore_files,
+    clear_local_lore,
+    import_lore_directory,
+    list_lore_backups,
+    read_lore_backup_date,
+)
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -91,3 +98,63 @@ def test_clear_local_lore_cleans_configured_lore_dir(tmp_path, monkeypatch):
     assert session_notes_dir.exists()
     assert lore_dir.exists()
     assert character_metadata_dir.exists()
+
+
+def test_backup_lore_files_copies_current_lore_and_records_date(tmp_path, monkeypatch):
+    lore_dir = tmp_path / "world_building" / "lore"
+    backup_dir = tmp_path / "world_building" / "backup"
+    character_file = lore_dir / "character_sheets" / "Jory_Ravenmark.md"
+    place_file = lore_dir / "places" / "Atlantia_Lore.md"
+    character_file.parent.mkdir(parents=True)
+    place_file.parent.mkdir(parents=True)
+    character_file.write_text("# Jory Ravenmark\n", encoding="utf-8")
+    place_file.write_text("# Atlantia\n", encoding="utf-8")
+    monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
+    timestamp = datetime(2026, 7, 13, 9, 30, tzinfo=timezone.utc)
+
+    summary = backup_lore_files(lore_dir, backup_dir, updated_at=timestamp)
+
+    assert summary.files == 2
+    assert summary.backup_dir == backup_dir.resolve()
+    assert summary.updated_at == timestamp
+    assert (
+        backup_dir / "character_sheets" / "Jory_Ravenmark.md"
+    ).read_text(encoding="utf-8") == "# Jory Ravenmark\n"
+    assert (backup_dir / "places" / "Atlantia_Lore.md").read_text(encoding="utf-8") == "# Atlantia\n"
+    assert read_lore_backup_date(backup_dir) == timestamp
+
+
+def test_backup_lore_files_updates_existing_backup_without_deleting_missing_files(tmp_path, monkeypatch):
+    lore_dir = tmp_path / "world_building" / "lore"
+    backup_dir = tmp_path / "world_building" / "backup"
+    old_backup_file = backup_dir / "session_notes" / "Old_Note.md"
+    current_note = lore_dir / "session_notes" / "Current_Note.md"
+    old_backup_file.parent.mkdir(parents=True)
+    current_note.parent.mkdir(parents=True)
+    old_backup_file.write_text("# Old Note\n", encoding="utf-8")
+    current_note.write_text("# Current Note\n", encoding="utf-8")
+    monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
+
+    summary = backup_lore_files(lore_dir, backup_dir)
+
+    assert summary.files == 1
+    assert old_backup_file.exists()
+    assert (backup_dir / "session_notes" / "Current_Note.md").exists()
+
+
+def test_backup_lore_files_can_create_selectable_snapshot(tmp_path, monkeypatch):
+    lore_dir = tmp_path / "world_building" / "lore"
+    backup_dir = tmp_path / "world_building" / "backup"
+    character_file = lore_dir / "character_sheets" / "Jory_Ravenmark.md"
+    character_file.parent.mkdir(parents=True)
+    character_file.write_text("# Jory Ravenmark\n", encoding="utf-8")
+    monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
+    timestamp = datetime(2026, 7, 13, 9, 30, tzinfo=timezone.utc)
+
+    summary = backup_lore_files(lore_dir, backup_dir, updated_at=timestamp, snapshot=True)
+    backups = list_lore_backups(backup_dir)
+
+    assert summary.backup_dir == backup_dir / "2026-07-13_09-30-00"
+    assert (summary.backup_dir / "character_sheets" / "Jory_Ravenmark.md").exists()
+    assert backups[0].path == summary.backup_dir
+    assert backups[0].label.startswith("Backup - 2026-07-13")
