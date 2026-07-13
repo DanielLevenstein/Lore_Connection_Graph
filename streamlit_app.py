@@ -1198,6 +1198,47 @@ def render_session_import_heading_dialog(
         st.rerun()
 
 
+
+def import_session_note():
+    uploaded_file_state = st.session_state.get("markdown_import")
+    import_expanded = st.session_state.get("session_notes_import_expanded", False) or uploaded_file_state is not None
+    with st.expander(
+            "Import Session Note",
+            expanded=import_expanded,
+    ):
+        if st.session_state.pop("clear_session_notes_import", False):
+            st.session_state["markdown_import_source_name"] = ""
+        uploaded_notes = st.file_uploader(
+            "File",
+            type=["md", "txt"],
+            key="markdown_import",
+        )
+        title = st.text_input(
+            "Imported File Name",
+            placeholder=uploaded_notes.name if uploaded_notes is not None else "Optional title or source filename",
+            key="markdown_import_source_name",
+        )
+        if st.button("Upload Session Note", icon=":material/upload_file:", key="upload_session_notes"):
+            st.session_state["session_notes_import_expanded"] = True
+            source_name = title.strip() or (uploaded_notes.name if uploaded_notes is not None else "")
+            if uploaded_notes is None:
+                st.error("Choose A Markdown Or Text File Before Uploading.")
+                return
+            try:
+                notes = uploaded_notes.getvalue().decode("utf-8")
+            except UnicodeDecodeError:
+                st.error("Import File Must Be UTF-8 Text.")
+                return
+            if not notes.strip():
+                st.error("Import File Must Include Session Notes.")
+                return
+            request_main_navigation_tab("Session Notes")
+            render_session_import_heading_dialog(
+                notes,
+                source_name,
+            )
+            return
+
 def render_session_notes() -> None:
     st.title("Session Notes")
     saved_count = st.session_state.pop("session_notes_saved_count", 0)
@@ -1255,43 +1296,6 @@ def render_session_notes() -> None:
             section_key=st.session_state.get("active_session_note_section", ""),
         )
     uploaded_file_state = st.session_state.get("markdown_import")
-    import_expanded = st.session_state.get("session_notes_import_expanded", False) or uploaded_file_state is not None
-    with st.expander(
-        "Import Session Note",
-        expanded=import_expanded,
-    ):
-        if st.session_state.pop("clear_session_notes_import", False):
-            st.session_state["markdown_import_source_name"] = ""
-        uploaded_notes = st.file_uploader(
-            "File",
-            type=["md", "txt"],
-            key="markdown_import",
-        )
-        title = st.text_input(
-            "Imported File Name",
-            placeholder=uploaded_notes.name if uploaded_notes is not None else "Optional title or source filename",
-            key="markdown_import_source_name",
-        )
-        if st.button("Upload Session Note", icon=":material/upload_file:", key="upload_session_notes"):
-            st.session_state["session_notes_import_expanded"] = True
-            source_name = title.strip() or (uploaded_notes.name if uploaded_notes is not None else "")
-            if uploaded_notes is None:
-                st.error("Choose A Markdown Or Text File Before Uploading.")
-                return
-            try:
-                notes = uploaded_notes.getvalue().decode("utf-8")
-            except UnicodeDecodeError:
-                st.error("Import File Must Be UTF-8 Text.")
-                return
-            if not notes.strip():
-                st.error("Import File Must Include Session Notes.")
-                return
-            request_main_navigation_tab("Session Notes")
-            render_session_import_heading_dialog(
-                notes,
-                source_name,
-            )
-            return
 
 
 def render_session_note_editor(path, show_dates: bool = False, section_key: str = "") -> None:
@@ -1820,6 +1824,7 @@ with places_tab:
     render_place_panel()
 
 with session_notes_tab:
+    import_session_note()
     render_session_notes()
 
 render_combined_character_graph()
