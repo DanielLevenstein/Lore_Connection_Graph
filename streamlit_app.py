@@ -63,6 +63,7 @@ from local_chatbot.session_notes import (
     delete_session_note,
     insert_markdown_section,
     markdown_sections,
+    normalize_session_note_file_headings,
     prepare_markdown_import,
     list_session_notes,
     read_markdown_section,
@@ -1174,6 +1175,9 @@ def render_session_notes() -> None:
     show_dates = True
 
     note_files = list_session_notes()
+    if note_files:
+        if any(normalize_session_note_file_headings(path) for path in note_files):
+            note_files = list_session_notes()
     if note_files:
         select_options = session_note_select_options(note_files, show_dates=show_dates)
         display_names = [option["label"] for option in select_options]

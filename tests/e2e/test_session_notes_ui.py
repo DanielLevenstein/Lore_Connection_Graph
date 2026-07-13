@@ -274,6 +274,37 @@ The party opened the lighthouse door.
     assert "### Locked Door\nThe lock has silver runes." in text
 
 
+def test_ui_demotes_duplicate_headings_on_session_notes_load(isolated_session_notes_app):
+    app_url, docs_lore_dir = isolated_session_notes_app
+    notes_dir = docs_lore_dir / "session_notes"
+    notes_dir.mkdir(parents=True)
+    note_path = notes_dir / "Duplicate_Headings.md"
+    note_path.write_text(
+        """# Duplicate Headings
+
+### 2024/03/18 - Camryn
+The next morning they meet with the towns mayor and assistant.
+
+### 2024/03/18 - Camryn
+The group follows the directions and arrive at a hut.
+""",
+        encoding="utf-8",
+    )
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        page.get_by_role("tab", name="Session Notes", exact=True).click()
+        expect(page.get_by_role("heading", name="Duplicate Headings", exact=True)).to_be_visible(timeout=10000)
+        browser.close()
+
+    text = note_path.read_text(encoding="utf-8")
+    assert "### 2024/03/18 - Camryn\nThe next morning" in text
+    assert "#### 2024/03/18 - Camryn\nThe group follows" in text
+
+
 def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
     characters_dir = docs_lore_dir / "character_sheets"

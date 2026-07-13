@@ -11,6 +11,7 @@ from local_chatbot.session_notes import (
     import_lore_document_text,
     import_markdown_text,
     markdown_sections,
+    normalize_session_note_file_headings,
     prepare_markdown_import,
     remove_markdown_section,
     save_session_notes,
@@ -285,6 +286,60 @@ The next session began.
     assert "Session 2" not in session_1.body
     assert "##### 2023/08/03 - Sean" in session_2.body
     assert "The next session began." in session_2.body
+
+
+def test_markdown_import_demotes_duplicate_searchable_headings_to_h4():
+    prepared, headings = prepare_markdown_import(
+        """### 2024/03/18 - Camryn
+The next morning they meet with the towns mayor and assistant.
+
+### 2024/03/18 - Camryn
+The group follows the directions and arrive at a hut.
+""",
+        title="Session Import",
+        today=date(2026, 7, 12),
+    )
+
+    assert "### 2024/03/18 - Camryn\nThe next morning" in prepared
+    assert "#### 2024/03/18 - Camryn\nThe group follows" in prepared
+    assert [(heading.level, heading.text) for heading in headings] == [
+        (1, "Session Import"),
+        (3, "2024/03/18 - Camryn"),
+    ]
+
+    sections = markdown_sections(prepared, today=date(2026, 7, 12))
+    camryn_sections = [section for section in sections if section.text == "2024/03/18 - Camryn"]
+    assert [(section.level, section.text) for section in camryn_sections] == [(3, "2024/03/18 - Camryn")]
+    assert "#### 2024/03/18 - Camryn" in camryn_sections[0].body
+
+
+def test_session_note_file_heading_normalizer_demotes_existing_duplicates(tmp_path):
+    path = tmp_path / "Session_Import.md"
+    path.write_text(
+        """# Session Import
+
+### 2024/03/18 - Camryn
+The next morning they meet with the towns mayor and assistant.
+
+### 2024/03/18 - Camryn
+The group follows the directions and arrive at a hut.
+
+## 2024-03-18
+This date stays searchable.
+
+## 2024-03-18
+This duplicate date also stays searchable.
+""",
+        encoding="utf-8",
+    )
+
+    assert normalize_session_note_file_headings(path, today=date(2026, 7, 12))
+    text = path.read_text(encoding="utf-8")
+
+    assert "### 2024/03/18 - Camryn\nThe next morning" in text
+    assert "#### 2024/03/18 - Camryn\nThe group follows" in text
+    assert text.count("## 2024-03-18") == 2
+    assert not normalize_session_note_file_headings(path, today=date(2026, 7, 12))
 
 
 def test_markdown_import_does_not_move_higher_level_headings_without_preceding_chat_heading():

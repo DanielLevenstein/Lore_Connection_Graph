@@ -42,6 +42,18 @@ tests/fixtures/places/Atlantia_Lore.md
 - `.venv/bin/python -m pytest tests/test_session_notes.py tests/test_entity_file_saves.py`
 - `.venv/bin/python -m pytest tests/e2e/test_session_notes_ui.py tests/e2e/test_character_sheet_roundtrip_ui.py`
 
+### Completed
+- Added page-load/import normalization that demotes repeated searchable session-note headings to H4 while preserving repeated standalone date headings.
+- Added regression coverage for duplicate `2024/03/18 - Camryn` headings and existing-file page-load repair.
+- Added screenshot: `docs/screenshots/session_notes_duplicate_headings.png`.
+- Tested:
+  - `../.venv/bin/python -m pytest tests/test_session_notes.py`
+  - `../.venv/bin/python -m pytest tests/test_entity_file_saves.py`
+  - `../.venv/bin/python -m pytest tests/e2e/test_session_notes_ui.py::test_ui_demotes_duplicate_headings_on_session_notes_load`
+- Full e2e suites still have unrelated existing failures:
+  - `tests/e2e/test_session_notes_ui.py`: missing disabled legacy fixture, remove-section warning flow, external character-sheet import persistence.
+  - `tests/e2e/test_character_sheet_roundtrip_ui.py`: session-note save-status assertion.
+
 
 # Future UI Improvements
 ## Section Rendering 

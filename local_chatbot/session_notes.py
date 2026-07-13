@@ -188,7 +188,30 @@ def normalize_import_headings(text: str, title: str = "", today: date | None = N
         normalized.insert(0, f"# {document_title}")
         if len(normalized) > 1 and normalized[1].strip():
             normalized.insert(1, "")
-    return "\n".join(move_chat_headings_below_higher_level_headings(normalized)).strip()
+    normalized = move_chat_headings_below_higher_level_headings(normalized)
+    return demote_duplicate_searchable_headings("\n".join(normalized), today=today).strip()
+
+
+def demote_duplicate_searchable_headings(text: str, today: date | None = None) -> str:
+    default_year = (today or date.today()).year
+    seen_headings: set[str] = set()
+    normalized: list[str] = []
+    for line in text.splitlines():
+        heading = markdown_heading_parts(line.strip())
+        if not heading:
+            normalized.append(line)
+            continue
+        level, heading_text = heading
+        heading_key = safe_session_note_title(heading_text).lower()
+        is_searchable_heading = level <= 3
+        is_date_heading = bool(standalone_date_text(heading_text, default_year))
+        if is_searchable_heading and not is_date_heading and heading_key in seen_headings:
+            normalized.append(f"#### {heading_text}")
+            continue
+        if is_searchable_heading and not is_date_heading:
+            seen_headings.add(heading_key)
+        normalized.append(line)
+    return "\n".join(normalized).strip()
 
 
 def import_headings(text: str, today: date | None = None) -> list[ImportHeading]:
@@ -737,6 +760,15 @@ def has_session_note_date(path: Path) -> bool:
 
 def read_session_note(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def normalize_session_note_file_headings(path: Path, today: date | None = None) -> bool:
+    text = read_session_note(path)
+    normalized = demote_duplicate_searchable_headings(text, today=today)
+    if normalized == text.strip():
+        return False
+    path.write_text(f"{normalized}\n", encoding="utf-8")
+    return True
 
 
 def read_session_note_body(path: Path) -> str:
