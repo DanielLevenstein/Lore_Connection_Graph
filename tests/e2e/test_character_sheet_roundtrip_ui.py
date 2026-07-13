@@ -162,17 +162,10 @@ def ensure_place_editor_open(page) -> None:
     expect(save_button).to_be_visible(timeout=10000)
 
 
-def ensure_session_notes_open(page) -> None:
-    save_button = page.get_by_role("button", name="note_add Save Session Notes")
-    if not save_button.is_visible():
-        page.get_by_text("Add Session Note", exact=True).click()
-    expect(save_button).to_be_visible(timeout=10000)
-
-
 def ensure_session_note_editor_open(page) -> None:
     save_button = page.get_by_role("button", name="save Save Session Note")
     if not save_button.is_visible():
-        page.get_by_text("Edit Session Note", exact=True).first.click()
+        page.get_by_role("button", name="edit Edit Section").first.click()
     expect(save_button).to_be_visible(timeout=10000)
 
 
@@ -402,6 +395,13 @@ def test_ui_creates_loads_and_undoes_place_changes(isolated_character_app):
 def test_ui_creates_loads_and_undoes_session_notes(isolated_character_app):
     app_url, _docs_lore_dir, _characters_dir, _places_dir, session_notes_dir, _data_dir = isolated_character_app
     note_path = session_notes_dir / "2026-07-10_Session_Notes.md"
+    session_notes_dir.mkdir(parents=True, exist_ok=True)
+    note_path.write_text(
+        "# Session Notes - 2026-07-10 - Session Notes\n\n"
+        "## 2026-07-10\n"
+        "The party found a silver key.\n",
+        encoding="utf-8",
+    )
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -409,11 +409,6 @@ def test_ui_creates_loads_and_undoes_session_notes(isolated_character_app):
         page.goto(app_url, wait_until="networkidle")
 
         open_tab(page, "Session Notes")
-        expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
-        ensure_session_notes_open(page)
-        page.get_by_role("textbox", name="New Session Notes").fill("2026-07-10\nThe party found a silver key.")
-        page.get_by_role("button", name="note_add Save Session Notes").click()
-        expect(page.get_by_text("Saved 1 Session Note File.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
 
         page.get_by_role("combobox", name="Session Note").click()
@@ -486,10 +481,8 @@ def test_create_validation_preserves_entered_fields(isolated_character_app):
         expect(page.get_by_role("textbox", name="Name", exact=True).first).to_have_value("Draft Hall")
 
         open_tab(page, "Session Notes")
-        ensure_session_notes_open(page)
-        page.get_by_role("button", name="note_add Save Session Notes").click()
-        expect(page.get_by_text("Add Session Notes Before Saving.")).to_be_visible(timeout=10000)
-        expect(page.get_by_role("button", name="note_add Save Session Notes")).to_be_visible(timeout=10000)
+        expect(page.get_by_text("Add Session Note", exact=True)).to_have_count(0)
+        expect(page.get_by_text("Import Session Note", exact=True)).to_be_visible(timeout=10000)
         browser.close()
 
 
@@ -498,6 +491,13 @@ def test_ui_deletes_character_place_and_session_note_files(isolated_character_ap
     character_path = characters_dir / "Delete Me.md"
     place_path = places_dir / "Delete Hall.md"
     note_path = session_notes_dir / "2026-07-10_Session_Notes.md"
+    session_notes_dir.mkdir(parents=True, exist_ok=True)
+    note_path.write_text(
+        "# Session Notes - 2026-07-10 - Session Notes\n\n"
+        "## 2026-07-10\n"
+        "A temporary note for deletion.\n",
+        encoding="utf-8",
+    )
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -532,9 +532,6 @@ def test_ui_deletes_character_place_and_session_note_files(isolated_character_ap
         expect(page.get_by_text("Place Deleted.")).to_be_visible(timeout=10000)
 
         open_tab(page, "Session Notes")
-        ensure_session_notes_open(page)
-        page.get_by_role("textbox", name="New Session Notes").fill("2026-07-10\nA temporary note for deletion.")
-        page.get_by_role("button", name="note_add Save Session Notes").click()
         expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
         ensure_session_note_editor_open(page)
         page.get_by_role("button", name="delete_forever Delete Session Note").click()

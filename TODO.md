@@ -42,6 +42,17 @@ tests/fixtures/places/Atlantia_Lore.md
 - Discord author export lines are rewritten as H4 metadata (`Username - Date`) without making them searchable headings yet.
 - Add and import session note flows continue through the same save path, with editable campaign/session dates preserved.
 - Updated `docs/screenshots/import_session_notes.png` for the import heading-selection UI.
+- H3 import headings now only move above the previous line when that previous line is an H4 chat-log heading.
+- `docs/specs/SESSION_IMPORT_DESIGN.md` now states the H4-only H3 boundary rule explicitly.
+- Session note section dropdown labels now show `Filename.md H#: Heading Value` so main headings and subheadings are distinguishable.
+- Selected session note sections now expose Add Previous Section, Combine Section, Add Next Section, and Remove Section actions.
+- Added section editing helpers for inserting blank previous/next sections, combining a section heading into an H5 heading, listing child sections, and deleting a section with its subsections.
+- Section editor saves now require added/edited section Markdown to start with an H1, H2, or H3 heading.
+- Removed the broken Add Session Note UI path because it saved through `save_session_notes`, which date-splits and normalizes Markdown before section editing.
+- Preserved the removed Add Session Note code as a clearly marked disabled test fixture only.
+- Added `docs/screenshots/session_note_section_controls.png` for the section controls UI.
+- First H1 title sections no longer show Add Previous Section or Combine Section controls.
+- Remove Section warnings now list H4 subsections so chat metadata is visible before deletion.
 - Testing completed:
   - `.venv/bin/python -m pytest tests/test_session_notes.py tests/test_entity_file_saves.py`
   - `.venv/bin/python -m pytest tests/e2e/test_session_notes_ui.py tests/e2e/test_character_sheet_roundtrip_ui.py`

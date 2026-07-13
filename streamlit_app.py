@@ -57,8 +57,11 @@ from local_chatbot.character_rewrites import (
     graph_generated_summary as build_graph_generated_summary,
 )
 from local_chatbot.session_notes import (
+    child_markdown_sections,
+    combine_markdown_section,
     import_markdown_text,
     delete_session_note,
+    insert_markdown_section,
     markdown_sections,
     prepare_markdown_import,
     list_session_notes,
@@ -67,6 +70,8 @@ from local_chatbot.session_notes import (
     read_session_note_body,
     read_session_note_date_text,
     read_session_note_title,
+    remove_markdown_section,
+    starts_with_searchable_markdown_heading,
     write_lore_document,
     write_markdown_section,
     write_session_note,
@@ -192,10 +197,7 @@ def session_note_select_options(paths, show_dates: bool = False) -> list[dict[st
                 options.append({"label": display_session_note_option(path, show_dates=show_dates), "path": path.name, "section": ""})
             continue
         for section in sections:
-            if section.date_text and show_dates:
-                label = f"{path.name} - {section.date_text} - {section.text}"
-            else:
-                label = f"{path.name} - {section.text}"
+            label = f"{path.name} H{section.level}: {section.text}"
             options.append({"label": label, "path": path.name, "section": section.key})
     return options
 
@@ -1152,6 +1154,9 @@ def render_session_notes() -> None:
     session_notes_status = st.session_state.pop("session_notes_status", "")
     if session_notes_status:
         st.success(session_notes_status)
+    session_notes_error = st.session_state.pop("session_notes_error", "")
+    if session_notes_error:
+        st.error(session_notes_error)
     show_dates = True
 
     note_files = list_session_notes()
@@ -1193,8 +1198,6 @@ def render_session_notes() -> None:
             show_dates=show_dates,
             section_key=st.session_state.get("active_session_note_section", ""),
         )
-
-    st.subheader("New Session Notes")
     uploaded_file_state = st.session_state.get("markdown_import")
     import_expanded = st.session_state.get("session_notes_import_expanded", False) or uploaded_file_state is not None
     with st.expander(
@@ -1240,13 +1243,112 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
     note_date = read_session_note_date_text(path)
     note_title = read_session_note_title(path) if note_date else ""
     note_body = read_session_note_body(path) if note_date else read_session_note(path).strip()
+    sections = markdown_sections(read_session_note(path))
+    selected_section = next((section for section in sections if section.key == section_key), None)
     display_body = read_markdown_section(path, section_key) if section_key else note_body
+    editor_state_key = f"{path.name}:{section_key or 'full'}"
+    editor_is_open = not selected_section or st.session_state.get("active_session_note_editor") == editor_state_key
+    is_first_title_section = bool(selected_section and selected_section.level == 1 and selected_section.start_line == 0)
     if markdown_document_title(note_body) != note_label:
         st.subheader(note_label)
+    if selected_section:
+        top_action_cols = st.columns(3)
+        if not is_first_title_section and top_action_cols[0].button(
+            "Add Previous Section",
+            icon=":material/vertical_align_top:",
+            key=f"add_previous_section_{path.name}_{section_key}",
+        ):
+            push_session_notes_undo()
+            _note, new_section_key = insert_markdown_section(path, section_key, "previous")
+            set_active_session_note(path)
+            set_active_session_note_section(new_section_key)
+            st.session_state["active_session_note_editor"] = f"{path.name}:{new_section_key or 'full'}"
+            st.session_state["session_notes_status"] = "Previous Section Added."
+            st.rerun()
+        if not is_first_title_section and top_action_cols[1].button(
+            "Combine Section",
+            icon=":material/call_merge:",
+            key=f"combine_section_{path.name}_{section_key}",
+        ):
+            push_session_notes_undo()
+            _note, parent_section_key = combine_markdown_section(path, section_key)
+            set_active_session_note(path)
+            set_active_session_note_section(parent_section_key)
+            st.session_state["session_notes_status"] = "Section Combined."
+            st.rerun()
+        if top_action_cols[2].button(
+            "Add Next Section",
+            icon=":material/vertical_align_bottom:",
+            key=f"top_add_next_section_{path.name}_{section_key}",
+        ):
+            push_session_notes_undo()
+            _note, new_section_key = insert_markdown_section(path, section_key, "next")
+            set_active_session_note(path)
+            set_active_session_note_section(new_section_key)
+            st.session_state["active_session_note_editor"] = f"{path.name}:{new_section_key or 'full'}"
+            st.session_state["session_notes_status"] = "Next Section Added."
+            st.rerun()
     if display_body:
         st.markdown(display_body)
-    expander_label = "Edit Session Note"
-    with st.expander(expander_label, expanded=False):
+    if selected_section:
+        bottom_action_cols = st.columns(3)
+        if bottom_action_cols[0].button(
+            "Edit Section",
+            icon=":material/edit:",
+            key=f"edit_section_{path.name}_{section_key}",
+        ):
+            st.session_state["active_session_note_editor"] = editor_state_key
+            st.rerun()
+        if bottom_action_cols[1].button(
+            "Add Next Section",
+            icon=":material/vertical_align_bottom:",
+            key=f"add_next_section_{path.name}_{section_key}",
+        ):
+            push_session_notes_undo()
+            _note, new_section_key = insert_markdown_section(path, section_key, "next")
+            set_active_session_note(path)
+            set_active_session_note_section(new_section_key)
+            st.session_state["active_session_note_editor"] = f"{path.name}:{new_section_key or 'full'}"
+            st.session_state["session_notes_status"] = "Next Section Added."
+            st.rerun()
+        if bottom_action_cols[2].button(
+            "Remove Section",
+            icon=":material/delete:",
+            key=f"remove_section_{path.name}_{section_key}",
+        ):
+            st.session_state["pending_delete_session_section"] = {"path": path.name, "section": section_key}
+            st.rerun()
+        pending_delete = st.session_state.get("pending_delete_session_section", {})
+        if pending_delete.get("path") == path.name and pending_delete.get("section") == section_key:
+            st.warning("Are you sure you would like to delete this section and all sub sections?")
+            child_sections = child_markdown_sections(read_session_note(path), section_key)
+            if child_sections:
+                st.write("Subsections that will be deleted:")
+                for child in child_sections:
+                    st.write(f"- H{child.level}: {child.text}")
+
+            confirm_cols = st.columns(2)
+            if confirm_cols[0].button(
+                "Delete Section",
+                icon=":material/delete_forever:",
+                key=f"confirm_remove_section_{path.name}_{section_key}",
+            ):
+                push_session_notes_undo()
+                remove_markdown_section(path, section_key)
+                set_active_session_note(path)
+                set_active_session_note_section()
+                st.session_state.pop("active_session_note_editor", None)
+                st.session_state.pop("pending_delete_session_section", None)
+                st.session_state["session_notes_status"] = "Section Removed."
+                st.rerun()
+            if confirm_cols[1].button(
+                "Cancel",
+                icon=":material/close:",
+                key=f"cancel_remove_section_{path.name}_{section_key}",
+            ):
+                st.session_state.pop("pending_delete_session_section", None)
+                st.rerun()
+    if editor_is_open:
         editor_revision = st.session_state.get(f"session_note_editor_revision_{path.name}", 0)
         section_token = section_key.replace(":", "_") if section_key else "full"
         with st.form(f"edit_session_note_{path.name}"):
@@ -1272,7 +1374,7 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
             action_cols = st.columns(3)
             save_requested = action_cols[0].form_submit_button("Save Session Note", icon=":material/save:")
             delete_requested = action_cols[1].form_submit_button(
-                "Delete Session Note",
+                "Delete Section" if section_key else "Delete Session Note",
                 icon=":material/delete_forever:",
             )
             undo_requested = action_cols[2].form_submit_button("Undo Changes", icon=":material/undo:")
@@ -1280,15 +1382,25 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
                 undo_session_notes_changes()
             if delete_requested:
                 push_session_notes_undo()
-                delete_session_note(path)
-                st.session_state.pop(f"session_note_editor_revision_{path.name}", None)
-                st.session_state.pop("active_session_note", None)
-                st.session_state["session_notes_status"] = "Session Note Deleted."
+                if section_key:
+                    remove_markdown_section(path, section_key)
+                    set_active_session_note(path)
+                    set_active_session_note_section()
+                    st.session_state["session_notes_status"] = "Section Removed."
+                else:
+                    delete_session_note(path)
+                    st.session_state.pop(f"session_note_editor_revision_{path.name}", None)
+                    st.session_state.pop("active_session_note", None)
+                    st.session_state["session_notes_status"] = "Session Note Deleted."
                 st.rerun()
             if save_requested:
                 if not body.strip():
                     st.error("Add Markdown Details Before Saving.")
                     return
+                if section_key and not starts_with_searchable_markdown_heading(body):
+                    st.session_state["session_notes_error"] = "Section Markdown Must Start With An H1, H2, Or H3 Heading."
+                    st.session_state["active_session_note_editor"] = editor_state_key
+                    st.rerun()
                 push_session_notes_undo()
                 if note_date:
                     write_session_note(path, body, title, session_date=session_date)
@@ -1300,6 +1412,7 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
                     write_lore_document(path, body)
                     st.session_state["session_notes_status"] = "Session Note Saved."
                 st.session_state[f"session_note_editor_revision_{path.name}"] = editor_revision + 1
+                st.session_state.pop("active_session_note_editor", None)
                 st.rerun()
 
 

@@ -3,15 +3,20 @@ from datetime import date
 
 import local_chatbot.session_notes as session_notes
 from local_chatbot.session_notes import (
+    child_markdown_sections,
+    combine_markdown_section,
     date_from_line,
+    insert_markdown_section,
     import_discord_session_notes,
     import_lore_document_text,
     import_markdown_text,
     markdown_sections,
     prepare_markdown_import,
+    remove_markdown_section,
     save_session_notes,
     split_discord_session_notes,
     split_session_notes,
+    starts_with_searchable_markdown_heading,
 )
 
 
@@ -282,6 +287,29 @@ The next session began.
     assert "The next session began." in session_2.body
 
 
+def test_markdown_import_only_moves_h3_headings_when_previous_line_is_h4():
+    prepared, headings = prepare_markdown_import(
+        """Introductory campaign note.
+
+Session 1:
+The party awoke in strange cells.
+
+Session 2:
+The party found the piano.
+""",
+        title="Session Import",
+        today=date(2026, 7, 12),
+    )
+
+    assert "The party awoke in strange cells.\n\n### Session 2" in prepared
+    assert "### Session 2\nThe party awoke" not in prepared
+    assert [(heading.level, heading.text) for heading in headings] == [
+        (1, "Session Import"),
+        (3, "Session 1"),
+        (3, "Session 2"),
+    ]
+
+
 def test_markdown_sections_expose_searchable_import_headings(tmp_path, monkeypatch):
     monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
 
@@ -336,6 +364,69 @@ The user promoted this marker to a searchable section.
         "## 2025/01/02 - Skunkman22\n"
         "The user promoted this marker to a searchable section."
     )
+
+
+def test_markdown_section_insert_remove_and_combine_helpers(tmp_path):
+    path = tmp_path / "Session_Import.md"
+    path.write_text(
+        """# Session Import
+
+## Harbor Trouble
+The party found a sealed brass door.
+
+### Locked Door
+The lock has silver runes.
+
+#### 2026/07/10 - Keeper
+This chat metadata should appear in delete warnings.
+
+## Lighthouse Door
+The party opened the lighthouse door.
+""",
+        encoding="utf-8",
+    )
+
+    harbor_section = next(section for section in markdown_sections(path.read_text(encoding="utf-8")) if section.text == "Harbor Trouble")
+    child_sections = child_markdown_sections(path.read_text(encoding="utf-8"), harbor_section.key)
+    assert [(section.level, section.text) for section in child_sections] == [
+        (3, "Locked Door"),
+        (4, "2026/07/10 - Keeper"),
+    ]
+
+    _note, previous_key = insert_markdown_section(path, harbor_section.key, "previous")
+    text = path.read_text(encoding="utf-8")
+    assert "## Harbor Trouble: (Previously)\n\n## Harbor Trouble" in text
+    assert next(section for section in markdown_sections(text) if section.key == previous_key).text == "Harbor Trouble: (Previously)"
+
+    harbor_section = next(section for section in markdown_sections(text) if section.text == "Harbor Trouble")
+    _note, next_key = insert_markdown_section(path, harbor_section.key, "next")
+    text = path.read_text(encoding="utf-8")
+    assert "#### 2026/07/10 - Keeper\nThis chat metadata should appear in delete warnings.\n\n## Harbor Trouble: (Coming Next)" in text
+    assert next(section for section in markdown_sections(text) if section.key == next_key).text == "Harbor Trouble: (Coming Next)"
+
+    locked_section = next(section for section in markdown_sections(text) if section.text == "Locked Door")
+    _note, parent_key = combine_markdown_section(path, locked_section.key)
+    text = path.read_text(encoding="utf-8")
+    assert "##### Locked Door\nThe lock has silver runes." in text
+    assert "#### 2026/07/10 - Keeper\nThis chat metadata should appear in delete warnings." in text
+    assert "### Locked Door" not in text.splitlines()
+    assert not [section for section in markdown_sections(text) if section.text == "Locked Door"]
+    assert next(section for section in markdown_sections(text) if section.key == parent_key).text == "Harbor Trouble"
+
+    harbor_section = next(section for section in markdown_sections(text) if section.text == "Harbor Trouble")
+    remove_markdown_section(path, harbor_section.key)
+    text = path.read_text(encoding="utf-8")
+    assert "## Harbor Trouble\n" not in text
+    assert "##### Locked Door" not in text
+    assert "## Lighthouse Door" in text
+
+
+def test_section_markdown_must_start_with_h1_h2_or_h3():
+    assert starts_with_searchable_markdown_heading("# Main Heading\nBody")
+    assert starts_with_searchable_markdown_heading("## Section Heading\nBody")
+    assert starts_with_searchable_markdown_heading("### Subsection Heading\nBody")
+    assert not starts_with_searchable_markdown_heading("#### Chat Metadata\nBody")
+    assert not starts_with_searchable_markdown_heading("Plain text heading\nBody")
 
 
 def test_uploaded_session_importer_saves_single_lore_file_without_date_split(tmp_path, monkeypatch):

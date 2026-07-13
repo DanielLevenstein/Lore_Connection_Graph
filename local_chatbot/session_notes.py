@@ -279,6 +279,39 @@ def read_markdown_section(path: Path, section_key: str) -> str:
     return read_session_note(path).strip()
 
 
+def child_markdown_sections(text: str, section_key: str) -> list[MarkdownSection]:
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None:
+        return []
+    lines = text.splitlines()
+    children: list[MarkdownSection] = []
+    for index in range(section.start_line + 1, section.end_line):
+        heading = markdown_heading_parts(lines[index].strip())
+        if not heading:
+            continue
+        level, heading_text = heading
+        if section.level < level <= 4:
+            children.append(
+                MarkdownSection(
+                    key=f"{index}:{level}:{safe_session_note_title(heading_text)}",
+                    level=level,
+                    text=heading_text,
+                    date_text=section.date_text,
+                    body=lines[index].strip(),
+                    start_line=index,
+                    end_line=index + 1,
+                )
+            )
+    return children
+
+
+def starts_with_searchable_markdown_heading(text: str) -> bool:
+    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    heading = markdown_heading_parts(first_line)
+    return bool(heading and heading[0] <= 3)
+
+
 def write_markdown_section(path: Path, section_key: str, body: str) -> SessionNote:
     text = read_session_note(path)
     sections = markdown_sections(text)
@@ -295,10 +328,75 @@ def write_markdown_section(path: Path, section_key: str, body: str) -> SessionNo
     return SessionNote(note_date=None, body=updated, path=path, title=title)
 
 
+def insert_markdown_section(path: Path, section_key: str, placement: str) -> tuple[SessionNote, str]:
+    text = read_session_note(path)
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None:
+        return write_lore_document(path, text), ""
+
+    label = "Previously" if placement == "previous" else "Coming Next"
+    heading = f"{'#' * section.level} {section.text}: ({label})"
+    lines = text.splitlines()
+    insertion_index = section.start_line if placement == "previous" else section.end_line
+    insertion = [heading, ""]
+    if insertion_index > 0 and lines[insertion_index - 1].strip():
+        insertion.insert(0, "")
+    updated_lines = lines[:insertion_index] + insertion + lines[insertion_index:]
+    updated = "\n".join(updated_lines).strip()
+    note = write_lore_document(path, updated)
+    new_section = next(
+        (
+            candidate
+            for candidate in markdown_sections(updated)
+            if candidate.text == f"{section.text}: ({label})" and candidate.level == section.level
+        ),
+        None,
+    )
+    return note, new_section.key if new_section else ""
+
+
+def remove_markdown_section(path: Path, section_key: str) -> SessionNote:
+    text = read_session_note(path)
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None:
+        return write_lore_document(path, text)
+
+    lines = text.splitlines()
+    updated_lines = lines[: section.start_line] + lines[section.end_line :]
+    updated = "\n".join(updated_lines).strip()
+    return write_lore_document(path, updated)
+
+
+def combine_markdown_section(path: Path, section_key: str) -> tuple[SessionNote, str]:
+    text = read_session_note(path)
+    sections = markdown_sections(text)
+    section = next((candidate for candidate in sections if candidate.key == section_key), None)
+    if section is None or section.start_line == 0:
+        return write_lore_document(path, text), section_key
+
+    lines = text.splitlines()
+    lines[section.start_line] = f"##### {section.text}"
+    updated = "\n".join(lines).strip()
+    note = write_lore_document(path, updated)
+    parent = next(
+        (
+            candidate
+            for candidate in reversed(markdown_sections(updated))
+            if candidate.start_line < section.start_line and candidate.level < section.level
+        ),
+        None,
+    )
+    return note, parent.key if parent else ""
+
+
 def move_h3_headings_up_one_line(lines: list[str]) -> list[str]:
     reordered = list(lines)
     for index in range(1, len(reordered)):
-        if markdown_heading_parts(reordered[index].strip()) and reordered[index].strip().startswith("### "):
+        current_heading = markdown_heading_parts(reordered[index].strip())
+        previous_heading = markdown_heading_parts(reordered[index - 1].strip())
+        if current_heading and previous_heading and current_heading[0] == 3 and previous_heading[0] == 4:
             reordered[index - 1], reordered[index] = reordered[index], reordered[index - 1]
     return reordered
 
