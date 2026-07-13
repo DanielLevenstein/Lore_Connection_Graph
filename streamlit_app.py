@@ -92,6 +92,7 @@ ENABLE_CHARACTER_REWRITE = "1"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 ENABLE_EXTERNAL_CHARACTER_IMPORT = "LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"
 MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
+LORE_BACKUP_IMPORT_SOURCE_KEY = "lore_backup_import_source"
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
 ensure_base_dirs()
@@ -1147,9 +1148,11 @@ def render_lore_backup_restore_dialog(overwrite_existing: bool) -> None:
         format_func=lambda option: option.label,
         key="selected_lore_backup",
     )
+    st.session_state[LORE_BACKUP_IMPORT_SOURCE_KEY] = str(selected_backup.path)
     action_cols = st.columns(2)
     if action_cols[0].button("Restore Selected Backup", icon=":material/restore_page:", width="stretch"):
-        summary = import_lore_directory(selected_backup.path, overwrite=overwrite_existing)
+        backup_source = Path(st.session_state[LORE_BACKUP_IMPORT_SOURCE_KEY])
+        summary = import_lore_directory(backup_source, overwrite=overwrite_existing)
         st.session_state["lore_import_status"] = (
             f"Restored {summary.total} Backup Lore File{'s' if summary.total != 1 else ''} "
             f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
@@ -1351,7 +1354,6 @@ def render_session_notes() -> None:
             show_dates=show_dates,
             section_key=st.session_state.get("active_session_note_section", ""),
         )
-    uploaded_file_state = st.session_state.get("markdown_import")
 
 
 def render_session_note_editor(path, show_dates: bool = False, section_key: str = "") -> None:
