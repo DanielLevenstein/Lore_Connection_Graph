@@ -17,8 +17,6 @@ from character_graph.graph_view import (
     evidence_rows,
 )
 from character_graph.ingest import load_backstory
-from character_graph.prompt_context import build_prompt_context
-from character_graph.retrieval import retrieve_relevant_context
 from character_graph.storage import load_graph
 
 
@@ -84,7 +82,7 @@ from local_chatbot.lore_import import (
     list_lore_backups,
     read_lore_backup_date,
 )
-from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, WORLD_BUILDING_IMPORT_DIR
+from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, LORE_FIXTURES_DIR
 
 ENABLE_CHARACTER_REWRITE = "LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
@@ -300,17 +298,6 @@ def first_meaningful_sentence(text: str) -> str:
             continue
         return stripped
     return ""
-
-
-def graph_context_for_prompt(character: Character, prompt: str) -> str:
-    try:
-        graph = load_graph(character.graph_path)
-    except (OSError, ValueError):
-        return ""
-    if not graph:
-        return ""
-    retrieved = retrieve_relevant_context(graph, prompt)
-    return build_prompt_context(retrieved)
 
 
 def parse_list_field(value: str) -> list[str]:
@@ -1098,7 +1085,7 @@ def render_lore_import_tools() -> None:
         st.subheader("Bulk Lore Directory")
         source_dir = st.text_input(
             "Source Directory",
-            value=str(WORLD_BUILDING_IMPORT_DIR),
+            value=str(LORE_FIXTURES_DIR),
             help="Choose a directory under world_building/import that contains character_sheets, places, and session_notes folders.",
             key="lore_directory_import_source",
         )

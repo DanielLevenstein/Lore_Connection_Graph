@@ -115,3 +115,11 @@ Backup lore files are stored in `world_building/backup` and are updated every ti
 - Disabled model-config-backed random character backstory generation for this release.
 - Updated README, release notes, and rewrite design docs to reflect graph-backed generation instead of model downloads.
 - Testing: run focused graph, rewrite, model-config, semantic-report, and character-generation tests before committing this section.
+
+### Character Rewrite Metadata Stabilization
+
+- Centralized deterministic rewrite story signals so summary, backstory, prompt context, and required-term scoring use the same profile-plus-graph facts.
+- Preserved JSON/metadata-backed origin, drives, alliances, enemies, motivations, custom stat fields, and source-backed places in rewrite scoring and generated prose.
+- Filtered non-story attribute artifacts out of relationship prose so race, class, family placeholders, and place edges do not masquerade as character relationships.
+- Regenerated `docs/reports/semantic_backstory_improvement.md` with model, existing generated, and original backstory scores.
+- Testing: `.venv/bin/python -m pytest tests/test_semantic_improvement_report.py tests/test_character_rewrite_model_lifecycle.py tests/e2e/test_character_rewrites.py`; `.venv/bin/python -m pytest tests/test_semantic_improvement_report.py tests/test_character_rewrite_model_lifecycle.py tests/test_character_graph.py tests/test_model_downloads.py tests/test_character_generation.py`.

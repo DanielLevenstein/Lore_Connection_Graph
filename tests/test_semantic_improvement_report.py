@@ -24,7 +24,7 @@ def test_semantic_report_formats_three_version_score_table():
         if line.startswith("| ")
         and (
             "Candidate" in line
-            or "Model rewrite" in line
+            or "Graph rewrite" in line
             or "Existing generated section" in line
             or "Original section" in line
             or "---" in line
@@ -32,7 +32,7 @@ def test_semantic_report_formats_three_version_score_table():
     ]
 
     assert "Source context similarity compares each candidate" in report
-    assert any("Model rewrite" in line for line in table_lines)
+    assert any("Graph rewrite" in line for line in table_lines)
     assert any("Existing generated section" in line for line in table_lines)
     assert any("Original section" in line for line in table_lines)
     assert len({len(line) for line in table_lines}) == 1

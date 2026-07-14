@@ -22,6 +22,19 @@ class RewriteQualityScore:
     concision: float
 
 
+@dataclass(frozen=True)
+class StorySignals:
+    first_name: str
+    identity: str
+    origin: str
+    places: list[str]
+    relationships: list[str]
+    drives: list[str]
+    alliances: list[str]
+    enemies: list[str]
+    traits: list[str]
+
+
 def graph_generated_summary(
     graph: CharacterGraph,
     profile: CharacterProfile,
@@ -73,60 +86,77 @@ def deterministic_graph_rewrite(kind: str, graph: CharacterGraph, profile: Chara
 
 
 def deterministic_graph_summary(graph: CharacterGraph, profile: CharacterProfile) -> str:
-    first_name = profile.first_name or character_first_name(profile.name)
-    descriptors = [value for value in [profile.race, profile.character_class] if value]
-    identity = " ".join(descriptors) if descriptors else "adventurer"
-    places = story_place_names(graph)
-    relationships = story_relationship_names(graph)
-    drives = graph_drive_values(graph, profile)
-    clauses = [f"{profile.name} is {article_for(identity)} {identity}"]
-    if places:
-        clauses.append(f"shaped by {places[0]}")
-    if relationships:
-        clauses.append(f"bound to {relationships[0]}")
-    if drives:
-        clauses.append(f"driven to {drives[0]}")
+    signals = story_signals(graph, profile)
+    clauses = [f"{profile.name} is {article_for(signals.identity)} {signals.identity}"]
+    if signals.origin:
+        clauses.append(f"from {signals.origin}")
+    if signals.places and all(signals.places[0].lower() not in clause.lower() for clause in clauses):
+        clauses.append(f"shaped by {signals.places[0]}")
+    if signals.relationships:
+        clauses.append(f"bound to {signals.relationships[0]}")
+    if signals.drives:
+        clauses.append(f"driven to {signals.drives[0]}")
     summary = ", ".join(clauses) + "."
     return summary.replace(
         profile.name,
-        first_name if len(profile.name.split()) > 1 else profile.name,
+        signals.first_name if len(profile.name.split()) > 1 else profile.name,
         1,
     )
 
 
 def deterministic_graph_backstory(graph: CharacterGraph, profile: CharacterProfile) -> str:
-    first_name = profile.first_name or character_first_name(profile.name)
-    places = story_place_names(graph)
-    relationships = story_relationship_names(graph)
-    drives = graph_drive_values(graph, profile)
-    traits = primary_traits(graph)
-    identity = " ".join(value for value in [profile.race, profile.character_class] if value) or "adventurer"
-    origin = attribute_value(graph, "Home") or profile.origin
-
-    opening_parts = [f"{first_name} is {article_for(identity)} {identity}"]
-    if origin:
-        opening_parts.append(f"from {origin}")
-    if places:
-        opening_parts.append(f"whose story keeps circling back to {places[0]}")
+    signals = story_signals(graph, profile)
+    opening_parts = [f"{signals.first_name} is {article_for(signals.identity)} {signals.identity}"]
+    if signals.origin:
+        opening_parts.append(f"from {signals.origin}")
+    if signals.places:
+        opening_parts.append(f"whose story keeps circling back to {signals.places[0]}")
     opening = " ".join(opening_parts) + "."
 
     middle_bits = []
-    if relationships:
-        middle_bits.append(f"Their ties to {', '.join(relationships[:3])} give the story its sharpest edges")
-    if traits:
-        middle_bits.append(f"{first_name} is remembered as {', '.join(traits[:3])}")
+    if signals.alliances:
+        middle_bits.append(f"Alliances with {', '.join(signals.alliances[:2])} give the story trusted anchors")
+    if signals.enemies:
+        middle_bits.append(f"Pressure from {', '.join(signals.enemies[:2])} keeps the conflict close")
+    if signals.relationships:
+        middle_bits.append(f"Ties to {', '.join(signals.relationships[:3])} give the story its sharpest edges")
+    if signals.traits:
+        middle_bits.append(f"{signals.first_name} is remembered as {', '.join(signals.traits[:3])}")
     if not middle_bits:
-        middle_bits.append(profile.summary or f"{first_name}'s source notes keep the focus on hard-won choices")
+        middle_bits.append(profile.summary or f"{signals.first_name}'s source notes keep the focus on hard-won choices")
     middle = ". ".join(middle_bits) + "."
 
-    if drives:
-        ending = f"Now {first_name} is driven to {drives[0]}"
-        if len(drives) > 1:
-            ending += f" while still needing to {drives[1]}"
+    if signals.drives:
+        ending = f"Now {signals.first_name} is driven to {signals.drives[0]}"
+        if len(signals.drives) > 1:
+            ending += f" while still needing to {signals.drives[1]}"
         ending += "."
     else:
-        ending = f"Now {first_name} carries those graph-backed connections forward without losing sight of the established lore."
+        ending = (
+            f"Now {signals.first_name} carries those graph-backed connections forward "
+            "without losing sight of the established lore."
+        )
     return "\n\n".join([opening, middle, ending])
+
+
+def story_signals(graph: CharacterGraph, profile: CharacterProfile) -> StorySignals:
+    first_name = profile.first_name or character_first_name(profile.name) or profile.name
+    descriptors = [value for value in [profile.race, profile.character_class] if value]
+    identity = " ".join(descriptors) if descriptors else "adventurer"
+    alliances = unique_values(profile.alliances or [])
+    enemies = unique_values(profile.enemies or [])
+    relationships = unique_values([*story_relationship_names(graph), *alliances, *enemies])
+    return StorySignals(
+        first_name=first_name,
+        identity=identity,
+        origin=profile.origin or attribute_value(graph, "Home"),
+        places=story_place_names(graph),
+        relationships=relationships,
+        drives=graph_drive_values(graph, profile),
+        alliances=alliances,
+        enemies=enemies,
+        traits=primary_traits(graph),
+    )
 
 
 def article_for(value: str) -> str:
@@ -234,12 +264,18 @@ def rewrite_quality_context(graph: CharacterGraph, profile: CharacterProfile) ->
         profile.race,
         profile.character_class,
         profile.pronouns,
+        profile.origin,
+        profile.gender,
         profile.summary,
         profile.backstory,
+        profile.details,
         " ".join(profile.drives or []),
+        " ".join(profile.motivations or []),
         " ".join(profile.alliances or []),
         " ".join(profile.enemies or []),
     ]
+    if profile.stat_fields:
+        sections.extend(profile.stat_fields.values())
     if primary:
         sections.extend([primary.summary, " ".join(primary.source_spans)])
     sections.extend(attribute.summary for attribute in graph.attributes.values())
@@ -254,7 +290,11 @@ def rewrite_required_terms(graph: CharacterGraph, profile: CharacterProfile) -> 
         profile.name,
         profile.race,
         profile.character_class,
+        profile.origin,
         *(profile.drives or []),
+        *(profile.motivations or []),
+        *(profile.alliances or []),
+        *(profile.enemies or []),
     ]
     terms.extend(story_place_names(graph))
     terms.extend(story_relationship_names(graph))
@@ -303,7 +343,11 @@ def story_place_names(graph: CharacterGraph) -> list[str]:
 def story_relationship_names(graph: CharacterGraph) -> list[str]:
     names = []
     primary_last_name = graph.primary_character.name.split()[-1].lower() if graph.primary_character.name.split() else ""
+    non_story_relationships = {"race", "class", "drive", "place"}
+    non_story_names = {"mother", "father", "parent", "family", "half", "orc", "bard", "half orc", "half-orc", "orc bard"}
     for edge in graph.relationships:
+        if edge.relationship_type.lower() in non_story_relationships:
+            continue
         if edge.target not in graph.characters or edge.target == graph.primary_character.id:
             continue
         character = graph.characters[edge.target]
@@ -312,7 +356,7 @@ def story_relationship_names(graph: CharacterGraph) -> list[str]:
             continue
         if primary_last_name and name.lower() == primary_last_name:
             continue
-        if name.lower() in {"mother", "father", "parent", "half", "orc", "bard"}:
+        if name.lower() in non_story_names:
             continue
         names.append(humanize_generated_text(name))
     return unique_values(names)

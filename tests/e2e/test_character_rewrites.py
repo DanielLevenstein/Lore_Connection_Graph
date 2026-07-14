@@ -131,7 +131,7 @@ def test_semantic_improvement_report_includes_scores_and_result():
 
     assert "# Semantic Improvement Report: Orin Nightbloom" in report
     assert "Source context similarity compares each candidate" in report
-    assert "Model rewrite" in report
+    assert "Graph rewrite" in report
     assert "Existing generated section" in report
     assert "Original section" in report
     assert "improves the overall quality score over the original section" in report

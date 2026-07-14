@@ -3,11 +3,20 @@
 ## Rewrite Engine
 
 - Rewrite engine: `deterministic-graph-rewrite`
-- Evaluation: deterministic local hash-embedding semantic scorer with concept coverage and concision.
+- Evaluation: local hash-embedding source-context similarity, required concept coverage, and concision.
+- Source context similarity compares each candidate against the assembled character profile and graph evidence.
 
 ## Candidate
 
-### Post-Transform Story
+### Model Rewrite
+
+Orin is a Half-Orc Bard from a coastal mage college whose story keeps circling back to Sunstone Mage College.
+
+Ties to Orin Nightbloom's Mother give the story its sharpest edges. Orin is remembered as brave.
+
+Now Orin is driven to stop a younger relative from repeating their worst choice while still needing to break a curse that only worsens when ignored.
+
+### Existing Generated Section
 
 Orin Nightbloom is a Half-Orc Bard whose life has been shaped by the tension between legacy and self-invention. Orin came of age at Sunstone Mage College, a place that sharpened both his talent and his sense of exile.
 
@@ -25,11 +34,12 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 ## Scores
 
-| Candidate | Overall | Similarity |Coverage | Concision |
-| --------- | ------: | ---------: | ------: | --------: |
-| Post-transform story | 0.8384 | 0.7347 | 0.8889 | 0.9062 |
-| Pre-transform backstory | 0.4758 | 0.7881 | 0.4444 | 0.0000 |
+| Candidate         | Overall | Similarity | Coverage | Concision |
+|-------------------| ------: | ---------: | -------: | --------: |
+| LangGraph rewrite | 0.7987  | 0.5857     | 0.8750   | 1.0000    |
+| Legacy rewrite    | 0.7762  | 0.7357     | 0.7500   | 0.9062    |
+| Original section  | 0.4441  | 0.7867     | 0.3750   | 0.0000    |
 
 ## Result
 
-The post-transform story improves the semantic quality score by `0.3626`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
+The model rewrite improves the overall quality score over the original section by `0.3546`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.

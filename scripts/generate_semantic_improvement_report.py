@@ -37,33 +37,33 @@ def build_report(character_path: Path = DEFAULT_CHARACTER_PATH, rewrite_client: 
     original_score = semantic_rewrite_score(original_backstory, source_context, required_terms)
     delta = round(model_score.score - original_score.score, 4)
     score_rows = [
-        score_row("Model rewrite", model_score),
+        score_row("Graph rewrite", model_score),
         score_row("Existing generated section", existing_generated_score),
     ]
     if original_backstory.strip() != existing_generated_backstory.strip():
         score_rows.append(score_row("Original section", original_score))
     score_table = markdown_table(
-        ["Candidate", "Overall", "Source Context Similarity", "Coverage", "Concision"],
+        ["Candidate", "Overall", "Similarity", "Coverage", "Concision"],
         score_rows,
         alignments=["left", "right", "right", "right", "right"],
     )
     return (
         "# Semantic Improvement Report: Orin Nightbloom\n\n"
-        "## Model Recommendation\n\n"
+        "## Rewrite Engine\n\n"
         f"- Rewrite engine: `{REWRITE_ENGINE_NAME}`\n"
         "- Evaluation: local hash-embedding source-context similarity, required concept coverage, and concision.\n"
         "- Source context similarity compares each candidate against the assembled character profile and graph evidence.\n\n"
         "## Candidate\n\n"
-        "### Model Rewrite\n\n"
+        "### LangGraph Rewrite\n\n"
         f"{model_story}\n\n"
-        "### Existing Generated Section\n\n"
+        "### Legacy Rewrite \n\n"
         f"{existing_generated_backstory}\n\n"
-        "### Original Character Backstory\n\n"
+        "### Original Backstory\n\n"
         f"{original_backstory}\n\n"
         "## Scores\n\n"
         f"{score_table}\n\n"
         "## Result\n\n"
-        f"The model rewrite improves the overall quality score over the original section by `{delta:.4f}`. "
+        f"The graph rewrite improves the overall quality score over the original section by `{delta:.4f}`. "
         "It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.\n"
     )
 

@@ -133,7 +133,7 @@ def build_combined_character_graph(
                 target_node = graph.attributes.get(relationship.target)
             if target_node is None:
                 continue
-            if relationship.target in graph.characters:
+            if relationship.target in graph.characters and not target_is_family:
                 matched_primary_id = match_primary_character(
                     target_node.name,
                     relationship.evidence,

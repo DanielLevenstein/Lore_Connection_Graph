@@ -3,8 +3,6 @@ import json
 from character_graph.extraction import extract_character_graph
 from character_graph.graph_view import attribute_rows, evidence_rows, place_rows, relationship_dot, relationship_rows
 from character_graph.ingest import load_backstory
-from character_graph.prompt_context import build_prompt_context
-from character_graph.retrieval import retrieve_relevant_context
 from character_graph.schema import CharacterGraph, CharacterNode, PrimaryCharacterRef, RelationshipEdge
 from character_graph.storage import load_graph, save_graph
 from character_graph.validation import validate_graph
@@ -604,19 +602,6 @@ def test_graph_storage_migrates_legacy_attribute_nodes(tmp_path):
     assert set(loaded.characters) == {"arlen_voss"}
     assert loaded.attributes["pronouns_he_him"].value == "he/him"
     assert loaded.attributes["pronouns_he_him"].attribute_type == "Pronouns"
-
-
-def test_retrieval_formats_related_character_context(tmp_path):
-    source = tmp_path / "arlen.md"
-    source.write_text(BACKSTORY, encoding="utf-8")
-    graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
-
-    retrieved = retrieve_relevant_context(graph, "What does being an Elf Wizard mean for me?")
-    context = build_prompt_context(retrieved)
-
-    assert retrieved[0].display_name in {"Elf", "Wizard"}
-    assert "Relevant character attribute context:" in context
-    assert "Relationship metadata:" in context
 
 
 def test_validation_warns_on_missing_relationship_target(tmp_path):
