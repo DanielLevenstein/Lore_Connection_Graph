@@ -30,6 +30,16 @@ A manual backup button has been added in the `Lore Import` Section for your conv
 
 ## Setup
 
+The easiest way to run the app is:
+
+```bash
+./run_streamlit.sh
+```
+
+This helper script creates a local `.venv` environment if needed, installs the dependencies from `requirements.txt`, and starts the Streamlit app.
+
+If you prefer to manage the environment manually, use:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
