@@ -1,17 +1,22 @@
-# Character Rewrite And Lore Move Merge
+# UI Bug Reports
+- All files under the old legacy model harness can be safely deleted, I verified it locally.
+- pull the latest changes from the main before writing code.
+- Update `ui_issue_report.md` after UI bugs are fixed.
 
-This branch combines `feature/character_rewrite` and `feature/lore_move`.
 ## UI Save Audit (visible elements before / after Save)
 
 **Characters**
 - Before Save: Heading `Roleplaying Character Creator`; tab `Characters` (selected); heading `Characters`; `Existing Characters` combobox (e.g. Jory Ravenmark); `Open` / `chat Open Character` buttons; character heading (e.g. `Jory Ravenmark`); `Edit Character` expander; `Character Attribute Graph` expander; `New Character` / `Create Character` section; editor textboxes (`Name`, `First Name`, `Family Name`, `Level`, `Race`, `Class`, `Pronouns`, `Backstory`, `Summary`); editor buttons (`person_add Create Character`, `save Save Character`, `undo Undo Changes`, `delete_forever Delete Character`).
 - After Save: transient confirmation `Character Saved.` (may be hidden or brief); tab `Characters` remains selected; character heading remains visible; editor buttons still present. Successful saves typically write a PROFILE.json under the app `meta_data/character_metadata/<name>/PROFILE.json`.
 - The `Character Saved` field not showing up after the save button is clicked is a bug and should be fixed. 
+- The summary section on the character creation has two periods. 
 
 **Places**
 - Before Save: tab `Places`; heading `Places`; `Create Place` expander with `Name` textbox and `Place Markdown` textbox; `add_location_alt Create Place` button; existing `Place Files` combobox.
 - After Save: transient confirmation `Place Saved.`; created place heading visible (e.g. `Brindle Hall`); `save Save Place` and `delete_forever Delete Place` buttons available;
 - place file appears under the `places` fixture directory when save completes.
+- Added new places aren't showing up in the UI after `Create Place` button is clicked
+- When new places are created in the UI they are saved as `New Place.md`
 
 **Session Notes**
 - Before Save: tab `Session Notes`; heading `Session Notes`; `Session Note` combobox; `Open Session Note` button; editor fields (`Title`, `Session Note` textbox); `edit Edit Section` / `save Save Session Note` buttons.
@@ -20,7 +25,6 @@ This branch combines `feature/character_rewrite` and `feature/lore_move`.
 Please ensure that the following text fields are visible in the UI after clicking save `Character Saved.` / `Place Saved.` / `Session Note Saved.` 
 They should be visible in plain text and not hidden by other UI elements.
 Tests should assert both visible confirmation and fallback indicators (file writes, tab selection, presence of created headings) to reduce flakiness.
-
 
 ## Character Rewrite Improvements
 
