@@ -1,50 +1,125 @@
-# Commit Working Changes
-- Between each section in a TODO list commit working changes to create a stable checkpoint. 
-- Do not commit changes until testing for each section is complete.
-- If no testing section is present, add one to the TODO and commit it with the feature commit. 
+# Character Rewrite And Lore Move Merge
+
+This branch combines `feature/character_rewrite` and `feature/lore_move`.
+
+## Character Rewrite Improvements
+
+### Goals
+
+- Generate character summaries and backstories from the character graph instead of deterministic fallback prose.
+- Let missing character graphs be regenerated automatically before rewrite actions.
+- Avoid requiring a long-running local API server for one-off rewrite generation.
+- Show visible feedback when a local model artifact needs to be downloaded.
+- Compare generated, existing, and original backstory sections in the semantic improvement report.
+
+### Concerns To Resolve
+
+- Direct `llama cli` output can include loader, banner, prompt, or performance text and must never be saved into character fields.
+- First-run model downloads are slow, even with smaller quantized artifacts.
+- Top-level Streamlit tab state needs careful handling, so validation errors do not move the user to another tab.
+- The current rewrite path should be simplified and tested before merging back to main.
+
+### Suggested Next Pass
+
+- Isolate model invocation behind a small adapter with fixture-backed tests for CLI transcripts.
+- Keep model download and generation status outside editable character fields.
+- Re-evaluate the selected local model and quantization against output quality and download time.
+- Add a focused Playwright test for Repopulate Summary with a missing graph and a mocked rewrite client.
+
+### Testing
+
+- Run focused unit tests for semantic reports, character rewrites, lore imports, and path behavior.
+- Run Playwright e2e tests for the character rewrite and session note workflows.
 
 ## Session Note Import Deduplication
+
 Allow importing the same session note file again without creating a second file or duplicating existing sections. New imported sections should be appended when their section titles are not already present.
 
 ### H1 Heading Visibility
+
 - For H1 headings, offer a non-destructive Hide Heading action instead of removing the section.
 - Hiding an H1 heading converts the H1 line to an ignored H4 heading and keeps its content in the file.
 - When hiding an H1 heading, promote the next non-H1 heading in that section to H1.
 
 ## Lore Directory Move
-The main flaw the lore move is we are attempting to use the data directory for both the internal application storage and the userfacing document store.
 
-### Previous solution
-Move the local lore source directory from `docs/lore` to `data/lore` so docs can stay focused on committed templates, specs, reports, and screenshots.
+The main flaw the lore move addresses is that the app was attempting to use the data directory for both internal application storage and the user-facing document store.
 
-### New proposal
-Create 3 root levels data directories [docs, world_building, meta_data]
-- Store specification and design docs in docs
-- Store lore folder in world_building
-- Store character graph and local model in meta_data
+### Completed Proposal
 
-Add two subdirectories to the world_building directory [import, lore] 
-- this will separate raw import files from generated Markdown and provides a path to create an export directory later if we want a way of extracting info from the system.
-- On the session notes page import UI should show the world_building directory as the base directory for md imports.
+Create root-level `docs` and `world_building` directories.
+
+- Store specification and design docs in `docs`.
+- Store lore, imports, backups, character graph data, and local model data in `world_building`.
+- Use `world_building/import`, `world_building/lore`, and `world_building/meta_data` to separate raw imports, generated Markdown, and runtime metadata.
+- On the session notes page, import UI should show the `world_building/import` directory as the base directory for Markdown imports.
 
 ### Backup Functionality
-Backup lore files are stored in `world_building/backup` and are updated everytime the app is loaded.
-Lore backups can be restored using the Lore Import functionality. 
 
-- Remove the existing backup button with a date timestamp
-- Add the following buttons under the `Lore Import` heading
-[Import Testing Lore, Create Lore Backup, Import Lore Backup, Bulk Lore Removal]
-- Make sure the `Bulk Lore Removal` button quietly creates a backup before the wipe. 
+Backup lore files are stored in `world_building/backup` and are updated every time the app is loaded. Lore backups can be restored using the Lore Import functionality.
 
-### Testing
-- Add focused tests for lore backup copying, timestamp recording, Lore Import UI visibility, and backup creation before bulk removal.
+- Remove the existing backup button with a date timestamp.
+- Add `Import Testing Lore`, `Create Lore Backup`, `Import Lore Backup`, and `Bulk Lore Removal` under `Lore Import`.
+- Make sure the `Bulk Lore Removal` button quietly creates a backup before the wipe.
 
 ## Completed
 
 ### Backup Functionality
+
 - Added `world_building/backup` as the local lore backup directory.
 - Refresh backups whenever the Streamlit app loads.
+- Include `world_building/meta_data` files in backups and backup restores.
 - Removed the backup timestamp button.
 - Added `Import Testing Lore`, `Create Lore Backup`, `Import Lore Backup`, and `Bulk Lore Removal` actions under `Lore Import`.
 - Bulk lore removal creates a backup before wiping local lore.
 - Documented backup behavior in README.
+
+### Lore Directory Move
+
+- Kept authored lore under `world_building/lore` and raw imports under `world_building/import`.
+- Moved runtime metadata, graph data, and local model data under `world_building/meta_data`.
+- Updated tests and documentation to use the nested metadata path.
+
+### Merge Resolution
+
+- Resolved merge conflicts between `feature/character_rewrite` and `feature/lore_move`.
+- Preserved the `world_building` directory defaults while retaining fixture overrides for tests.
+- Preserved the semantic improvement report comparison across model rewrite, existing generated section, and original section.
+
+### Global Codex Skills
+
+- Created global skills for LangGraph knowledge graphs, local model text transformations, Playwright e2e tests, Streamlit business logic separation, and language-model-assisted worldbuilding.
+- Validated the new skill frontmatter and naming constraints.
+- Added `AGENTS.md` guidance to use the worldbuilding skill for lore consistency checks.
+
+### Rendering And Compiler Fixes
+
+- Removed stale `language_model_harness.py` imports and switched tests/scripts to the existing `model_harness` defaults.
+- Decoded literal escaped newlines during session note import, so imported headings and selected note labels render normally.
+- Deleted obsolete `rendering_bug_*` screenshots after verification.
+- Added `docs/screenshots/import_session_notes_escaped_newlines_fixed.png` to document the corrected import rendering.
+- Testing: `.venv/bin/python -m pytest tests/test_session_notes.py tests/test_semantic_improvement_report.py tests/test_model_downloads.py tests/test_character_rewrite_model_lifecycle.py`; `.venv/bin/python -m pytest tests/e2e/test_session_notes_ui.py`.
+
+### Environment Variable Removal Plan
+
+- Created `docs/reports/environment_variable_feature_audit.md`.
+- Added an ordered removal plan for all environment variables except `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES`, ranked from lowest to highest risk.
+- Testing: report-only change; no runtime tests required beyond the focused validation already run for the pending code fixes.
+
+### Hidden Knowledge Graph Release Hardening
+
+- Replaced the Qwen-backed rewrite path with the in-code `deterministic-graph-rewrite` engine.
+- Removed bundled external Qwen model configs from the release path.
+- Hardened graph validation and save behavior so missing evidence, missing node references, and missing embeddings fail before graph JSON is written.
+- Confirmed the same character knowledge graph can improve current character summary/backstory rewrites by feeding people, places, relationships, drives, and evidence into deterministic generated prose and the semantic improvement report.
+- Disabled model-config-backed random character backstory generation for this release.
+- Updated README, release notes, and rewrite design docs to reflect graph-backed generation instead of model downloads.
+- Testing: run focused graph, rewrite, model-config, semantic-report, and character-generation tests before committing this section.
+
+### Character Rewrite Metadata Stabilization
+
+- Centralized deterministic rewrite story signals so summary, backstory, prompt context, and required-term scoring use the same profile-plus-graph facts.
+- Preserved JSON/metadata-backed origin, drives, alliances, enemies, motivations, custom stat fields, and source-backed places in rewrite scoring and generated prose.
+- Filtered non-story attribute artifacts out of relationship prose so race, class, family placeholders, and place edges do not masquerade as character relationships.
+- Regenerated `docs/reports/semantic_backstory_improvement.md` with model, existing generated, and original backstory scores.
+- Testing: `.venv/bin/python -m pytest tests/test_semantic_improvement_report.py tests/test_character_rewrite_model_lifecycle.py tests/e2e/test_character_rewrites.py`; `.venv/bin/python -m pytest tests/test_semantic_improvement_report.py tests/test_character_rewrite_model_lifecycle.py tests/test_character_graph.py tests/test_model_downloads.py tests/test_character_generation.py`.

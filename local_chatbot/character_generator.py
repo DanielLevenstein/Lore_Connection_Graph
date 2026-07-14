@@ -4,7 +4,6 @@ import re
 from dataclasses import dataclass
 
 from model_harness import ModelConfig
-from .client import chat_completion
 from .paths import CHARACTER_METADATA_DIR
 from .storage import Character, CharacterProfile, create_generated_character, sanitize_name
 
@@ -191,79 +190,9 @@ class RandomCharacterGenerator:
         )
 
     def with_model_backstory(self, profile: CharacterProfile, model_config: ModelConfig) -> CharacterProfile:
-        first_name = self.first_name(profile.name)
-        prompt = (
-            "Create a believable tabletop fantasy character profile from these base stats.\n\n"
-            f"Full name: {profile.name}\n"
-            f"First name to use in prose: {first_name}\n"
-            f"Level: {profile.level}\n"
-            f"Race: {profile.race}\n"
-            f"Class: {profile.character_class}\n"
-            f"Pronouns: {profile.pronouns}\n"
-            f"Gender: {profile.gender}\n"
-            f"Place of origin: {profile.origin}\n\n"
-            "Selected character motivations:\n"
-            f"1. {profile.motivations[0] if profile.motivations else 'choose a personal goal'}\n"
-            f"2. {profile.motivations[1] if profile.motivations and len(profile.motivations) > 1 else 'choose a competing personal goal'}\n\n"
-            "Requirements:\n"
-            "- Write a detailed backstory with as many paragraphs as needed.\n"
-            "- Make the character feel grounded and believable, with concrete relationships, losses, skills, and flaws.\n"
-            "- Use both selected motivations and contemplate how they assist each other, compete with each other, or both.\n"
-            "- Use the first name only in the backstory and summary. Do not use the family name outside the title metadata.\n"
-            "- Write the summary last as 1 or 2 sentences.\n"
-            "- Return only this format:\n"
-            "BACKSTORY:\n"
-            "<three paragraphs>\n\n"
-            "SUMMARY:\n"
-            "<one or two sentences>\n"
-        )
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You write concise, grounded fantasy character biographies. "
-                    "You follow formatting instructions exactly."
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ]
-        response = chat_completion(model_config, messages, temperature=0.9, max_tokens=1100)
-        try:
-            payload = self.parse_model_markdown(response)
-        except ValueError:
-            messages.extend(
-                [
-                    {"role": "assistant", "content": response},
-                    {
-                        "role": "user",
-                        "content": (
-                            "Reformat your last answer using only this plain text structure:\n"
-                            "BACKSTORY:\n"
-                            "<detailed backstory>\n\n"
-                            "SUMMARY:\n"
-                            "<one or two sentences>"
-                        ),
-                    },
-                ]
-            )
-            response = chat_completion(model_config, messages, temperature=0.2, max_tokens=1100)
-            payload = self.parse_model_markdown(response)
-        backstory = self.normalize_backstory(payload.get("backstory", profile.backstory))
-        summary = payload.get("summary", profile.summary).strip()
-        return CharacterProfile(
-            name=profile.name,
-            pronouns=profile.pronouns,
-            level=profile.level,
-            race=profile.race,
-            character_class=profile.character_class,
-            backstory=backstory,
-            summary=summary,
-            motivations=profile.motivations,
-            drives=profile.drives,
-            alliances=profile.alliances,
-            enemies=profile.enemies,
-            origin=profile.origin,
-            gender=profile.gender,
+        raise RuntimeError(
+            "External language-model character generation is disabled for this release. "
+            "Use the deterministic in-code generator instead."
         )
 
     @classmethod

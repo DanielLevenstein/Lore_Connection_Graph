@@ -21,37 +21,25 @@ The buttons are:
 
 `Undo Changes` remains available even when graph rewrite generation is disabled. The undo stack is recursive in the practical UI sense: each saved mutation pushes a snapshot, and repeated undo actions walk backward through prior snapshots.
 
-## Model Recommendation
+## Rewrite Engine
 
-Use the configured local chat model exposed through the existing OpenAI-compatible local model server. Do not hard-code a specific remote model into the rewrite path.
+Use the deterministic graph rewrite engine that ships in the codebase. Do not call a language model that is external to the repository release, including downloaded model artifacts that external users may not have access to.
 
-Default recommendation:
+Release behavior:
 
-- `qwen2.5-3b-instruct-gguf`
-- Runner: `llama.cpp`
-- Quantization: `Qwen2.5-3B-Instruct-Q4_K_M.gguf`
-- Role: semantic-aware local rewrite model for summaries and compact backstory rewrites.
+- Engine: `deterministic-graph-rewrite`
+- Inputs: authored character profile fields plus knowledge graph characters, places, attributes, relationships, and evidence.
+- Role: generate compact summaries and backstory drafts from source-backed graph facts.
 
-This is the best default for the current project because the repository already validates it as the selected runnable GGUF semantic model, it is small enough for local iteration, and it is instruction-tuned enough for constrained rewrite prompts. Larger 7B or 8B instruction models remain good future quality upgrades when latency and memory budgets allow them.
+This is the best default for the current release because it is offline, fixture-testable, and available to every user who has the codebase.
 
-Recommended default model class:
+Future model-backed rewrites can be reconsidered only when the model is a codebase-owned, redistributable dependency with deterministic tests and no hidden download requirement.
 
-- Instruction-tuned local model.
-- 7B to 8B parameter range for interactive latency on local hardware.
-- GGUF deployment through the existing harness when available.
-- At least 8k context if the model and hardware support it.
-
-Good candidates for this project are local instruction models in the Mistral, Llama, or Qwen families, selected through the existing model harness configuration. The app should ask the model for structured Markdown and then validate the output before it reaches the editor.
-
-Fallback behavior:
-
-- If no local model is configured or reachable, keep the current deterministic graph-derived draft helpers.
-- The fallback should be labeled as derived from graph data, not presented as polished prose.
-- The fallback summary builder should still use both authored profile fields and graph-derived facts so tests can validate the rewrite contract without requiring a running model server.
+The graph rewrite output should be labeled as graph-backed generated text and should still preserve original sections for review before acceptance.
 
 ## Rewrite Context
 
-Every rewrite request should combine authored prose and derived graph fields. The model input should include:
+Every rewrite request should combine authored prose and derived graph fields. The rewrite context should include:
 
 - Character name, first name, family name, race, class, level, pronouns.
 - Current summary and current backstory.
@@ -69,7 +57,7 @@ The prompt should clearly rank source authority:
 3. Knowledge graph facts with evidence.
 4. Inferred graph relationships.
 
-When sources conflict, the model should preserve authored prose and avoid inventing a correction.
+When sources conflict, the rewrite should preserve authored prose and avoid inventing a correction.
 
 ## Attribute Graph Overrides
 
@@ -171,7 +159,7 @@ Unit tests should cover:
 - Original section preservation.
 - Rewrite save semantics.
 - Repeated undo stack behavior through storage-independent helpers.
-- Prompt/context construction once model-backed rewrites are implemented.
+- Rewrite/context construction for graph-backed summaries and backstories.
 
 End-to-end tests should cover:
 

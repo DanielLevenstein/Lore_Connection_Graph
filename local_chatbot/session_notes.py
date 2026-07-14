@@ -163,11 +163,25 @@ def prepare_markdown_import(
     selected_heading_keys: set[str] | None = None,
     today: date | None = None,
 ) -> tuple[str, list[ImportHeading]]:
-    normalized = expand_single_newlines(normalize_import_headings(text, title=title, today=today))
+    import_text = normalize_escaped_newlines(text)
+    normalized = expand_single_newlines(normalize_import_headings(import_text, title=title, today=today))
     headings = import_headings(normalized, today=today)
     if selected_heading_keys is None:
         return normalized, headings
     return restore_unselected_import_headings(normalized, selected_heading_keys, today=today), headings
+
+
+def normalize_escaped_newlines(text: str) -> str:
+    if "\\n" not in text:
+        return text
+    normalized_line_breaks = text.replace("\r\n", "\n").replace("\r", "\n")
+    if "\n" in normalized_line_breaks:
+        return text
+    return (
+        text.replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        .replace("\\t", "\t")
+    )
 
 
 def expand_single_newlines(text: str) -> str:

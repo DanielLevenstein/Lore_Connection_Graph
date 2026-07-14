@@ -16,23 +16,23 @@ Build a local Python app for creating roleplaying character sheets, maintaining 
 
 ## Storage
 
-- The source-of-truth file structure is `docs/` for committed project documentation, `world_building/` for local user-facing campaign documents, and `meta_data/` for local internal application data.
+- The source-of-truth file structure is `docs/` for committed project documentation and `world_building/` for local campaign documents, raw imports, backups, and internal application data.
 - Authored lore is stored in `world_building/lore`.
 - Raw source imports are staged under `world_building/import`.
 - Authored lore in `world_building/lore` is ignored by git so users can populate it with private campaign data.
 - Available character sheets are sourced from `world_building/lore/character_sheets`.
 - Available places are sourced from `world_building/lore/places`.
 - Generated characters are stored in `world_building/lore/character_sheets` only after the player saves them.
-- Runtime metadata, memory files, chat logs, generated graph JSON, and local model data are stored under `meta_data/`.
-- No files in `world_building/` or `meta_data/` should be committed.
+- Runtime metadata, memory files, chat logs, generated graph JSON, and local model data are stored under `world_building/meta_data/`.
+- No files in `world_building/` should be committed.
 
 ## Character Sheets
 
 - Support flat character sheets at `world_building/lore/character_sheets/character_name.md`.
 - Support folder character sheets at `world_building/lore/character_sheets/character_name/BACKSTORY.md`.
-- Store runtime character metadata in `meta_data/character_metadata/character_name/PROFILE.json`.
-- Store memory notes as markdown in `meta_data/character_metadata/character_name/MEMORY.md`.
-- Store logs as raw text in `meta_data/character_metadata/character_name/chatlogs`.
+- Store runtime character metadata in `world_building/meta_data/character_metadata/character_name/PROFILE.json`.
+- Store memory notes as markdown in `world_building/meta_data/character_metadata/character_name/MEMORY.md`.
+- Store logs as raw text in `world_building/meta_data/character_metadata/character_name/chatlogs`.
 - Preserve existing character sheet sections where possible when saving.
 - Support first-name-only characters.
 

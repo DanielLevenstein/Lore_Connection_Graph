@@ -6,6 +6,7 @@ from character_graph.combined_graph import (
 )
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
+from character_graph.schema import AttributeNode, CharacterGraph, CharacterNode, PrimaryCharacterRef, RelationshipEdge
 import local_chatbot.storage as storage
 from local_chatbot.storage import Character, append_character_connections, read_character_profile
 
@@ -389,6 +390,35 @@ Neal is a performer.
 
     assert '"family_lovington" [label="Lovington", fillcolor="#fef3c7", shape="ellipse"]' in dot
     assert '"neal_lovington" -> "family_lovington" [label="Family"]' in dot
+
+
+def test_combined_graph_handles_family_attribute_id_collision():
+    graph = CharacterGraph(
+        schema_version="0.3.0",
+        primary_character=PrimaryCharacterRef(id="neal_lovington", name="Neal Lovington", source_file="Neal.md"),
+        characters={
+            "neal_lovington": CharacterNode(name="Neal Lovington", summary="Neal sings."),
+            "family_lovington": CharacterNode(name="Lovington", summary="A related character record."),
+        },
+        attributes={
+            "family_lovington": AttributeNode(value="Lovington", attribute_type="Family", summary="Family name.")
+        },
+        relationships=[
+            RelationshipEdge(
+                source="neal_lovington",
+                target="family_lovington",
+                relationship_type="family",
+                relationship_label="Family",
+                evidence=["Lovington is inferred as the family name from Neal Lovington."],
+            )
+        ],
+    )
+
+    combined = build_combined_character_graph([graph])
+
+    assert ("neal_lovington", "family_lovington", "family") in {
+        (edge.source, edge.target, edge.relationship_type) for edge in combined.edges
+    }
 
 
 def test_combined_graph_deduplicates_same_type_same_name_nodes():

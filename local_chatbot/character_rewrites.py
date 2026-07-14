@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Callable
 
 from character_graph.embeddings import HashingEmbedder, cosine_similarity
 from character_graph.schema import CharacterGraph
@@ -9,7 +10,8 @@ from character_graph.schema import CharacterGraph
 from .storage import CharacterProfile, character_first_name
 
 
-RECOMMENDED_REWRITE_MODEL = "qwen2.5-3b-instruct-gguf"
+REWRITE_ENGINE_NAME = "deterministic-graph-rewrite"
+RewriteClient = Callable[[list[dict[str, str]]], str]
 
 
 @dataclass(frozen=True)
@@ -20,87 +22,239 @@ class RewriteQualityScore:
     concision: float
 
 
-def graph_generated_summary(graph: CharacterGraph, profile: CharacterProfile) -> str:
+@dataclass(frozen=True)
+class StorySignals:
+    first_name: str
+    identity: str
+    origin: str
+    places: list[str]
+    relationships: list[str]
+    drives: list[str]
+    alliances: list[str]
+    enemies: list[str]
+    traits: list[str]
+
+
+def graph_generated_summary(
+    graph: CharacterGraph,
+    profile: CharacterProfile,
+    rewrite_client: RewriteClient | None = None,
+) -> str:
+    prompt = rewrite_prompt("summary", graph, profile)
+    return run_graph_rewrite(prompt, graph, profile, "summary", rewrite_client=rewrite_client)
+
+
+def graph_generated_backstory(
+    graph: CharacterGraph,
+    profile: CharacterProfile,
+    rewrite_client: RewriteClient | None = None,
+) -> str:
+    prompt = rewrite_prompt("backstory", graph, profile)
+    return run_graph_rewrite(prompt, graph, profile, "backstory", rewrite_client=rewrite_client)
+
+
+def run_graph_rewrite(
+    prompt: str,
+    graph: CharacterGraph,
+    profile: CharacterProfile,
+    kind: str,
+    rewrite_client: RewriteClient | None = None,
+) -> str:
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Rewrite roleplaying character lore using only facts from the supplied character sheet "
+                "and knowledge graph context."
+            ),
+        },
+        {"role": "user", "content": prompt},
+    ]
+    response = rewrite_client(messages) if rewrite_client else deterministic_graph_rewrite(kind, graph, profile)
+    cleaned = clean_model_rewrite(response)
+    if not cleaned:
+        raise RuntimeError(f"{REWRITE_ENGINE_NAME} returned an empty rewrite.")
+    return humanize_generated_text(cleaned)
+
+
+def deterministic_graph_rewrite(kind: str, graph: CharacterGraph, profile: CharacterProfile) -> str:
+    if kind == "summary":
+        return deterministic_graph_summary(graph, profile)
+    if kind == "backstory":
+        return deterministic_graph_backstory(graph, profile)
+    raise ValueError(f"Unknown rewrite kind: {kind}")
+
+
+def deterministic_graph_summary(graph: CharacterGraph, profile: CharacterProfile) -> str:
+    signals = story_signals(graph, profile)
+    clauses = [f"{profile.name} is {article_for(signals.identity)} {signals.identity}"]
+    if signals.origin:
+        clauses.append(f"from {signals.origin}")
+    if signals.places and all(signals.places[0].lower() not in clause.lower() for clause in clauses):
+        clauses.append(f"shaped by {signals.places[0]}")
+    if signals.relationships:
+        clauses.append(f"bound to {signals.relationships[0]}")
+    if signals.drives:
+        clauses.append(f"driven to {signals.drives[0]}")
+    summary = ", ".join(clauses) + "."
+    return summary.replace(
+        profile.name,
+        signals.first_name if len(profile.name.split()) > 1 else profile.name,
+        1,
+    )
+
+
+def deterministic_graph_backstory(graph: CharacterGraph, profile: CharacterProfile) -> str:
+    signals = story_signals(graph, profile)
+    opening_parts = [f"{signals.first_name} is {article_for(signals.identity)} {signals.identity}"]
+    if signals.origin:
+        opening_parts.append(f"from {signals.origin}")
+    if signals.places:
+        opening_parts.append(f"whose story keeps circling back to {signals.places[0]}")
+    opening = " ".join(opening_parts) + "."
+
+    middle_bits = []
+    if signals.alliances:
+        middle_bits.append(f"Alliances with {', '.join(signals.alliances[:2])} give the story trusted anchors")
+    if signals.enemies:
+        middle_bits.append(f"Pressure from {', '.join(signals.enemies[:2])} keeps the conflict close")
+    if signals.relationships:
+        middle_bits.append(f"Ties to {', '.join(signals.relationships[:3])} give the story its sharpest edges")
+    if signals.traits:
+        middle_bits.append(f"{signals.first_name} is remembered as {', '.join(signals.traits[:3])}")
+    if not middle_bits:
+        middle_bits.append(profile.summary or f"{signals.first_name}'s source notes keep the focus on hard-won choices")
+    middle = ". ".join(middle_bits) + "."
+
+    if signals.drives:
+        ending = f"Now {signals.first_name} is driven to {signals.drives[0]}"
+        if len(signals.drives) > 1:
+            ending += f" while still needing to {signals.drives[1]}"
+        ending += "."
+    else:
+        ending = (
+            f"Now {signals.first_name} carries those graph-backed connections forward "
+            "without losing sight of the established lore."
+        )
+    return "\n\n".join([opening, middle, ending])
+
+
+def story_signals(graph: CharacterGraph, profile: CharacterProfile) -> StorySignals:
+    first_name = profile.first_name or character_first_name(profile.name) or profile.name
+    descriptors = [value for value in [profile.race, profile.character_class] if value]
+    identity = " ".join(descriptors) if descriptors else "adventurer"
+    alliances = unique_values(profile.alliances or [])
+    enemies = unique_values(profile.enemies or [])
+    relationships = unique_values([*story_relationship_names(graph), *alliances, *enemies])
+    return StorySignals(
+        first_name=first_name,
+        identity=identity,
+        origin=profile.origin or attribute_value(graph, "Home"),
+        places=story_place_names(graph),
+        relationships=relationships,
+        drives=graph_drive_values(graph, profile),
+        alliances=alliances,
+        enemies=enemies,
+        traits=primary_traits(graph),
+    )
+
+
+def article_for(value: str) -> str:
+    return "an" if value[:1].lower() in {"a", "e", "i", "o", "u"} else "a"
+
+
+def primary_traits(graph: CharacterGraph) -> list[str]:
     primary = graph.characters.get(graph.primary_character.id)
-    traits = ", ".join(primary.traits[:3]) if primary and primary.traits else ""
-    drives = ", ".join(graph_drive_values(graph, profile)[:2])
-    places = ", ".join(story_place_names(graph)[:2])
-    relationships = story_relationship_names(graph)[:2]
-    pieces = [profile.first_name or character_first_name(profile.name) or profile.name]
-    descriptor = " is"
-    if traits:
-        trait_text = f" who is {traits}"
+    return unique_values(primary.traits if primary else [])
+
+
+def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) -> str:
+    if kind == "summary":
+        instruction = (
+            "Write one polished character summary sentence. Keep it under 70 words. "
+            "Include the character's race, class, key place, important relationship, and main drive when present."
+        )
+    elif kind == "backstory":
+        instruction = (
+            "Rewrite the character backstory as 2 to 4 concise paragraphs. Preserve the named people, places, "
+            "relationships, and drives. Make it read like authored campaign lore, not a bullet list."
+        )
     else:
-        trait_text = ""
-    role = " ".join(value for value in [profile.race, profile.character_class] if value).strip()
-    if role:
-        descriptor += f" a {role}"
-    descriptor += trait_text
-    pieces.append(descriptor)
-    if places:
-        pieces.append(f" tied to {places}")
-    if relationships:
-        pieces.append(f" and connected to {', '.join(relationships)}")
-    if drives:
-        pieces.append(f", driven to {drives}")
-    return humanize_generated_text("".join(pieces).strip() + ".")
-
-
-def graph_generated_backstory(graph: CharacterGraph, profile: CharacterProfile) -> str:
-    name = profile.first_name or character_first_name(profile.name) or profile.name
-    full_name = profile.name
-    role = " ".join(value for value in [profile.race, profile.character_class] if value).strip() or "wanderer"
-    places = story_place_names(graph)
-    drives = graph_drive_values(graph, profile)
-    relationships = story_relationship_names(graph)
-    home = profile.origin or attribute_value(graph, "home")
-    relationship_focus = relationships[0] if relationships else ""
-    place_focus = places[0] if places else home
-    curse_drive = next((drive for drive in drives if "curse" in drive.lower()), "")
-    protection_drive = next((drive for drive in drives if "relative" in drive.lower() or "history" in drive.lower()), "")
-
-    origin_line = (
-        f"{name} came of age at {place_focus}, a place that sharpened both his talent and his sense of exile."
-        if place_focus
-        else f"{name} came of age between inherited expectations and the uneasy promise of his own gifts."
-    )
-    first = (
-        f"{full_name} is a {role} whose life has been shaped by the tension between legacy and self-invention. "
-        f"{origin_line}"
+        raise ValueError(f"Unknown rewrite kind: {kind}")
+    return "\n\n".join(
+        [
+            instruction,
+            "Character profile:",
+            character_profile_context(profile),
+            "Knowledge graph context:",
+            graph_context(graph),
+        ]
     )
 
-    if relationship_focus and curse_drive:
-        second = (
-            f"The loss of {relationship_focus} left more than grief behind; it gave {name} a reason to understand "
-            f"the curse shadowing his family and to stop it from claiming anyone else."
-        )
-    elif curse_drive:
-        second = (
-            f"A family curse sits at the center of {name}'s story, turning old pain into a task he can no longer ignore."
-        )
-    elif relationship_focus:
-        second = (
-            f"His bond with {relationship_focus} gives the story its emotional weight and keeps his choices personal."
-        )
-    else:
-        second = (
-            f"The past keeps pressing on {name}, but he has learned to turn that pressure into purpose."
-        )
 
-    if protection_drive:
-        third = (
-            f"Now {name} carries his music forward as a form of defiance, trying to {protection_drive} while "
-            "turning inherited sorrow into something brave enough to protect the living."
-        )
-    elif drives:
-        third = (
-            f"Now {name} moves with a clearer purpose: to {drives[0]}, without letting the old story decide who he becomes."
-        )
-    else:
-        third = (
-            f"Now {name} steps into the wider world with a clearer voice, determined to make the next verse his own."
-        )
-    return humanize_generated_text("\n\n".join([first, second, third]))
+def character_profile_context(profile: CharacterProfile) -> str:
+    values = [
+        f"Name: {profile.name}",
+        f"First name: {profile.first_name or character_first_name(profile.name)}",
+        f"Race: {profile.race}",
+        f"Class: {profile.character_class}",
+        f"Pronouns: {profile.pronouns}",
+        f"Summary: {profile.summary}",
+        f"Backstory: {profile.backstory}",
+        f"Original backstory: {profile.original_backstory}",
+        f"Drives: {'; '.join(profile.drives or [])}",
+        f"Alliances: {'; '.join(profile.alliances or [])}",
+        f"Enemies: {'; '.join(profile.enemies or [])}",
+    ]
+    return "\n".join(value for value in values if value.split(":", 1)[1].strip())
+
+
+def graph_context(graph: CharacterGraph) -> str:
+    lines = [
+        f"Primary character: {graph.primary_character.name}",
+        "Characters:",
+    ]
+    for character in graph.characters.values():
+        pieces = [character.name]
+        if character.summary:
+            pieces.append(character.summary)
+        if character.traits:
+            pieces.append("traits: " + ", ".join(character.traits))
+        if character.source_spans:
+            pieces.append("evidence: " + " ".join(character.source_spans[:3]))
+        lines.append("- " + " | ".join(pieces))
+    if graph.places:
+        lines.append("Places:")
+        for place in graph.places.values():
+            pieces = [place.name]
+            if place.summary:
+                pieces.append(place.summary)
+            if place.source_spans:
+                pieces.append("evidence: " + " ".join(place.source_spans[:3]))
+            lines.append("- " + " | ".join(pieces))
+    if graph.attributes:
+        lines.append("Attributes:")
+        for attribute in graph.attributes.values():
+            pieces = [attribute.attribute_type, attribute.value]
+            if attribute.summary:
+                pieces.append(attribute.summary)
+            lines.append("- " + " | ".join(piece for piece in pieces if piece))
+    if graph.relationships:
+        lines.append("Relationships:")
+        for edge in graph.relationships:
+            target = graph.characters.get(edge.target)
+            target_name = target.name if target else edge.target
+            evidence = " ".join(edge.evidence[:2])
+            lines.append(f"- {edge.relationship_label or edge.relationship_type}: {target_name}. {evidence}".strip())
+    return "\n".join(lines)
+
+
+def clean_model_rewrite(response: str) -> str:
+    cleaned = response.strip()
+    cleaned = re.sub(r"^```(?:markdown|md)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    cleaned = re.sub(r"^(?:summary|backstory)\s*:\s*", "", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 
 def rewrite_quality_context(graph: CharacterGraph, profile: CharacterProfile) -> str:
@@ -110,12 +264,18 @@ def rewrite_quality_context(graph: CharacterGraph, profile: CharacterProfile) ->
         profile.race,
         profile.character_class,
         profile.pronouns,
+        profile.origin,
+        profile.gender,
         profile.summary,
         profile.backstory,
+        profile.details,
         " ".join(profile.drives or []),
+        " ".join(profile.motivations or []),
         " ".join(profile.alliances or []),
         " ".join(profile.enemies or []),
     ]
+    if profile.stat_fields:
+        sections.extend(profile.stat_fields.values())
     if primary:
         sections.extend([primary.summary, " ".join(primary.source_spans)])
     sections.extend(attribute.summary for attribute in graph.attributes.values())
@@ -130,7 +290,11 @@ def rewrite_required_terms(graph: CharacterGraph, profile: CharacterProfile) -> 
         profile.name,
         profile.race,
         profile.character_class,
+        profile.origin,
         *(profile.drives or []),
+        *(profile.motivations or []),
+        *(profile.alliances or []),
+        *(profile.enemies or []),
     ]
     terms.extend(story_place_names(graph))
     terms.extend(story_relationship_names(graph))
@@ -179,7 +343,11 @@ def story_place_names(graph: CharacterGraph) -> list[str]:
 def story_relationship_names(graph: CharacterGraph) -> list[str]:
     names = []
     primary_last_name = graph.primary_character.name.split()[-1].lower() if graph.primary_character.name.split() else ""
+    non_story_relationships = {"race", "class", "drive", "place"}
+    non_story_names = {"mother", "father", "parent", "family", "half", "orc", "bard", "half orc", "half-orc", "orc bard"}
     for edge in graph.relationships:
+        if edge.relationship_type.lower() in non_story_relationships:
+            continue
         if edge.target not in graph.characters or edge.target == graph.primary_character.id:
             continue
         character = graph.characters[edge.target]
@@ -188,7 +356,7 @@ def story_relationship_names(graph: CharacterGraph) -> list[str]:
             continue
         if primary_last_name and name.lower() == primary_last_name:
             continue
-        if name.lower() in {"mother", "father", "parent", "half", "orc", "bard"}:
+        if name.lower() in non_story_names:
             continue
         names.append(humanize_generated_text(name))
     return unique_values(names)

@@ -17,12 +17,8 @@ from character_graph.graph_view import (
     evidence_rows,
 )
 from character_graph.ingest import load_backstory
-from character_graph.prompt_context import build_prompt_context
-from character_graph.retrieval import retrieve_relevant_context
 from character_graph.storage import load_graph
-from language_model_harness import configure_language_model_harness
 
-configure_language_model_harness()
 
 from model_harness.environment import ensure_base_dirs
 from local_chatbot.storage import (
@@ -86,9 +82,9 @@ from local_chatbot.lore_import import (
     list_lore_backups,
     read_lore_backup_date,
 )
-from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, WORLD_BUILDING_IMPORT_DIR
+from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, LORE_FIXTURES_DIR
 
-ENABLE_CHARACTER_REWRITE = "1"
+ENABLE_CHARACTER_REWRITE = "LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 ENABLE_EXTERNAL_CHARACTER_IMPORT = "LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"
 MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
@@ -248,7 +244,7 @@ def clean_display_name(name: str) -> str:
 
 
 def graph_rewrites_enabled() -> bool:
-    return ENABLE_CHARACTER_REWRITE
+    return os.environ.get(ENABLE_CHARACTER_REWRITE) == "1"
 
 
 def attribute_graph_override_enabled() -> bool:
@@ -304,17 +300,6 @@ def first_meaningful_sentence(text: str) -> str:
     return ""
 
 
-def graph_context_for_prompt(character: Character, prompt: str) -> str:
-    try:
-        graph = load_graph(character.graph_path)
-    except (OSError, ValueError):
-        return ""
-    if not graph:
-        return ""
-    retrieved = retrieve_relevant_context(graph, prompt)
-    return build_prompt_context(retrieved)
-
-
 def parse_list_field(value: str) -> list[str]:
     return [item.strip() for item in value.replace("\n", ",").replace(";", ",").split(",") if item.strip()]
 
@@ -356,16 +341,22 @@ def accept_current_character_text(profile: CharacterProfile) -> CharacterProfile
 
 
 def graph_generated_summary(character: Character, profile: CharacterProfile) -> str:
-    graph = load_graph(character.graph_path)
-    if graph is None:
-        raise ValueError("No Character Graph Is Available. Regenerate The Graph First.")
+    graph = character_graph_or_regenerate(character)
     return build_graph_generated_summary(graph, profile)
 
 
-def graph_generated_backstory(character: Character, profile: CharacterProfile) -> str:
+def character_graph_or_regenerate(character: Character):
     graph = load_graph(character.graph_path)
     if graph is None:
+        regenerate_character_graph(character)
+        graph = load_graph(character.graph_path)
+    if graph is None:
         raise ValueError("No Character Graph Is Available. Regenerate The Graph First.")
+    return graph
+
+
+def graph_generated_backstory(character: Character, profile: CharacterProfile) -> str:
+    graph = character_graph_or_regenerate(character)
     return build_graph_generated_backstory(graph, profile)
 
 
@@ -1119,7 +1110,7 @@ def render_lore_import_tools() -> None:
         if action_cols[1].button("Create Lore Backup", icon=":material/backup:", key="create_lore_backup"):
             summary = backup_lore_files(snapshot=True)
             st.session_state["lore_import_status"] = (
-                f"Created Backup For {summary.files} Lore File{'s' if summary.files != 1 else ''}."
+                f"Created Backup For {summary.files} File{'s' if summary.files != 1 else ''}."
             )
             st.rerun()
         if action_cols[2].button("Import Lore Backup", icon=":material/restore_page:", key="import_lore_backup"):
@@ -1155,8 +1146,9 @@ def render_lore_backup_restore_dialog(overwrite_existing: bool) -> None:
         backup_source = Path(st.session_state[LORE_BACKUP_IMPORT_SOURCE_KEY])
         summary = import_lore_directory(backup_source, overwrite=overwrite_existing)
         st.session_state["lore_import_status"] = (
-            f"Restored {summary.total} Backup Lore File{'s' if summary.total != 1 else ''} "
-            f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
+            f"Restored {summary.total} Backup File{'s' if summary.total != 1 else ''} "
+            f"({summary.characters} Characters, {summary.places} Places, "
+            f"{summary.session_notes} Session Notes, {summary.metadata} Metadata Files)."
         )
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
@@ -1174,8 +1166,9 @@ def render_bulk_lore_removal_warning() -> None:
         backup_lore_files(snapshot=True)
         summary = clear_local_lore()
         st.session_state["lore_import_status"] = (
-            f"Deleted {summary.total} Local Lore File{'s' if summary.total != 1 else ''} "
-            f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
+            f"Deleted {summary.total} Local File{'s' if summary.total != 1 else ''} "
+            f"({summary.characters} Characters, {summary.places} Places, "
+            f"{summary.session_notes} Session Notes, {summary.metadata} Metadata Files)."
         )
         for key in ("active_character", "active_place", "active_session_note"):
             st.session_state.pop(key, None)
@@ -1696,11 +1689,13 @@ def render_character_editor(character: Character) -> None:
             pronouns = stat_cols[3].text_input("Pronouns", value=profile.pronouns)
             if has_distinct_original(profile.backstory, profile.original_backstory):
                 backstory_cols = st.columns(2)
+                backstory_cols[0].caption(section_status_label("Character Backstory", profile))
                 backstory = backstory_cols[0].text_area(
-                    section_label("Backstory", profile, "Character Backstory"),
+                    "Backstory",
                     value=profile.backstory,
                     height=180,
                 )
+                backstory_cols[1].caption("Original Character Backstory")
                 backstory_cols[1].text_area(
                     "Original Backstory",
                     value=profile.original_backstory,
@@ -1708,14 +1703,17 @@ def render_character_editor(character: Character) -> None:
                     disabled=True,
                 )
             else:
-                backstory = st.text_area(section_label("Backstory", profile, "Character Backstory"), value=profile.backstory, height=180)
+                render_section_status("Character Backstory", profile)
+                backstory = st.text_area("Backstory", value=profile.backstory, height=180)
             if has_distinct_original(profile.summary, profile.original_summary):
                 summary_cols = st.columns(2)
+                summary_cols[0].caption(section_status_label("Character Summary", profile))
                 summary = summary_cols[0].text_area(
-                    section_label("Summary", profile, "Character Summary"),
+                    "Summary",
                     value=profile.summary,
                     height=96,
                 )
+                summary_cols[1].caption("Original Character Summary")
                 summary_cols[1].text_area(
                     "Original Summary",
                     value=profile.original_summary,
@@ -1723,7 +1721,8 @@ def render_character_editor(character: Character) -> None:
                     disabled=True,
                 )
             else:
-                summary = st.text_area(section_label("Summary", profile, "Character Summary"), value=profile.summary, height=96)
+                render_section_status("Character Summary", profile)
+                summary = st.text_area("Summary", value=profile.summary, height=96)
             with st.expander("Optional Metadata", expanded=False):
                 detail_cols = st.columns(3)
                 drives = detail_cols[0].text_area("Drives", value=render_list_field(profile.drives), height=96)
@@ -1732,20 +1731,45 @@ def render_character_editor(character: Character) -> None:
                 details_value = profile.details or default_details(profile)
                 details = st.text_area("Character Details", value=details_value, height=120)
             action_cols = st.columns(5 if graph_rewrites_enabled() else 3)
-            save_requested = action_cols[0].form_submit_button("Save Character", icon=":material/save:")
+            save_requested = action_cols[0].form_submit_button(
+                "Save Character",
+                icon=":material/save:",
+                on_click=request_main_navigation_tab,
+                args=("Characters",),
+            )
             populate_summary = False
             repopulate_summary = False
             rewrite_backstory = False
             if graph_rewrites_enabled():
-                repopulate_summary = action_cols[1].form_submit_button("Repopulate Summary", icon=":material/sync:")
-                rewrite_backstory = action_cols[2].form_submit_button("Rewrite Backstory", icon=":material/edit_note:")
+                repopulate_summary = action_cols[1].form_submit_button(
+                    "Repopulate Summary",
+                    icon=":material/sync:",
+                    on_click=request_main_navigation_tab,
+                    args=("Characters",),
+                )
+                rewrite_backstory = action_cols[2].form_submit_button(
+                    "Rewrite Backstory",
+                    icon=":material/edit_note:",
+                    on_click=request_main_navigation_tab,
+                    args=("Characters",),
+                )
                 delete_col = action_cols[3]
                 undo_col = action_cols[4]
             else:
                 delete_col = action_cols[1]
                 undo_col = action_cols[2]
-            delete_requested = delete_col.form_submit_button("Delete Character", icon=":material/delete_forever:")
-            undo_requested = undo_col.form_submit_button("Undo Changes", icon=":material/undo:")
+            delete_requested = delete_col.form_submit_button(
+                "Delete Character",
+                icon=":material/delete_forever:",
+                on_click=request_main_navigation_tab,
+                args=("Characters",),
+            )
+            undo_requested = undo_col.form_submit_button(
+                "Undo Changes",
+                icon=":material/undo:",
+                on_click=request_main_navigation_tab,
+                args=("Characters",),
+            )
             if undo_requested:
                 undo_character_changes(character)
             if delete_requested:
@@ -1770,20 +1794,23 @@ def render_character_editor(character: Character) -> None:
                 try:
                     if populate_summary and not next_summary:
                         original_summary = profile.summary
-                        next_summary = graph_generated_summary(character, profile)
+                        with st.spinner("Preparing graph-backed summary."):
+                            next_summary = graph_generated_summary(character, profile)
                         auto_generated_sections = mark_auto_generated(profile, "Character Summary")
                         updated_sections = remove_updated_section(updated_sections, "Character Summary")
                     elif repopulate_summary:
                         original_summary = profile.original_summary or profile.summary
-                        next_summary = graph_generated_summary(character, profile)
+                        with st.spinner("Preparing graph-backed summary."):
+                            next_summary = graph_generated_summary(character, profile)
                         auto_generated_sections = mark_auto_generated(profile, "Character Summary")
                         updated_sections = remove_updated_section(updated_sections, "Character Summary")
                     elif rewrite_backstory:
                         original_backstory = profile.original_backstory or profile.backstory
-                        next_backstory = graph_generated_backstory(character, profile)
+                        with st.spinner("Preparing graph-backed backstory."):
+                            next_backstory = graph_generated_backstory(character, profile)
                         auto_generated_sections = mark_auto_generated(profile, "Character Backstory")
                         updated_sections = remove_updated_section(updated_sections, "Character Backstory")
-                except ValueError as exc:
+                except (RuntimeError, ValueError) as exc:
                     st.error(str(exc))
                     return
                 generated = {value.lower() for value in auto_generated_sections}
@@ -1833,9 +1860,20 @@ def render_character_editor(character: Character) -> None:
             render_character_save_choice(character)
 
 
-def section_label(label: str, profile: CharacterProfile, section: str) -> str:
+def section_status_label(section: str, profile: CharacterProfile) -> str:
     generated = {value.lower() for value in profile.auto_generated_sections or []}
-    return f"{label} (Generated)" if section.lower() in generated else label
+    updated = {value.lower() for value in profile.updated_sections or []}
+    if section.lower() in updated:
+        return f"{section} (Updated)"
+    if section.lower() in generated:
+        return f"{section} (Generated)"
+    return section
+
+
+def render_section_status(section: str, profile: CharacterProfile) -> None:
+    label = section_status_label(section, profile)
+    if label != section:
+        st.caption(label)
 
 
 def render_memory_tools(character: Character) -> None:

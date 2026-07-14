@@ -236,6 +236,21 @@ def test_prepare_markdown_import_expands_single_newlines_for_markdown_paragraphs
     assert "\n\n\n" not in prepared
 
 
+def test_prepare_markdown_import_decodes_literal_escaped_newlines():
+    prepared, headings = prepare_markdown_import(
+        "# Test Session\\n\\n## Arrival\\nThe party arrives.\\n",
+        title="session_import",
+        today=date(2026, 7, 12),
+    )
+
+    assert "\\n" not in prepared
+    assert "# Test Session\n\n## Arrival\n\nThe party arrives." in prepared
+    assert [(heading.level, heading.text) for heading in headings] == [
+        (1, "Test Session"),
+        (2, "Arrival"),
+    ]
+
+
 def test_markdown_import_demotes_unselected_searchable_headings_to_h4(tmp_path, monkeypatch):
     monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
 

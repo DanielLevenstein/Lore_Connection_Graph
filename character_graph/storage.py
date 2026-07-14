@@ -4,9 +4,14 @@ import json
 from pathlib import Path
 
 from .schema import CharacterGraph
+from .validation import validate_graph
 
 
 def save_graph(graph: CharacterGraph, path: Path | str) -> None:
+    warnings = validate_graph(graph)
+    if warnings:
+        details = "\n".join(f"- {warning}" for warning in warnings)
+        raise ValueError(f"Cannot save invalid character graph:\n{details}")
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
@@ -19,7 +24,13 @@ def load_graph(path: Path | str) -> CharacterGraph | None:
     source = Path(path)
     if not source.exists():
         return None
-    payload = json.loads(source.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{source} must contain valid graph JSON.") from exc
     if not isinstance(payload, dict):
         raise ValueError(f"{source} must contain a JSON object.")
-    return CharacterGraph.from_dict(payload)
+    try:
+        return CharacterGraph.from_dict(payload)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"{source} does not contain a valid character graph.") from exc

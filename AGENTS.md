@@ -12,12 +12,21 @@
 - When a task is finished, add a Completed section to the TODO.md file. 
 - When finishing a section, check TODO.md for the next task.
 
+## Consistency Skill
+- Use `$use-language-models-for-worldbuilding` for lore consistency checks before saving generated or rewritten character, place, session note, or knowledge graph summary content.
+- Verify generated worldbuilding output preserves established names, places, relationships, chronology, and source-backed facts.
+
 ## Application Screenshots
-- Add an application screenshot to docs/screenshots before committing code.
-- Name the screenshot based on the UI page you are modifying.
-- Compare the current version to the previous one before updating.
+- Add an application screenshot to docs/screenshots while testing code but do not commit these files. 
+- After reviewing the work I will commit the files which are useful for demonstration or bug tracking purposes. 
 
 ## Automated Testing
 
 - e2e tests for this project use playwright
 - When automated tests break, add a unique id to the button or table you are accessing.
+
+### Environment Variable Removal Plan
+
+- Created `docs/reports/environment_variable_feature_audit.md`.
+- Added an ordered removal plan for all environment variables except `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES`, ranked from lowest to highest risk.
+- For environmental variables used in testing come up with the shortest override list possible that allows the testing that needs to be done without creating a maintenance issue. 

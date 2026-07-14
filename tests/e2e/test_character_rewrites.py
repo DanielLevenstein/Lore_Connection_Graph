@@ -16,6 +16,30 @@ from scripts.generate_semantic_improvement_report import build_report
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FIXTURE_CHARACTER_SHEETS_DIR = ROOT_DIR / "tests" / "fixtures" / "character_sheets"
+MODEL_SUMMARY = (
+    "Orin is a Half-Orc Bard shaped by Sunstone Mage College, the loss of Orin Nightbloom's Mother, "
+    "and a vow to break a worsening family curse before it claims a younger relative."
+)
+MODEL_BACKSTORY = (
+    "Orin Nightbloom is a Half-Orc Bard whose gifts were sharpened in the halls of Sunstone Mage College, "
+    "where lineage and talent never sat comfortably together.\n\n"
+    "The death of Orin Nightbloom's Mother left him with grief, forbidden notes, and the truth of a curse "
+    "that only worsens when ignored.\n\n"
+    "Now Orin turns music into defiance, determined to break the curse and stop a younger relative from "
+    "repeating the family's worst choice."
+)
+
+
+def rewrite_client_with(summary: str = MODEL_SUMMARY, backstory: str = MODEL_BACKSTORY):
+    def rewrite_client(messages: list[dict[str, str]]) -> str:
+        prompt = messages[-1]["content"]
+        if "Write one polished character summary sentence" in prompt:
+            return summary
+        if "Rewrite the character backstory" in prompt:
+            return backstory
+        raise AssertionError(f"Unexpected rewrite prompt: {prompt}")
+
+    return rewrite_client
 
 
 def test_orin_graph_generated_summary_scores_better_than_original_backstory():
@@ -24,7 +48,7 @@ def test_orin_graph_generated_summary_scores_better_than_original_backstory():
     profile = read_character_profile(character)
     graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
 
-    generated_summary = graph_generated_summary(graph, profile)
+    generated_summary = graph_generated_summary(graph, profile, rewrite_client=rewrite_client_with())
     source_context = rewrite_quality_context(graph, profile)
     required_terms = rewrite_required_terms(graph, profile)
     original_backstory = profile.original_backstory or profile.backstory
@@ -38,13 +62,25 @@ def test_orin_graph_generated_summary_scores_better_than_original_backstory():
     assert generated_score.concision > original_score.concision
 
 
+def test_graph_generated_summary_uses_default_graph_engine_without_model():
+    character_path = FIXTURE_CHARACTER_SHEETS_DIR / "Orin_Nightbloom.md"
+    character = Character(name=character_path.stem, path=character_path)
+    profile = read_character_profile(character)
+    graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
+
+    generated_summary = graph_generated_summary(graph, profile)
+
+    assert generated_summary.startswith("Orin is a Half-Orc Bard")
+    assert "Sunstone Mage College" in generated_summary
+
+
 def test_orin_graph_generated_story_scores_better_than_original_backstory():
     character_path = FIXTURE_CHARACTER_SHEETS_DIR / "Orin_Nightbloom.md"
     character = Character(name=character_path.stem, path=character_path)
     profile = read_character_profile(character)
     graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
 
-    generated_story = graph_generated_backstory(graph, profile)
+    generated_story = graph_generated_backstory(graph, profile, rewrite_client=rewrite_client_with())
     source_context = rewrite_quality_context(graph, profile)
     required_terms = rewrite_required_terms(graph, profile)
     original_backstory = profile.original_backstory or profile.backstory
@@ -80,16 +116,22 @@ def test_graph_generated_summary_humanizes_underscored_character_names():
     )
     profile = read_character_profile(Character(name="Jory_Ravenmark", path=FIXTURE_CHARACTER_SHEETS_DIR / "Jory_Ravenmark.md"))
 
-    generated_summary = graph_generated_summary(graph, profile)
+    generated_summary = graph_generated_summary(
+        graph,
+        profile,
+        rewrite_client=rewrite_client_with(summary="Jory Ravenmark remembers Jory_Ravenmark's Mother through old evidence."),
+    )
 
     assert "Jory Ravenmark's Mother" in generated_summary
     assert "Jory_Ravenmark" not in generated_summary
 
 
 def test_semantic_improvement_report_includes_scores_and_result():
-    report = build_report()
+    report = build_report(rewrite_client=rewrite_client_with())
 
     assert "# Semantic Improvement Report: Orin Nightbloom" in report
-    assert "| Post-transform story |" in report
-    assert "| Pre-transform backstory |" in report
-    assert "improves the semantic quality score" in report
+    assert "Source context similarity compares each candidate" in report
+    assert "Graph rewrite" in report
+    assert "Existing generated section" in report
+    assert "Original section" in report
+    assert "improves the overall quality score over the original section" in report
