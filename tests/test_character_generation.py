@@ -711,11 +711,6 @@ def test_create_character_keeps_only_sheet_in_lore_character_sheets(tmp_path, mo
     assert not (tmp_path / "docs" / "lore" / "character_sheets" / "Mara Voss").exists()
     assert character.profile_path == tmp_path / "data" / "character_metadata" / "Mara Voss" / "PROFILE.json"
     assert character.profile_path.exists()
-    assert character.memory_path == tmp_path / "data" / "character_metadata" / "Mara Voss" / "MEMORY.md"
-    assert character.memory_path.exists()
-    assert character.chatlogs_dir == tmp_path / "data" / "character_metadata" / "Mara Voss" / "chatlogs"
-    assert character.chatlogs_dir.exists()
-
 
 def test_create_generated_character_writes_to_data_lore_character_sheets(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)

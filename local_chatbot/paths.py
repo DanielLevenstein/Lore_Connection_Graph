@@ -4,10 +4,8 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = ROOT_DIR / "config"
-LORE_FIXTURES_DIR = Path(os.environ.get("LOCAL_CHATBOT_LORE_FIXTURES_DIR", ROOT_DIR / "tests" / "fixtures")).resolve()
+TEST_FIXTURES_DIRECTORY = Path(os.environ.get("LOCAL_CHATBOT_LORE_FIXTURES_DIR", ROOT_DIR / "tests" / "fixtures")).resolve()
 WORLD_BUILDING_DIR = Path(os.environ.get("LOCAL_CHATBOT_WORLD_BUILDING_DIR", ROOT_DIR / "world_building")).resolve()
-DEFAULT_META_DATA_DIR = WORLD_BUILDING_DIR / "meta_data"
-DATA_DIR = Path(os.environ.get("LOCAL_CHATBOT_DATA_DIR", DEFAULT_META_DATA_DIR)).resolve()
 WORLD_BUILDING_IMPORT_DIR = Path(
     os.environ.get("LOCAL_CHATBOT_WORLD_BUILDING_IMPORT_DIR", WORLD_BUILDING_DIR / "import")
 ).resolve()
@@ -17,7 +15,7 @@ WORLD_BUILDING_BACKUP_DIR = Path(
 META_DATA_DIR = Path(
     os.environ.get(
         "LOCAL_CHATBOT_META_DATA_DIR",
-        os.environ.get("LOCAL_CHATBOT_DATA_DIR", DEFAULT_META_DATA_DIR),
+        os.environ.get("LOCAL_CHATBOT_DATA_DIR", ROOT_DIR / "meta_data"),
     )
 ).resolve()
 LORE_DIR = Path(
@@ -39,8 +37,6 @@ CHARACTER_METADATA_DIR = META_DATA_DIR / "character_metadata"
 
 
 def ensure_base_dirs() -> None:
-    CONFIG_DIR.mkdir(exist_ok=True)
-    DATA_DIR.mkdir(exist_ok=True)
     WORLD_BUILDING_DIR.mkdir(parents=True, exist_ok=True)
     WORLD_BUILDING_IMPORT_DIR.mkdir(parents=True, exist_ok=True)
     WORLD_BUILDING_BACKUP_DIR.mkdir(parents=True, exist_ok=True)

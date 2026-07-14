@@ -73,8 +73,6 @@ world_building/meta_data/character_metadata/*/PROFILE.json
                                             Runtime character metadata
 world_building/meta_data/character_metadata/*/MEMORY.md
                                             Runtime memory notes
-world_building/meta_data/character_metadata/*/chatlogs/*.log
-                                            Runtime play logs
 world_building/meta_data/character_graph/*.graph.json
                                             Derived per-character graph JSON
 ```

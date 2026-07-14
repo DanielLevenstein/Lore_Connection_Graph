@@ -20,7 +20,6 @@ from character_graph.ingest import load_backstory
 from character_graph.storage import load_graph
 
 
-from model_harness.environment import ensure_base_dirs
 from local_chatbot.storage import (
     Character,
     CharacterProfile,
@@ -82,16 +81,14 @@ from local_chatbot.lore_import import (
     list_lore_backups,
     read_lore_backup_date,
 )
-from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, LORE_FIXTURES_DIR
+from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, TEST_FIXTURES_DIRECTORY
 
 ENABLE_CHARACTER_REWRITE = "LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 ENABLE_EXTERNAL_CHARACTER_IMPORT = "LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"
 MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
 LORE_BACKUP_IMPORT_SOURCE_KEY = "lore_backup_import_source"
-TEST_FIXUTES_DIRECTORY = "tests/fixtures"
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
-ensure_base_dirs()
 backup_lore_files()
 
 st.markdown(
@@ -1086,7 +1083,7 @@ def render_lore_import_tools() -> None:
         st.subheader("Bulk Lore Directory")
         source_dir = st.text_input(
             "Source Directory",
-            value=str(TEST_FIXUTES_DIRECTORY),
+            value=str(TEST_FIXTURES_DIRECTORY),
             help="Choose a directory under world_building/import that contains character_sheets, places, and session_notes folders.",
             key="lore_directory_import_source",
         )
@@ -1166,9 +1163,8 @@ def render_bulk_lore_removal_warning() -> None:
         backup_lore_files(snapshot=True)
         summary = clear_local_lore()
         st.session_state["lore_import_status"] = (
-            f"Deleted {summary.total} Local File{'s' if summary.total != 1 else ''} "
-            f"({summary.characters} Characters, {summary.places} Places, "
-            f"{summary.session_notes} Session Notes, {summary.metadata} Metadata Files)."
+            f"Deleted {summary.total} Local Lore File{'s' if summary.total != 1 else ''} "
+            f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
         )
         for key in ("active_character", "active_place", "active_session_note"):
             st.session_state.pop(key, None)

@@ -68,14 +68,6 @@ class Character:
         return self.path / "BACKSTORY.md"
 
     @property
-    def memory_path(self) -> Path:
-        return self.data_dir / "MEMORY.md"
-
-    @property
-    def chatlogs_dir(self) -> Path:
-        return self.data_dir / "chatlogs"
-
-    @property
     def profile_path(self) -> Path:
         return self.data_dir / "PROFILE.json"
 
@@ -397,7 +389,7 @@ def create_character(profile: CharacterProfile, destination_dir: Path | None = N
     if character.backstory_path.exists():
         raise FileExistsError(character.backstory_path)
     character.data_dir.mkdir(parents=True, exist_ok=False)
-    character.chatlogs_dir.mkdir(exist_ok=True)
+
     write_character_profile(character, profile)
     character.memory_path.write_text(
         "# Memory\n\nAdd durable character memories here. The chat UI can append notes as you play.\n",
