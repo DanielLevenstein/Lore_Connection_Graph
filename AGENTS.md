@@ -23,7 +23,23 @@
 ## Automated Testing
 
 - e2e tests for this project use playwright
+- Install required Playwright browsers in the project venv with `.venv/bin/python -m playwright install chromium`
+- Run the UI suite with `PYTHONPATH=. .venv/bin/python -m pytest -q tests/e2e --maxfail=1`
 - When automated tests break, add a unique id to the button or table you are accessing.
+
+## Repository Conventions
+
+- Use `./run_streamlit.sh` to bootstrap the local `.venv` and start the Streamlit app.
+- The source of truth is `world_building/lore`; files in `world_building/meta_data` are derived runtime data and should not be committed.
+- `tests/e2e` fixtures start `streamlit_app.py` on `http://127.0.0.1:8512` and rely on environment overrides such as `LOCAL_CHATBOT_WORLD_BUILDING_DIR`, `LOCAL_CHATBOT_CHARACTERS_DIR`, `LOCAL_CHATBOT_SESSION_NOTES_DIR`, and `LOCAL_CHATBOT_LORE_DIR`.
+- Hidden Streamlit feature flags are gated by environment variables in `streamlit_app.py`: `LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH`, `LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT`, `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES`, `LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE`.
+- UI changes must preserve accessible button/tab names and stable Playwright selectors; if Streamlit labels change, update the tests accordingly.
+
+### Notes for UI work
+
+- The app uses many `st.session_state` keys to manage active character/place/session note selection and navigation tab persistence.
+- When fixing UI state, prefer a single source of truth for active selections and tab state rather than scattering state across many keys.
+- See `docs/reports/ui_issue_report.md` for current Streamlit tab/expander persistence risks and `docs/reports/environment_variable_feature_audit.md` for env var gating guidance.
 
 ### Environment Variable Removal Plan
 

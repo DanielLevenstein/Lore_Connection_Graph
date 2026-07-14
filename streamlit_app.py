@@ -42,7 +42,6 @@ from local_chatbot.storage import (
     read_text,
     regenerate_character_graph,
     remove_character_connections,
-    start_chatlog,
     write_character_connections,
     write_character_profile,
     write_place_markdown,
@@ -118,8 +117,6 @@ st.markdown(
 def set_active_character(character: Character) -> None:
     if st.session_state.get("active_character") != character.name:
         st.session_state.active_character = character.name
-        st.session_state.messages = []
-        st.session_state.chatlog_path = str(start_chatlog(character))
 
 
 def get_active_character() -> Character | None:
@@ -250,51 +247,6 @@ def attribute_graph_override_enabled() -> bool:
 
 def external_character_import_enabled() -> bool:
     return os.environ.get(ENABLE_EXTERNAL_CHARACTER_IMPORT) == "1"
-
-
-def build_character_messages(
-    character_name: str,
-    backstory: str,
-    memory: str,
-    history: list[dict[str, str]],
-    user_text: str,
-) -> list[dict[str, str]]:
-    graph_context = st.session_state.get("graph_context", "").strip()
-    graph_section = f"\n\nRELATED CHARACTER CONTEXT:\n{graph_context}" if graph_context else ""
-    system_prompt = (
-        f"You are roleplaying as {character_name}, the user's custom character. Stay in character, "
-        "use the backstory and memory as ground truth, and keep replies conversational.\n\n"
-        f"CHARACTER NAME:\n{character_name}\n\n"
-        f"BACKSTORY:\n{backstory.strip()}\n\n"
-        f"MEMORY:\n{memory.strip()}"
-        f"{graph_section}"
-    )
-    messages = [{"role": "system", "content": system_prompt}]
-    messages.extend(history[-20:])
-    messages.append({"role": "user", "content": user_text})
-    return messages
-
-
-def generate_fallback_reply(character: Character, backstory: str, memory: str, prompt: str) -> str:
-    summary = first_meaningful_sentence(backstory) or f"I am {character.name}."
-    memory_hint = first_meaningful_sentence(memory)
-    reply_parts = [
-        f"I hear you. {summary}",
-        f"About that: {prompt.strip()}",
-    ]
-    if memory_hint:
-        reply_parts.append(f"I keep this in mind: {memory_hint}")
-    reply_parts.append("The local model is not ready, so I am answering from the character sheet for now.")
-    return " ".join(reply_parts)
-
-
-def first_meaningful_sentence(text: str) -> str:
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or stripped.startswith("|"):
-            continue
-        return stripped
-    return ""
 
 
 def parse_list_field(value: str) -> list[str]:
@@ -1030,10 +982,10 @@ def render_place_info(place: Place) -> None:
         st.markdown(markdown)
     else:
         st.subheader(display_place_name(place))
+    place_message = st.session_state.pop(f"place_status_{place.name}", "")
+    if place_message:
+        st.success(place_message)
     with st.expander("Edit Place", expanded=False):
-        place_message = st.session_state.pop(f"place_status_{place.name}", "")
-        if place_message:
-            st.success(place_message)
         with st.form(f"edit_place_{place.name}"):
             st.text_input("Name", value=display_place_name(place), disabled=True)
             editor_revision = st.session_state.get(f"place_editor_revision_{place.name}", 0)
@@ -1670,9 +1622,6 @@ def render_external_character_sheet_list() -> None:
 def render_character_editor(character: Character) -> None:
     profile = read_character_profile(character)
     with st.expander("Edit Character", expanded=False):
-        character_message = st.session_state.pop(f"character_status_{character.name}", "")
-        if character_message:
-            st.success(character_message)
         with st.form(f"edit_character_{character.name}"):
             st.text_input("Name", value=profile.name, disabled=True)
             name_cols = st.columns(2)
@@ -1772,8 +1721,6 @@ def render_character_editor(character: Character) -> None:
                 delete_character_profile(character)
                 st.session_state.pop(f"character_undo_{character.name}", None)
                 st.session_state.pop("active_character", None)
-                st.session_state.pop("messages", None)
-                st.session_state.pop("chatlog_path", None)
                 st.session_state["character_panel_status"] = "Character Deleted."
                 st.rerun()
             if save_requested or populate_summary or repopulate_summary or rewrite_backstory:
@@ -1881,12 +1828,10 @@ def render_memory_tools(character: Character) -> None:
 
 
 def render_character_info(character: Character, model_config=None) -> None:
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "chatlog_path" not in st.session_state:
-        st.session_state.chatlog_path = str(start_chatlog(character))
-
     st.subheader(display_character_name(character))
+    character_message = st.session_state.pop(f"character_status_{character.name}", "")
+    if character_message:
+        st.success(character_message)
     render_character_editor(character)
     render_relationship_graph(character)
 

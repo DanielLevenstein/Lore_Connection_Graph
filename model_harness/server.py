@@ -4,7 +4,7 @@ from pathlib import Path
 from .environment import data_dir
 from .models import ModelConfig
 from .policy import require_codebase_owned_language_model
-
+# TODO delete this file
 
 @dataclass(frozen=True)
 class ServerStatus:

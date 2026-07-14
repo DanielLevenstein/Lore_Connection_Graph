@@ -72,6 +72,10 @@ class Character:
         return self.data_dir / "PROFILE.json"
 
     @property
+    def memory_path(self) -> Path:
+        return self.data_dir / "MEMORY.md"
+
+    @property
     def graph_path(self) -> Path:
         return CHARACTER_GRAPHS_DIR / f"{self.name}.graph.json"
 
@@ -1589,15 +1593,3 @@ def append_memory(character: Character, note: str) -> None:
         file.write(f"\n- {stamp}: {note}\n")
 
 
-def start_chatlog(character: Character) -> Path:
-    character.chatlogs_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return character.chatlogs_dir / f"{timestamp}_CHAT.log"
-
-
-def append_chatlog(chatlog: Path | str, speaker: str, text: str) -> None:
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    path = Path(chatlog)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as file:
-        file.write(f"[{stamp}] {speaker}: {text.rstrip()}\n\n")

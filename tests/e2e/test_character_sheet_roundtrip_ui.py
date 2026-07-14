@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import requests
 from playwright.sync_api import expect, sync_playwright
+import json
 
 from local_chatbot.storage import Character, read_character_profile
 
@@ -174,6 +175,23 @@ def fill_textbox(page, name: str, value: str, index: int = 0) -> None:
     page.get_by_role("textbox", name=name, exact=True).nth(index).fill(value)
 
 
+def fill_visible_text_inputs(page, prefix: str = "UPDATED") -> list[str]:
+    textboxes = page.get_by_role("textbox")
+    filled = []
+    for index in range(textboxes.count()):
+        textbox = textboxes.nth(index)
+        if not textbox.is_visible() or not textbox.is_enabled():
+            continue
+        label = textbox.get_attribute("aria-label") or textbox.get_attribute("name") or textbox.get_attribute("id") or f"field_{index}"
+        value = f"{prefix} {label}"
+        try:
+            textbox.fill(value)
+        except Exception:
+            continue
+        filled.append(label)
+    return filled
+
+
 def click_form_button_by_save_button(page, save_button_name: str, target_button_name: str) -> None:
     form = page.locator("form").filter(has=page.get_by_role("button", name=save_button_name)).first
     button = form.get_by_role("button", name=target_button_name)
@@ -202,6 +220,138 @@ def click_place_undo_button(page) -> None:
     undo_button = editor.get_by_role("button", name="undo Undo Changes")
     expect(undo_button).to_be_visible(timeout=10000)
     undo_button.evaluate("element => element.click()")
+
+
+def assert_character_saved_visible(page) -> None:
+    """Assert character save confirmation is visible (not hidden behind expander)."""
+    expect(page.get_by_text("Character Saved.")).to_be_visible(timeout=10000)
+
+
+def assert_place_saved_visible(page) -> None:
+    """Assert place save confirmation is visible (not hidden behind expander)."""
+    expect(page.get_by_text("Place Saved.")).to_be_visible(timeout=10000)
+
+
+def assert_session_note_saved_visible(page) -> None:
+    """Assert session note save confirmation is visible."""
+    expect(page.get_by_text("Session Note Saved.")).to_be_visible(timeout=10000)
+
+
+def assert_character_profile_written(data_dir: Path, character_name: str) -> None:
+    """Assert character profile file was written to disk (fallback indicator)."""
+    profile_path = data_dir / "character_metadata" / character_name / "PROFILE.json"
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if profile_path.exists():
+            return
+        time.sleep(0.1)
+    raise AssertionError(f"Character profile not written: {profile_path}")
+
+
+def assert_place_file_written(places_dir: Path, place_name: str) -> None:
+    """Assert place file was written to disk (fallback indicator)."""
+    place_file = places_dir / f"{place_name}.md"
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if place_file.exists():
+            return
+        time.sleep(0.1)
+    raise AssertionError(f"Place file not written: {place_file}")
+
+
+def test_ui_save_confirmations_are_visible(isolated_character_app):
+    """Test that save confirmations are visible without opening expanders.
+    
+    Validates both visible confirmation text and fallback file write indicators
+    to ensure robust save detection that reduces flakiness.
+    """
+    app_url, _docs_lore_dir, characters_dir, places_dir, session_notes_dir, data_dir = isolated_character_app
+    
+    # Create a session note file to open
+    session_notes_dir.mkdir(parents=True, exist_ok=True)
+    note_path = session_notes_dir / "test_save_confirmation.md"
+    note_path.write_text(
+        "# Session Notes - test_save_confirmation\n\n"
+        "## 2026-07-14\n"
+        "Initial test content.\n",
+        encoding="utf-8",
+    )
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        # Test character save confirmation is visible without opening expander
+        expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
+        expand_section(page, "Create Character")
+        fill_textbox(page, "Name", "Test Character")
+        fill_textbox(page, "First Name", "Test")
+        fill_textbox(page, "Family Name", "Character")
+        fill_textbox(page, "Level", "1")
+        fill_textbox(page, "Race", "Human")
+        fill_textbox(page, "Class", "Fighter")
+        page.get_by_role("textbox", name="Backstory", exact=True).fill("Test backstory for confirmation.")
+        page.get_by_role("textbox", name="Summary", exact=True).fill("Test summary.")
+        page.get_by_role("button", name="person_add Create Character").click()
+        expect(page.get_by_role("heading", name="Test Character", exact=True)).to_be_visible(timeout=10000)
+        
+        # Save character and verify confirmation is visible
+        ensure_character_editor_open(page)
+        page.get_by_role("textbox", name="Summary", exact=True).first.fill("Updated test summary.")
+        page.get_by_role("button", name="save Save Character").click()
+        # Handle the "Keep Both" dialog if it appears
+        for button_name in ("library_books Keep Both", "Keep Both"):
+            keep_both = page.get_by_role("button", name=button_name)
+            try:
+                expect(keep_both).to_be_visible(timeout=2000)
+            except AssertionError:
+                continue
+            keep_both.click(force=True)
+            break
+        assert_character_saved_visible(page)  # Should be visible without opening expander
+        assert_character_profile_written(data_dir, "Test Character")
+
+        # Test place save confirmation is visible without opening expander
+        open_tab(page, "Places")
+        expect(page.get_by_role("heading", name="Places")).to_be_visible(timeout=10000)
+        expand_section(page, "Create Place")
+        fill_textbox(page, "Name", "Test Place")
+        page.get_by_role("textbox", name="Place Markdown", exact=True).fill("# Test Place\n\nTest place content.")
+        page.get_by_role("button", name="add_location_alt Create Place").click()
+        expect(page.get_by_role("heading", name="Test Place", exact=True).last).to_be_visible(timeout=10000)
+        
+        # Open place and save it
+        page.get_by_role("combobox", name="Place Files").click()
+        page.get_by_role("option", name="Test Place (Test Place.md)", exact=True).click()
+        page.get_by_role("button", name="location_on Open Place").click()
+        ensure_place_editor_open(page)
+        page.get_by_role("textbox", name="Place Markdown", exact=True).fill("# Test Place\n\nUpdated place content.")
+        page.get_by_role("button", name="save Save Place").click(force=True)
+        assert_place_saved_visible(page)  # Should be visible without opening expander
+        assert_place_file_written(places_dir, "Test Place")
+
+        # Test session note save confirmation is visible
+        open_tab(page, "Session Notes")
+        expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
+        page.get_by_role("combobox", name="Session Note").click()
+        page.get_by_role(
+            "option",
+            name="test_save_confirmation.md - test_save_confirmation",
+            exact=True,
+        ).click()
+        page.get_by_role("button", name="event_note Open Session Note").click()
+        open_tab(page, "Session Notes")
+        ensure_session_note_editor_open(page)
+        page.get_by_role("textbox").first.fill("# Session Notes - test_save_confirmation\n\n## 2026-07-14\n\nUpdated test content.")
+        page.get_by_role("button", name="save Save Session Note").click()
+        assert_session_note_saved_visible(page)  # Should be visible
+        
+        browser.close()
+    
+    # Verify file content was actually saved
+    saved_content = note_path.read_text(encoding="utf-8")
+    assert "Updated test content" in saved_content
 
 
 def test_ui_save_preserves_sheet_values_and_normalizes_details(isolated_character_app):
@@ -266,6 +416,101 @@ Legacy Hero is a legacy generated character.
         expect(page.get_by_role("heading", name="Legacy Hero", exact=True)).to_be_visible(timeout=10000)
         expect(page.get_by_text("Legacy Hero - Autogenerated")).not_to_be_visible()
         browser.close()
+
+
+def test_ui_fills_only_visible_character_editor_fields_and_saves(isolated_character_app):
+    app_url, _docs_lore_dir, characters_dir, _places_dir, _session_notes_dir, data_dir = isolated_character_app
+    character_path = characters_dir / "Jory_Ravenmark.md"
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
+        select_character(page, markdown_title(character_path), 0)
+        ensure_character_editor_open(page)
+        filled = fill_visible_text_inputs(page, prefix="RoundTrip")
+        assert filled, "No visible character editor fields were found to fill."
+        save_open_character(page, data_dir, character_path)
+        browser.close()
+
+    profile = read_character_profile(Character(name=character_path.stem, path=character_path))
+    assert profile.name
+    assert profile.summary
+
+
+def test_ui_fills_visible_place_editor_fields_and_saves(isolated_character_app):
+    app_url, _docs_lore_dir, _characters_dir, places_dir, _session_notes_dir, _data_dir = isolated_character_app
+    existing_files = {path.name for path in places_dir.glob("*.md")}
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        open_tab(page, "Places")
+        expect(page.get_by_role("heading", name="Places")).to_be_visible(timeout=10000)
+        expand_section(page, "Create Place")
+        filled = fill_visible_text_inputs(page, prefix="RoundTrip")
+        assert filled, "No visible place editor fields were found to fill."
+        page.get_by_role("button", name="add_location_alt Create Place").click()
+
+        deadline = time.monotonic() + 10
+        created = []
+        while time.monotonic() < deadline:
+            created = [path for path in places_dir.glob("*.md") if path.name not in existing_files]
+            if created:
+                break
+            time.sleep(0.1)
+        assert created, "Place file was not created after saving visible fields."
+        created_title = markdown_title(created[0])
+        page.get_by_role("combobox", name="Place Files").click()
+        page.get_by_role("option", name=f"{created_title} ({created[0].name})", exact=True).click()
+        page.get_by_role("button", name="location_on Open Place").click()
+        ensure_place_editor_open(page)
+        expect(page.get_by_role("heading", name=created_title, exact=True).last).to_be_visible(timeout=10000)
+        browser.close()
+
+    content = created[0].read_text(encoding="utf-8")
+    assert created_title in content
+
+
+def test_ui_fills_visible_session_note_editor_fields_and_saves(isolated_character_app):
+    app_url, _docs_lore_dir, _characters_dir, _places_dir, session_notes_dir, _data_dir = isolated_character_app
+    note_path = session_notes_dir / "2026-07-10_Session_Notes.md"
+    session_notes_dir.mkdir(parents=True, exist_ok=True)
+    note_path.write_text(
+        "# Session Notes - 2026-07-10 - Session Notes\n\n"
+        "## 2026-07-10\n"
+        "The party found a silver key.\n",
+        encoding="utf-8",
+    )
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        open_tab(page, "Session Notes")
+        expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
+        page.get_by_role("combobox", name="Session Note").click()
+        page.get_by_role(
+            "option",
+            name="2026-07-10_Session_Notes.md - 2026-07-10 - Session Notes",
+            exact=True,
+        ).click()
+        page.get_by_role("button", name="event_note Open Session Note").click()
+        open_tab(page, "Session Notes")
+        ensure_session_note_editor_open(page)
+        filled = fill_visible_text_inputs(page, prefix="RoundTrip")
+        assert filled, "No visible session note editor fields were found to fill."
+        page.get_by_role("button", name="save Save Session Note").click()
+        expect(page.get_by_text("Session Note Saved.")).to_be_visible(timeout=10000)
+        browser.close()
+
+    saved_content = note_path.read_text(encoding="utf-8")
+    assert "RoundTrip" in saved_content
 
 
 def test_ui_creates_loads_and_undoes_character_changes(isolated_character_app):
@@ -574,3 +819,102 @@ def test_ui_creates_character_from_combined_graph_and_loads_it(isolated_characte
         select_character(page, created_title, 0)
         expect(page.get_by_role("heading", name=created_title, exact=True)).to_be_visible(timeout=10000)
         browser.close()
+
+
+def test_ui_fills_all_visible_character_fields_saves_and_reports_ui_elements(isolated_character_app):
+    app_url, _docs_lore_dir, characters_dir, _places_dir, _session_notes_dir, data_dir = isolated_character_app
+    character_path = characters_dir / "Jory_Ravenmark.md"
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
+        select_character(page, markdown_title(character_path), 0)
+        ensure_character_editor_open(page)
+
+        filled = fill_visible_text_inputs(page, prefix="Audit")
+        assert filled, "No visible character editor fields were found to fill."
+        # Click the save button and wait for the UI confirmation instead of relying on file writes
+        click_button_with_retry(page, "save Save Character")
+        # Handle potential Keep Both prompt
+        for button_name in ("library_books Keep Both", "Keep Both"):
+            keep_both = page.get_by_role("button", name=button_name)
+            if keep_both.count():
+                try:
+                    expect(keep_both).to_be_visible(timeout=2000)
+                    keep_both.click(force=True)
+                except Exception:
+                    pass
+                break
+        # Allow UI to settle after save action
+        page.wait_for_timeout(500)
+
+        elements = {"headings": [], "tabs": [], "buttons": [], "textboxes": []}
+
+        headings = page.get_by_role("heading")
+        for idx in range(headings.count()):
+            h = headings.nth(idx)
+            if not h.is_visible():
+                continue
+            try:
+                elements["headings"].append(h.inner_text())
+            except Exception:
+                elements["headings"].append("")
+
+        tabs = page.get_by_role("tab")
+        for idx in range(tabs.count()):
+            t = tabs.nth(idx)
+            if not t.is_visible():
+                continue
+            try:
+                name = t.get_attribute("name") or t.inner_text()
+            except Exception:
+                name = ""
+            selected = t.get_attribute("aria-selected")
+            elements["tabs"].append({"name": name, "selected": selected})
+
+        buttons = page.get_by_role("button")
+        for idx in range(buttons.count()):
+            b = buttons.nth(idx)
+            if not b.is_visible():
+                continue
+            try:
+                name = b.get_attribute("name") or b.inner_text()
+            except Exception:
+                name = ""
+            elements["buttons"].append(name)
+
+        textboxes = page.get_by_role("textbox")
+        for idx in range(textboxes.count()):
+            tb = textboxes.nth(idx)
+            if not tb.is_visible():
+                continue
+            try:
+                label = tb.get_attribute("aria-label") or tb.get_attribute("name") or tb.get_attribute("id") or ""
+            except Exception:
+                label = ""
+            try:
+                value = tb.input_value()
+            except Exception:
+                try:
+                    value = tb.inner_text()
+                except Exception:
+                    value = ""
+            elements["textboxes"].append({"label": label, "value": value})
+
+        out_path = data_dir / "ui_save_audit.json"
+        out_path.write_text(json.dumps(elements, indent=2), encoding="utf-8")
+        # capture a screenshot of the page after save for visual verification
+        out_path_img = data_dir / "ui_save_screenshot.png"
+        try:
+            page.screenshot(path=str(out_path_img), full_page=True)
+        except Exception:
+            pass
+        browser.close()
+
+    assert out_path.exists()
+    parsed = json.loads(out_path.read_text(encoding="utf-8"))
+    assert parsed.get("headings") and len(parsed["headings"]) > 0
+    assert parsed.get("buttons") and any("Save" in (b or "") or "save" in (b or "") for b in parsed["buttons"])

@@ -687,6 +687,21 @@ def test_character_file_path_metadata_is_saved_under_data_character_metadata(tmp
     assert not character_path.with_suffix(".PROFILE.json").exists()
 
 
+def test_character_runtime_metadata_paths_are_under_meta_data(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "character_metadata")
+    character_path = tmp_path / "Orin_Nightbloom.md"
+    shutil.copyfile(
+        FIXTURE_CHARACTER_SHEETS_DIR / character_path.name,
+        character_path,
+    )
+    character = Character(name=character_path.stem, path=character_path)
+
+    assert character.data_dir == tmp_path / "data" / "character_metadata" / "Orin_Nightbloom"
+    assert character.memory_path == character.data_dir / "MEMORY.md"
+    assert character.memory_path.parent.exists() is False
+
+
 def test_create_character_keeps_only_sheet_in_lore_character_sheets(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
     monkeypatch.setattr(storage, "CHARACTERS_DIR", tmp_path / "docs" / "lore" / "character_sheets")

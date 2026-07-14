@@ -6,7 +6,7 @@ from typing import Any
 
 from .environment import DEFAULT_PROJECT_DIR, CONFIG_DIR_ENV, config_dir, data_dir, ensure_base_dirs
 
-
+# TODO delete this file
 @dataclass(frozen=True)
 class ModelConfig:
     name: str

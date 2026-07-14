@@ -4,7 +4,7 @@ from pathlib import Path
 from .models import ModelConfig, is_runnable_model_filename
 from .policy import require_codebase_owned_language_model
 
-
+# TODO delete this file
 @dataclass(frozen=True)
 class DownloadStatus:
     filename: str
