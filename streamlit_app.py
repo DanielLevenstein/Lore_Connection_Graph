@@ -8,6 +8,7 @@ import streamlit as st
 from character_graph.combined_graph import (
     build_combined_character_graph,
     combined_attribute_rows,
+    combined_node_detail_rows,
     combined_relationship_dot,
     combined_relationship_rows,
     compact,
@@ -548,7 +549,6 @@ def render_combined_character_graph() -> None:
     places = list_places()
     graphs = load_lore_graphs()
 
-    st.header("Combined Knowledge Graph")
     place_sources = [(compact(place.name), place.name, str(place.path)) for place in places]
     with st.expander("Combined Knowledge Graph", expanded=False):
         render_pending_lore_drafts()
@@ -584,6 +584,31 @@ def render_combined_character_graph() -> None:
                     if compact(row["Character"]) == character_id or compact(row["Connection"]) == character_id
                 ]
                 st.graphviz_chart(combined_relationship_dot(combined), width="stretch")
+                node_options = {
+                    combined_node.name: combined_node_id
+                    for combined_node_id, combined_node in sorted(
+                        combined.characters.items(),
+                        key=lambda item: (item[1].node_type, item[1].name.lower()),
+                    )
+                }
+                node_labels = list(node_options)
+                default_node_index = (
+                    node_labels.index(node.name)
+                    if node.name in node_options
+                    else 0
+                )
+                selected_node_label = st.selectbox(
+                    f"Graph Node For {node.name}",
+                    node_labels,
+                    index=default_node_index,
+                    key=f"combined_graph_node_{character_id}",
+                )
+                selected_node_id = node_options[selected_node_label]
+                st.table(
+                    combined_node_detail_rows(combined, selected_node_id),
+                    hide_index=True,
+                    width="stretch",
+                )
                 scoped_detail_rows = [
                     row
                     for row in detail_rows

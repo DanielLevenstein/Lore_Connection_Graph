@@ -61,8 +61,16 @@ Status: fixed and covered by `tests/e2e/test_character_sheet_roundtrip_ui.py::te
 
 - Changes made to the Optional Metadata section aren't undone when clicking the "Undo Changes" button.
 - Restoring a previous version of lore should delete current lore files not present in back-up. 
+- The Combined Knowledge Graph no longer renders a duplicate top-level heading above its expander.
+- The Combined Knowledge Graph now includes a graph-node detail table below the chart, populated by the selected visible node and its incoming/outgoing evidence-backed edges.
 
 ## Improvements made
+
+### Knowledge Graph Improvements
+
+- Captured a fresh screenshot of `world_building/import/Session_Notes.txt` behavior at `docs/screenshots/Knowledge_Graph_current_2026-07-18.png`.
+- Added `reports/knowledge_graph_report.md` comparing the current session-note graph to `docs/screenshots/Knowledge_Graph.png`.
+- Combined `docs/specs/KNOWLEDGE_GRAPH_DESIGN2.md` into `docs/specs/KNOWLEDGE_GRAPH_DESIGN.md` so the graph redesign guidance has a single source.
 
 ### Backup Improvements
 

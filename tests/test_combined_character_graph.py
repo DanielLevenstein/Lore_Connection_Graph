@@ -1,6 +1,7 @@
 from character_graph.combined_graph import (
     build_combined_character_graph,
     combined_attribute_rows,
+    combined_node_detail_rows,
     combined_relationship_dot,
     combined_relationship_rows,
 )
@@ -111,6 +112,23 @@ Neal is a performer.
     assert combined.characters["royal_tittles"].node_type == "place"
     assert "Royal Tittles" in dot
     assert 'shape="component"' in dot
+
+    detail_rows = combined_node_detail_rows(combined, "neal_lovington")
+
+    assert {
+        "Detail": "Node",
+        "Relationship": "",
+        "Value": "Neal Lovington",
+        "Type": "Character",
+        "Evidence": str(tmp_path / "Neal_Lovington.md"),
+    } in detail_rows
+    assert {
+        "Detail": "Outgoing",
+        "Relationship": "Performs",
+        "Value": "Royal Tittles",
+        "Type": "Place",
+        "Evidence": "Neal performs at the Royal Tittles Tavern.",
+    } in detail_rows
 
 
 def test_combined_graph_includes_family_names_without_other_attributes(tmp_path):

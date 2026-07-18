@@ -344,6 +344,46 @@ def combined_attribute_rows(graphs: list[CharacterGraph]) -> list[dict[str, str]
     return rows
 
 
+def combined_node_detail_rows(graph: CombinedCharacterGraph, node_id: str) -> list[dict[str, str]]:
+    node = graph.characters.get(node_id)
+    if node is None:
+        return []
+
+    rows = [
+        {
+            "Detail": "Node",
+            "Relationship": "",
+            "Value": node.name,
+            "Type": node.node_type.title(),
+            "Evidence": node.source_file,
+        }
+    ]
+    for edge in graph.edges:
+        source = graph.characters.get(edge.source)
+        target = graph.characters.get(edge.target)
+        if edge.source == node_id and target is not None:
+            rows.append(
+                {
+                    "Detail": "Outgoing",
+                    "Relationship": edge.relationship_label,
+                    "Value": target.name,
+                    "Type": target.node_type.title(),
+                    "Evidence": compact_evidence(edge.evidence),
+                }
+            )
+        elif edge.target == node_id and source is not None:
+            rows.append(
+                {
+                    "Detail": "Incoming",
+                    "Relationship": edge.relationship_label,
+                    "Value": source.name,
+                    "Type": source.node_type.title(),
+                    "Evidence": compact_evidence(edge.evidence),
+                }
+            )
+    return rows
+
+
 def combined_relationship_dot(graph: CombinedCharacterGraph) -> str:
     lines = [
         "digraph CombinedCharacterRelationships {",
