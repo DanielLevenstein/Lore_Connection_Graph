@@ -75,8 +75,8 @@ class EmbeddingRecord:
 
 @dataclass
 class GraphMetadata:
-    created_at: str
-    updated_at: str
+    backup_date: str
+    snapshot_date: str
     source_hash: str
 
 

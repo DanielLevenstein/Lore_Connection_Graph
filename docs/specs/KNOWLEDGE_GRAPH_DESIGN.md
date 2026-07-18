@@ -342,8 +342,8 @@ If no graph JSON exists yet, the UI prompts the user to regenerate it. If graph 
     }
   },
   "metadata": {
-    "created_at": "2026-07-08T16:27:00",
-    "updated_at": "2026-07-08T16:27:00",
+    "snapshot_date": "2026-07-08T16:27:00",
+    "backup_date": "2026-07-08T16:27:00",
     "source_hash": "..."
   }
 }

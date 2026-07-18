@@ -34,6 +34,11 @@ Allow the user to update titles of places and session notes through Markdown and
 ## Suggested Improvements
 
 - Expand the Optional Metadata section by default if any of the fields in it are filled out.
+- Update backup functionality.
+  - Restored snapshots should show up as "Restored {DATE_TIME}" in the dropdown
+  - Before restoring a backup, add a new backup of the current state as is with the label "Snapshot {DATE_TIME}"
+  - Add the newly restored backup into the dropdown as "Restored {DATE_TIME}" but place it above the newly created stapshot.
+  - Manually created backups should use the "Snapshot {DATE_TIME}" format, while auto-generated backups should use the "Backup - {DATE_TIME}" format.
 
 ## Knowledge Graph Improvements
 

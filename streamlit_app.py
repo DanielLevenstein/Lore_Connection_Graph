@@ -74,11 +74,13 @@ from local_chatbot.session_notes import (
     write_session_note,
 )
 from local_chatbot.lore_import import (
+    BACKUP_KIND_SNAPSHOT,
     backup_lore_files,
     clear_local_lore,
     import_lore_directory,
     list_lore_backups,
     read_lore_backup_date,
+    restore_lore_backup,
 )
 from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, TEST_FIXTURES_DIRECTORY
 
@@ -331,7 +333,12 @@ def remove_updated_section(sections: list[str], section: str) -> list[str]:
 def push_character_undo(character: Character) -> None:
     key = f"character_undo_{character.name}"
     snapshots = st.session_state.setdefault(key, [])
-    snapshots.append(read_text(character.backstory_path))
+    snapshots.append(
+        {
+            "backstory": read_text(character.backstory_path),
+            "profile": read_text(character.profile_path) if character.profile_path.exists() else "",
+        }
+    )
     st.session_state[key] = snapshots[-20:]
 
 
@@ -342,7 +349,16 @@ def undo_character_changes(character: Character) -> None:
         st.warning("No Character Changes To Undo.")
         return
     previous = snapshots.pop()
-    character.backstory_path.write_text(previous.rstrip() + "\n", encoding="utf-8")
+    if isinstance(previous, dict):
+        character.backstory_path.write_text(previous.get("backstory", "").rstrip() + "\n", encoding="utf-8")
+        profile_text = previous.get("profile", "")
+        if profile_text:
+            character.profile_path.parent.mkdir(parents=True, exist_ok=True)
+            character.profile_path.write_text(profile_text.rstrip() + "\n", encoding="utf-8")
+        else:
+            character.profile_path.unlink(missing_ok=True)
+    else:
+        character.backstory_path.write_text(str(previous).rstrip() + "\n", encoding="utf-8")
     st.session_state[key] = snapshots
     regenerate_character_graph(character)
     st.session_state[f"character_status_{character.name}"] = "Character Changes Undone."
@@ -398,12 +414,17 @@ def undo_place_changes(place: Place) -> None:
     previous = snapshots.pop()
     place.path.write_text(previous.rstrip() + "\n", encoding="utf-8")
     st.session_state[key] = snapshots
+    sync_place_editor_values(place, previous.rstrip())
+    bump_place_editor_revision(place)
+    st.session_state[f"place_status_{place.name}"] = "Place Changes Undone."
+    st.rerun()
+
+
+def bump_place_editor_revision(place: Place) -> None:
     st.session_state[f"place_editor_revision_{place.name}"] = st.session_state.get(
         f"place_editor_revision_{place.name}",
         0,
     ) + 1
-    st.session_state[f"place_status_{place.name}"] = "Place Changes Undone."
-    st.rerun()
 
 
 def push_session_notes_undo() -> None:
@@ -791,7 +812,7 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
             height=96,
             key=f"{key_prefix}_summary",
         )
-        with st.expander("Optional Metadata", expanded=False):
+        with st.expander("Optional Metadata", expanded=character_optional_metadata_present(draft_profile)):
             detail_cols = st.columns(3)
             drives = detail_cols[0].text_area(
                 "Drives",
@@ -892,7 +913,7 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
         st.caption("Describe the place with a name and a short overview. You can add more detail later if you want to expand the lore.")
         name = st.text_input("Name", value=draft_profile.name, placeholder="Lantern House", key=f"{key_prefix}_name")
         markdown = st.text_area(
-            "Place Markdown",
+            "New Place Markdown",
             value=draft_place_markdown(draft_profile),
             placeholder="# Lantern House\n\nA welcoming inn where travelers share stories and quiet conversations.",
             height=220,
@@ -988,8 +1009,15 @@ def render_place_info(place: Place) -> None:
         st.success(place_message)
     with st.expander("Edit Place", expanded=bool(place_message)):
         with st.form(f"edit_place_{place.name}"):
-            st.text_input("Name", value=display_place_name(place), disabled=True)
+            original_title = markdown_document_title(markdown) or display_place_name(place)
             editor_revision = st.session_state.get(f"place_editor_revision_{place.name}", 0)
+            if f"place_editor_body_{place.name}" not in st.session_state:
+                sync_place_editor_values(place, markdown)
+            title = st.text_input(
+                "Name",
+                value=original_title,
+                key=f"place_title_{place.name}_{editor_revision}",
+            )
             body = st.text_area(
                 "Place Markdown",
                 value=markdown,
@@ -1011,14 +1039,46 @@ def render_place_info(place: Place) -> None:
                 st.session_state["place_panel_status"] = "Place Deleted."
                 st.rerun()
             if save_requested:
+                body = st.session_state.get(f"place_markdown_{place.name}_{editor_revision}", body)
+                title = st.session_state.get(f"place_title_{place.name}_{editor_revision}", title)
                 if not body.strip():
                     st.error("Add Place Markdown Before Saving.")
                     return
                 push_place_undo(place)
-                write_place_markdown(place, body)
-                st.session_state[f"place_editor_revision_{place.name}"] = editor_revision + 1
+                write_place_markdown(place, apply_place_title_update(markdown, body, title))
+                sync_place_editor_values(place, read_place_markdown(place).strip())
+                bump_place_editor_revision(place)
                 st.session_state[f"place_status_{place.name}"] = "Place Saved."
                 st.rerun()
+
+
+def sync_place_editor_values(place: Place, markdown: str) -> None:
+    st.session_state[f"place_editor_body_{place.name}"] = markdown
+    st.session_state[f"place_editor_title_{place.name}"] = markdown_document_title(markdown) or display_place_name(place)
+
+
+def apply_place_title_update(original_markdown: str, updated_markdown: str, title: str) -> str:
+    cleaned_title = title.strip()
+    if not cleaned_title:
+        return updated_markdown
+    original_title = markdown_document_title(original_markdown)
+    updated_title = markdown_document_title(updated_markdown)
+    if updated_title and updated_title != original_title:
+        return updated_markdown
+    if updated_title == cleaned_title:
+        return updated_markdown
+    if updated_title:
+        return replace_first_markdown_title(updated_markdown, cleaned_title)
+    return f"# {cleaned_title}\n\n{updated_markdown.strip()}"
+
+
+def replace_first_markdown_title(markdown: str, title: str) -> str:
+    lines = markdown.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip().startswith("# "):
+            lines[index] = f"# {title}"
+            return "\n".join(lines)
+    return markdown
 
 
 def render_lore_import_tools() -> None:
@@ -1059,7 +1119,7 @@ def render_lore_import_tools() -> None:
             )
             st.rerun()
         if action_cols[1].button("Create Lore Backup", icon=":material/backup:", key="create_lore_backup"):
-            summary = backup_lore_files(snapshot=True)
+            summary = backup_lore_files(snapshot=True, backup_kind=BACKUP_KIND_SNAPSHOT)
             st.session_state["lore_import_status"] = (
                 f"Created Backup For {summary.files} File{'s' if summary.files != 1 else ''}."
             )
@@ -1095,7 +1155,7 @@ def render_lore_backup_restore_dialog(overwrite_existing: bool) -> None:
     action_cols = st.columns(2)
     if action_cols[0].button("Restore Selected Backup", icon=":material/restore_page:", width="stretch"):
         backup_source = Path(st.session_state[LORE_BACKUP_IMPORT_SOURCE_KEY])
-        summary = import_lore_directory(backup_source, overwrite=overwrite_existing)
+        summary = restore_lore_backup(backup_source)
         st.session_state["lore_import_status"] = (
             f"Restored {summary.total} Backup File{'s' if summary.total != 1 else ''} "
             f"({summary.characters} Characters, {summary.places} Places, "
@@ -1670,7 +1730,7 @@ def render_character_editor(character: Character) -> None:
             else:
                 render_section_status("Character Summary", profile)
                 summary = st.text_area("Summary", value=profile.summary, height=96)
-            with st.expander("Optional Metadata", expanded=False):
+            with st.expander("Optional Metadata", expanded=character_optional_metadata_present(profile)):
                 detail_cols = st.columns(3)
                 drives = detail_cols[0].text_area("Drives", value=render_list_field(profile.drives), height=96)
                 alliances = detail_cols[1].text_area("Alliances", value=render_list_field(profile.alliances), height=96)
@@ -1827,6 +1887,17 @@ def render_memory_tools(character: Character) -> None:
         st.markdown(read_text(character.backstory_path))
         st.markdown("**Memory**")
         st.markdown(read_text(character.memory_path))
+
+
+def character_optional_metadata_present(profile: CharacterProfile) -> bool:
+    return any(
+        [
+            profile.drives,
+            profile.alliances,
+            profile.enemies,
+            profile.details.strip(),
+        ]
+    )
 
 
 def render_character_info(character: Character, model_config=None) -> None:

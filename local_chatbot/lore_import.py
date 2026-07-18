@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -34,14 +35,16 @@ class LoreImportSummary:
 class LoreBackupSummary:
     files: int = 0
     backup_dir: Path = WORLD_BUILDING_BACKUP_DIR
-    updated_at: datetime | None = None
+    backup_date: datetime | None = None
 
 
 @dataclass(frozen=True)
 class LoreBackupOption:
     label: str
     path: Path
-    updated_at: datetime | None = None
+    backup_date: datetime | None = None
+    snapshot_date: datetime | None = None
+    kind: str = "backup"
 
 
 LORE_SUBDIRECTORIES = {
@@ -50,7 +53,16 @@ LORE_SUBDIRECTORIES = {
     "session_notes": "session_notes",
 }
 LORE_BACKUP_STAMP = ".last_backup"
+LORE_BACKUP_METADATA = ".backup_metadata.json"
 LORE_BACKUP_SNAPSHOT_FORMAT = "%Y-%m-%d_%H-%M-%S"
+BACKUP_KIND_BACKUP = "backup"
+BACKUP_KIND_SNAPSHOT = "snapshot"
+BACKUP_KIND_RESTORED = "restored"
+BACKUP_SORT_PRIORITY = {
+    BACKUP_KIND_RESTORED: 3,
+    BACKUP_KIND_SNAPSHOT: 2,
+    BACKUP_KIND_BACKUP: 1,
+}
 
 
 def import_lore_directory(source_dir: Path, overwrite: bool = True) -> LoreImportSummary:
@@ -91,6 +103,29 @@ def import_lore_directory(source_dir: Path, overwrite: bool = True) -> LoreImpor
     )
 
 
+def restore_lore_backup(source_dir: Path) -> LoreImportSummary:
+    snapshot_backup_date = current_backup_timestamp()
+    backup_lore_files(
+        source_dir=LORE_DIR,
+        backup_dir=WORLD_BUILDING_BACKUP_DIR,
+        backup_date=snapshot_backup_date,
+        snapshot_date=snapshot_backup_date,
+        snapshot=True,
+        backup_kind=BACKUP_KIND_SNAPSHOT,
+    )
+    clear_local_lore()
+    summary = import_lore_directory(source_dir, overwrite=True)
+    backup_lore_files(
+        source_dir=LORE_DIR,
+        backup_dir=WORLD_BUILDING_BACKUP_DIR,
+        backup_date=current_backup_timestamp(),
+        snapshot_date=read_backup_snapshot_date(source_dir) or current_backup_timestamp(),
+        snapshot=True,
+        backup_kind=BACKUP_KIND_RESTORED,
+    )
+    return summary
+
+
 def clear_local_lore() -> LoreImportSummary:
     ensure_base_dirs()
     summary = LoreImportSummary(
@@ -108,23 +143,29 @@ def clear_local_lore() -> LoreImportSummary:
 def backup_lore_files(
     source_dir: Path = LORE_DIR,
     backup_dir: Path = WORLD_BUILDING_BACKUP_DIR,
-    updated_at: datetime | None = None,
+    backup_date: datetime | None = None,
+    snapshot_date: datetime | None = None,
     snapshot: bool = False,
+    backup_kind: str = BACKUP_KIND_BACKUP,
 ) -> LoreBackupSummary:
     ensure_base_dirs()
     source_dir = source_dir.expanduser().resolve()
     backup_dir = backup_dir.expanduser().resolve()
     backup_dir.mkdir(parents=True, exist_ok=True)
-    updated_at = updated_at or datetime.now().astimezone()
-    target_dir = create_backup_snapshot_dir(backup_dir, updated_at) if snapshot else backup_dir
+    backup_date = backup_date or current_backup_timestamp()
+    snapshot_date = snapshot_date or backup_date
+    target_dir = create_backup_snapshot_dir(backup_dir, backup_date) if snapshot else backup_dir
 
     file_count = 0
     file_count += copy_directory_files(source_dir, target_dir, pattern="*.md", overwrite=True)
     file_count += copy_directory_files(META_DATA_DIR, target_dir / "meta_data", overwrite=True, include_dotfiles=False)
 
-    write_backup_stamp(target_dir, updated_at)
-    write_backup_stamp(backup_dir, updated_at)
-    return LoreBackupSummary(files=file_count, backup_dir=target_dir, updated_at=updated_at)
+    write_backup_stamp(target_dir, backup_date)
+    write_backup_metadata(target_dir, backup_date, backup_kind, snapshot_date=snapshot_date)
+    write_backup_stamp(backup_dir, backup_date)
+    if not snapshot:
+        write_backup_metadata(backup_dir, backup_date, backup_kind, snapshot_date=snapshot_date)
+    return LoreBackupSummary(files=file_count, backup_dir=target_dir, backup_date=backup_date)
 
 
 def read_lore_backup_date(backup_dir: Path = WORLD_BUILDING_BACKUP_DIR) -> datetime | None:
@@ -137,8 +178,80 @@ def read_lore_backup_date(backup_dir: Path = WORLD_BUILDING_BACKUP_DIR) -> datet
         return None
 
 
-def write_backup_stamp(backup_dir: Path, updated_at: datetime) -> None:
-    (backup_dir / LORE_BACKUP_STAMP).write_text(updated_at.isoformat(timespec="seconds"), encoding="utf-8")
+def write_backup_stamp(backup_dir: Path, backup_date: datetime) -> None:
+    (backup_dir / LORE_BACKUP_STAMP).write_text(backup_date.isoformat(timespec="seconds"), encoding="utf-8")
+
+
+def write_backup_metadata(
+    backup_dir: Path,
+    backup_date: datetime,
+    backup_kind: str,
+    snapshot_date: datetime | None = None,
+) -> None:
+    snapshot_date = snapshot_date or backup_date
+    metadata = {
+        "kind": normalize_backup_kind(backup_kind),
+        "snapshot_date": snapshot_date.isoformat(timespec="seconds"),
+        "backup_date": backup_date.isoformat(timespec="seconds"),
+    }
+    (backup_dir / LORE_BACKUP_METADATA).write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+
+
+def read_backup_kind(backup_dir: Path) -> str:
+    metadata_path = backup_dir / LORE_BACKUP_METADATA
+    if not metadata_path.exists():
+        return BACKUP_KIND_BACKUP
+    try:
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return BACKUP_KIND_BACKUP
+    return normalize_backup_kind(str(payload.get("kind", BACKUP_KIND_BACKUP)))
+
+
+def read_backup_snapshot_date(backup_dir: Path) -> datetime | None:
+    metadata_path = backup_dir / LORE_BACKUP_METADATA
+    if not metadata_path.exists():
+        return read_lore_backup_date(backup_dir)
+    try:
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        value = (
+            payload.get("snapshot_date")
+            or payload.get("snapshot_creation_date")
+            or payload.get("created_at")
+            or payload.get("backup_date")
+            or payload.get("updated_at")
+        )
+        return datetime.fromisoformat(str(value)) if value else None
+    except (json.JSONDecodeError, OSError, ValueError):
+        return read_lore_backup_date(backup_dir)
+
+
+def read_backup_date(backup_dir: Path) -> datetime | None:
+    metadata_path = backup_dir / LORE_BACKUP_METADATA
+    if not metadata_path.exists():
+        return read_lore_backup_date(backup_dir)
+    try:
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        value = (
+            payload.get("backup_date")
+            or payload.get("snapshot_creation_date")
+            or payload.get("created_at")
+            or payload.get("snapshot_date")
+            or payload.get("updated_at")
+        )
+        return datetime.fromisoformat(str(value)) if value else None
+    except (json.JSONDecodeError, OSError, ValueError):
+        return read_lore_backup_date(backup_dir)
+
+
+def normalize_backup_kind(value: str) -> str:
+    if value in {BACKUP_KIND_BACKUP, BACKUP_KIND_SNAPSHOT, BACKUP_KIND_RESTORED}:
+        return value
+    return BACKUP_KIND_BACKUP
+
+
+def current_backup_timestamp() -> datetime:
+    return datetime.now().astimezone()
 
 
 def list_lore_backups(backup_dir: Path = WORLD_BUILDING_BACKUP_DIR) -> list[LoreBackupOption]:
@@ -147,13 +260,16 @@ def list_lore_backups(backup_dir: Path = WORLD_BUILDING_BACKUP_DIR) -> list[Lore
         return []
 
     options: list[LoreBackupOption] = []
-    latest_date = read_lore_backup_date(backup_dir)
+    latest_date = read_backup_snapshot_date(backup_dir)
     if backup_contains_lore(backup_dir):
+        kind = read_backup_kind(backup_dir)
         options.append(
             LoreBackupOption(
-                label=format_backup_option_label("Latest Backup", latest_date),
+                label=format_backup_option_label(kind, latest_date),
                 path=backup_dir,
-                updated_at=latest_date,
+                backup_date=read_backup_date(backup_dir),
+                snapshot_date=read_backup_snapshot_date(backup_dir),
+                kind=kind,
             )
         )
 
@@ -163,12 +279,16 @@ def list_lore_backups(backup_dir: Path = WORLD_BUILDING_BACKUP_DIR) -> list[Lore
             continue
         if not backup_contains_lore(path):
             continue
-        updated_at = read_lore_backup_date(path)
+        backup_date = read_backup_date(path)
+        snapshot_date = read_backup_snapshot_date(path)
+        kind = read_backup_kind(path)
         options.append(
             LoreBackupOption(
-                label=format_backup_option_label("Backup", updated_at, fallback=path.name),
+                label=format_backup_option_label(kind, snapshot_date, fallback=path.name),
                 path=path,
-                updated_at=updated_at,
+                backup_date=backup_date,
+                snapshot_date=snapshot_date,
+                kind=kind,
             )
         )
 
@@ -176,17 +296,19 @@ def list_lore_backups(backup_dir: Path = WORLD_BUILDING_BACKUP_DIR) -> list[Lore
 
 
 def backup_option_sort_key(option: LoreBackupOption) -> float:
-    if option.updated_at is None:
-        return 0.0
-    return option.updated_at.timestamp()
+    priority = BACKUP_SORT_PRIORITY.get(option.kind, 0)
+    sort_date = option.backup_date or option.snapshot_date
+    if sort_date is None:
+        return float(priority)
+    return sort_date.timestamp() * 10 + priority
 
 
 def backup_contains_lore(path: Path) -> bool:
     return any((path / subdirectory).exists() for subdirectory in LORE_SUBDIRECTORIES) or (path / "meta_data").exists()
 
 
-def create_backup_snapshot_dir(backup_dir: Path, updated_at: datetime) -> Path:
-    base_name = updated_at.strftime(LORE_BACKUP_SNAPSHOT_FORMAT)
+def create_backup_snapshot_dir(backup_dir: Path, backup_date: datetime) -> Path:
+    base_name = backup_date.strftime(LORE_BACKUP_SNAPSHOT_FORMAT)
     candidate = backup_dir / base_name
     suffix = 2
     while candidate.exists():
@@ -196,10 +318,15 @@ def create_backup_snapshot_dir(backup_dir: Path, updated_at: datetime) -> Path:
     return candidate
 
 
-def format_backup_option_label(prefix: str, updated_at: datetime | None, fallback: str = "") -> str:
-    if updated_at is None:
-        return f"{prefix} - {fallback or 'Unknown Date'}"
-    return f"{prefix} - {updated_at.astimezone().strftime('%Y-%m-%d %H:%M')}"
+def format_backup_option_label(kind: str, backup_date: datetime | None, fallback: str = "") -> str:
+    prefix = {
+        BACKUP_KIND_SNAPSHOT: "Snapshot",
+        BACKUP_KIND_RESTORED: "Restored",
+        BACKUP_KIND_BACKUP: "Backup -",
+    }.get(normalize_backup_kind(kind), "Backup -")
+    if backup_date is None:
+        return f"{prefix} {fallback or 'Unknown Date'}"
+    return f"{prefix} {backup_date.astimezone().strftime('%Y-%m-%d %H:%M')}"
 
 
 def unique_paths(*paths: Path) -> list[Path]:

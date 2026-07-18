@@ -15,7 +15,7 @@ WORLD_BUILDING_BACKUP_DIR = Path(
 META_DATA_DIR = Path(
     os.environ.get(
         "LOCAL_CHATBOT_META_DATA_DIR",
-        os.environ.get("LOCAL_CHATBOT_DATA_DIR", ROOT_DIR / "meta_data"),
+        os.environ.get("LOCAL_CHATBOT_DATA_DIR", WORLD_BUILDING_DIR / "meta_data"),
     )
 ).resolve()
 LORE_DIR = Path(
