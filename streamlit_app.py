@@ -86,7 +86,6 @@ from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, TEST_FIXTUR
 
 ENABLE_CHARACTER_REWRITE = "LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
-ENABLE_EXTERNAL_CHARACTER_IMPORT = "LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"
 MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
 LORE_BACKUP_IMPORT_SOURCE_KEY = "lore_backup_import_source"
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
@@ -246,9 +245,8 @@ def graph_rewrites_enabled() -> bool:
 def attribute_graph_override_enabled() -> bool:
     return os.environ.get(ENABLE_ATTRIBUTE_GRAPH_OVERRIDE) == "1"
 
-
 def external_character_import_enabled() -> bool:
-    return os.environ.get(ENABLE_EXTERNAL_CHARACTER_IMPORT) == "1"
+    return  False
 
 
 def parse_list_field(value: str) -> list[str]:

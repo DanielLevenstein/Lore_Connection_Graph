@@ -23,7 +23,6 @@ rg -n "os\.environ\.get|os\.environ\[|os\.environ\.setdefault|LOCAL_CHATBOT_|STR
 | --- | --- | --- | --- |
 | `STREAMLIT_BROWSER_GATHER_USAGE_STATS` | Set to `false` in all Streamlit e2e app fixtures. | Streamlit runtime setting, not app code. | Keep in tests only. |
 | `LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH` | Set to `1` in `tests/e2e/test_character_sheet_roundtrip_ui.py`. | Read in `streamlit_app.py` to hide/show Combined Knowledge Graph. | This is a feature gate currently used by e2e tests. |
-| `LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT` | Set to `1` in `tests/e2e/test_session_notes_ui.py`. | Read in `streamlit_app.py` to hide/show external character sheet import. | This is a feature gate currently used by e2e tests. |
 | `LOCAL_CHATBOT_WORLD_BUILDING_DIR` | Set in character and session note e2e fixtures. | Read in `local_chatbot/paths.py`. | Keep for isolated tests and local sandboxing. |
 | `LOCAL_CHATBOT_WORLD_BUILDING_IMPORT_DIR` | Set in session note e2e fixtures. | Read in `local_chatbot/paths.py`. | Keep for isolated import fixtures. |
 | `LOCAL_CHATBOT_LORE_DIR` | Set in character and session note e2e fixtures. | Read in `local_chatbot/paths.py`. | Keep for isolated lore fixtures. |
@@ -79,6 +78,7 @@ Remove the remaining environment variables in this order:
 7. `LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT`
    - Risk: medium.
    - Reason: tested feature gate. Remove the variable by making external character import part of the normal app rather than deleting the feature.
+   - Env variable removed without helper function `external_character_import_enabled()` updated to return False
 
 8. `LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH`
    - Risk: medium to high.

@@ -56,7 +56,6 @@ def isolated_session_notes_app(tmp_path):
     env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(docs_lore_dir / "character_sheets")
     env["LOCAL_CHATBOT_PLACES_DIR"] = str(docs_lore_dir / "places")
     env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(docs_lore_dir / "session_notes")
-    env["LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"] = "1"
     process = subprocess.Popen(
         [
             str(streamlit_executable()),

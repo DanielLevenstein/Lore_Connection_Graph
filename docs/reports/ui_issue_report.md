@@ -6,7 +6,7 @@ Date: 2026-07-14
 
 This report captures the current Streamlit UI issue state for the repository. The July 14 save-audit bugs have been fixed and covered by focused Streamlit/Playwright tests.
 
-## Fixed On 2026-07-14
+# Fixed On 2026-07-14
 
 - `Character Saved.` now remains visible after saving, and the character editor stays expanded so Save/Undo/Delete buttons remain visible after rerun.
 - `Place Saved.` now remains visible after creating or saving a place, and the place editor stays expanded after save.
@@ -23,21 +23,7 @@ This report captures the current Streamlit UI issue state for the repository. Th
 
 ## Findings
 
-### 1. UI test environment is not fully provisioned
-
-- Playwright e2e tests now run in this local environment.
-
-### 2. Test import path bug
-
-- `tests/e2e/test_character_rewrites.py` originally failed because the repository root was not on `sys.path` during pytest discovery.
-- `tests/conftest.py` has been added to insert the repo root into `sys.path` so e2e tests can import `character_graph` and other app modules.
-
-### 3. Semantic report formatting mismatch
-
-- `scripts/generate_semantic_improvement_report.py` contained score table labels that no longer matched assertions in the e2e test.
-- The table labels were updated to `Post-transform story` and `Pre-transform backstory` to match current report expectations.
-
-### 4. Streamlit UI state areas with high bug risk
+## 1. Streamlit UI state areas with high bug risk
 
 The app contains many `st.expander`, `st.tabs`, and `st.session_state` interactions that are common sources of reload/rerun bugs:
 
@@ -49,26 +35,7 @@ The app contains many `st.expander`, `st.tabs`, and `st.session_state` interacti
 
 These patterns should be the first focus of UI regression coverage because state can be lost on reload or when a rerun happens inside a selected tab.
 
-## Observed UI issue opportunities
-
-- incoming tab/expander state persistence may still be fragile on refresh and rerun outside the audited save flows
-- explicit UI state is scattered across many session keys instead of a single source of truth
-
-## Recommendations
-
-- Keep the save-audit e2e coverage focused on visible confirmations plus file-write fallback indicators.
-- Add focused Playwright tests for:
-  - tab selection persistence after reload
-  - expander expanded/collapsed persistence after reload
-  - save behavior inside active tabs and expanders
-  - session note section visibility after rerun and reload
-- Review and simplify `st.session_state` initialization in `streamlit_app.py`.
-
-## Next steps
-
-- Continue prioritizing tab and expander state persistence in the Streamlit app.
-
-## UI Save Audit (visible elements before / after Save)
+## 2. UI Save Audit (visible elements before / after Save)
 
 **Characters**
 - Before Save: Heading `Roleplaying Character Creator`; tab `Characters` (selected); heading `Characters`; `Existing Characters` combobox (e.g. Jory Ravenmark); `Open` / `chat Open Character` buttons; character heading (e.g. `Jory Ravenmark`); `Edit Character` expander; `Character Attribute Graph` expander; `New Character` / `Create Character` section; editor textboxes (`Name`, `First Name`, `Family Name`, `Level`, `Race`, `Class`, `Pronouns`, `Backstory`, `Summary`); editor buttons (`person_add Create Character`, `save Save Character`, `undo Undo Changes`, `delete_forever Delete Character`).
@@ -89,3 +56,43 @@ They should be visible in plain text and not hidden by other UI elements.
 Tests should assert both visible confirmation and fallback indicators (file writes, tab selection, presence of created headings) to reduce flakiness.
 
 Status: fixed and covered by `tests/e2e/test_character_sheet_roundtrip_ui.py::test_ui_save_confirmations_are_visible`.
+
+# Fixed on 2026-07-18
+
+- Changes made to the Optional Metadata section aren't undone when clicking the "Undo Changes" button.
+- Restoring a previous version of lore should delete current lore files not present in back-up. 
+
+## Improvements made
+
+### Backup Improvements
+
+- Expand the Optional Metadata section by default if any of the fields in it are filled out.
+- Update backup functionality.
+  - Restored snapshots should show up as "Restored {DATE_TIME}" in the dropdown
+  - Before restoring a backup, add a new backup of the current state as is with the label "Snapshot {DATE_TIME}"
+  - Add the newly restored backup into the dropdown as "Restored {DATE_TIME}" but place it above the newly created stapshot.
+  - Manually created backups should use the "Snapshot {DATE_TIME}" format, while auto-generated backups should use the "Backup - {DATE_TIME}" format.
+
+###  Test Cases Added
+Make race and class fields official. 
+- Test case **Mz. Glorious Backstory**:
+   - Create a new character: "Mz. Glorious"
+   - Enter the following backstory "Ms. Glorious is a glorious character who's vibrant personality is too powerful to be constrained by the required fields in their character sheet. "
+   - Click the "Create Character" button
+   - Error is displayed with the following text "Complete Name, Race, Class, And Backstory."
+  
+Infer markdown title from title in UI.
+- Test case **Markdown Inn**
+  - On the place tab, click the "Create Place" button.
+  - For the place body type "This Inn is housed by non-technical people who don't understand how markdown titles work."
+  - Click save
+  - Result: Upon reloading the place, the Markdown title is added.
+  - If the user later tries to update the title of an existing place in Markdown the changes are reverted. 
+
+Allow the user to update titles of places and session notes through Markdown and through the UI. 
+- Test case **Coming Next the Rapture Family**
+  - On the session notes tab, scroll down to the last family name and open the associated session note
+  - Click "Add Next Section"
+  - The new section will be auto named The Lovington Family: (Coming Next)
+  - Rename the section to "The Rapture Family" using Markdown and click save
+  - validate that the section title is update. 
