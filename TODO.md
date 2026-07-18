@@ -38,3 +38,10 @@ Commit to `feature/knowledge_graph` prior to implementing changes
 - Removed the duplicate Combined Knowledge Graph heading from the Streamlit UI.
 - Added a graph-node detail table below the combined graph chart.
 - Updated `docs/reports/ui_issue_report.md`.
+
+### Session Note Graph One-Screen Projection - 2026-07-18
+
+- Limited session-note-derived visible combined graphs to the session-note source and extracted place nodes.
+- Reduced the raw `Session_Notes.txt` projection estimate from 24 visible nodes and 30 edges to 4 visible nodes and 3 edges.
+- Added `docs/specs/KNOWLEDGE_GRAPH_DESIGN3.md` for the longer-term session-note extraction and review-table design.
+- Verified with `.venv/bin/python -m pytest tests/test_combined_character_graph.py tests/test_character_graph.py`.

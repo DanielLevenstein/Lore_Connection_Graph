@@ -28,6 +28,11 @@ The biggest fidelity gap is entity quality, not rendering. The chart can draw th
 - Removed the duplicate top-level `Combined Knowledge Graph` heading so the graph section begins with the existing expander title.
 - Added a `Graph Node` selector and node detail table below the graph. The table shows the selected node, incoming edges, outgoing edges, relationship labels, connected node types, and evidence.
 - Folded `KNOWLEDGE_GRAPH_DESIGN2.md` into `KNOWLEDGE_GRAPH_DESIGN.md` so the redesign requirements live in one spec.
+- Reduced the visible graph projection for session-note imports to the session-note source plus extracted places. The raw `Session_Notes.txt` extraction still produces 52 candidate character nodes and 54 relationships, but the visible combined graph now projects to 4 nodes and 3 edges: `Session Notes`, `Pixie Kingdom`, `Forest`, and `Hall`.
+
+## One-Screen Size Estimate
+
+No new browser screenshot was captured for this pass. Estimating from the raw post-fix graph shape, 4 visible nodes and 3 edges should fit comfortably on one desktop screen. The previous 24-node, 30-edge projection was too wide and noisy; the new projection is a compact source-to-place diagram.
 
 ## Recommended Next Improvements
 

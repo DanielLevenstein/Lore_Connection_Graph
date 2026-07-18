@@ -49,22 +49,24 @@ def build_combined_character_graph(
 ) -> CombinedCharacterGraph:
     combined = CombinedCharacterGraph()
     for graph in graphs:
+        session_note_graph = is_session_note_graph(graph)
         combined.characters[graph.primary_character.id] = CombinedCharacterNode(
             id=graph.primary_character.id,
-            name=display_name(graph.primary_character.name),
+            name=combined_primary_display_name(graph, session_note_graph),
             source_file=graph.primary_character.source_file,
             node_type="character",
         )
-        for character_id, character in graph.characters.items():
-            combined.characters.setdefault(
-                character_id,
-                CombinedCharacterNode(
-                    id=character_id,
-                    name=display_name(character.name),
-                    source_file=graph.primary_character.source_file,
-                    node_type="character",
-                ),
-            )
+        if not session_note_graph:
+            for character_id, character in graph.characters.items():
+                combined.characters.setdefault(
+                    character_id,
+                    CombinedCharacterNode(
+                        id=character_id,
+                        name=display_name(character.name),
+                        source_file=graph.primary_character.source_file,
+                        node_type="character",
+                    ),
+                )
         for place_id, place in graph.places.items():
             combined.characters.setdefault(
                 place_id,
@@ -75,18 +77,19 @@ def build_combined_character_graph(
                     node_type="place",
                 ),
             )
-        for attribute_id, attribute in graph.attributes.items():
-            if attribute.attribute_type.lower() != "family":
-                continue
-            combined.characters.setdefault(
-                attribute_id,
-                CombinedCharacterNode(
-                    id=attribute_id,
-                    name=display_name(attribute.value),
-                    source_file=graph.primary_character.source_file,
-                    node_type="family",
-                ),
-            )
+        if not session_note_graph:
+            for attribute_id, attribute in graph.attributes.items():
+                if attribute.attribute_type.lower() != "family":
+                    continue
+                combined.characters.setdefault(
+                    attribute_id,
+                    CombinedCharacterNode(
+                        id=attribute_id,
+                        name=display_name(attribute.value),
+                        source_file=graph.primary_character.source_file,
+                        node_type="family",
+                    ),
+                )
     for place_id, place_name, source_file in place_sources or []:
         combined.characters[place_id] = CombinedCharacterNode(
             id=place_id,
@@ -120,8 +123,11 @@ def build_combined_character_graph(
     by_key: dict[tuple[str, str, str], CombinedRelationshipEdge] = {}
 
     for graph in graphs:
+        session_note_graph = is_session_note_graph(graph)
         source_id = graph.primary_character.id
         for relationship in graph.relationships:
+            if session_note_graph and relationship.relationship_type != "place":
+                continue
             target_is_family = (
                 relationship.target in graph.attributes
                 and graph.attributes[relationship.target].attribute_type.lower() == "family"
@@ -188,6 +194,30 @@ def build_combined_character_graph(
     prune_disconnected_nodes(combined)
     clarify_duplicate_display_names(combined)
     return combined
+
+
+def is_session_note_graph(graph: CharacterGraph) -> bool:
+    source_file = graph.primary_character.source_file.replace("\\", "/").lower()
+    source_name = source_file.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    primary_id = compact(graph.primary_character.id)
+    primary_name = compact(graph.primary_character.name)
+    return (
+        "/session_notes/" in source_file
+        or source_file.endswith("/session_notes.md")
+        or compact(source_name) in {"sessionnote", "sessionnotes"}
+        or primary_id in {"sessionnote", "sessionnotes"}
+        or primary_name in {"sessionnote", "sessionnotes"}
+    )
+
+
+def combined_primary_display_name(graph: CharacterGraph, session_note_graph: bool) -> str:
+    if not session_note_graph:
+        return display_name(graph.primary_character.name)
+    source_file = graph.primary_character.source_file.replace("\\", "/")
+    source_name = source_file.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    if compact(source_name) in {"sessionnote", "sessionnotes"}:
+        return "Session Notes"
+    return display_name(source_name) or display_name(graph.primary_character.name)
 
 
 def merge_duplicate_nodes(graph: CombinedCharacterGraph) -> None:

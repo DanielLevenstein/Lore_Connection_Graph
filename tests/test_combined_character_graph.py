@@ -7,7 +7,7 @@ from character_graph.combined_graph import (
 )
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
-from character_graph.schema import AttributeNode, CharacterGraph, CharacterNode, PrimaryCharacterRef, RelationshipEdge
+from character_graph.schema import AttributeNode, CharacterGraph, CharacterNode, PlaceNode, PrimaryCharacterRef, RelationshipEdge
 import local_chatbot.storage as storage
 from local_chatbot.storage import Character, append_character_connections, read_character_profile
 
@@ -163,6 +163,69 @@ Neal is a performer.
     assert "race_elf" not in combined.characters
     assert "class_bard" not in combined.characters
     assert "drive_make_a_name" not in combined.characters
+
+
+def test_combined_graph_limits_session_note_graph_to_source_and_places():
+    graph = CharacterGraph(
+        schema_version="0.2.0",
+        primary_character=PrimaryCharacterRef(
+            id="this",
+            name="This",
+            source_file="world_building/import/Session_Notes.txt",
+        ),
+        characters={
+            "this": CharacterNode(name="This"),
+            "there": CharacterNode(name="There"),
+            "did": CharacterNode(name="Did"),
+            "you": CharacterNode(name="You"),
+        },
+        attributes={
+            "family_notes": AttributeNode(value="Notes", attribute_type="Family"),
+        },
+        places={
+            "pixie_kingdom": PlaceNode(name="Pixie Kingdom", place_type="Kingdom"),
+            "forest": PlaceNode(name="Forest", place_type="Forest"),
+        },
+        relationships=[
+            RelationshipEdge(
+                source="this",
+                target="there",
+                relationship_type="ally",
+                relationship_label="Ally",
+                evidence=["There was an ally-shaped false positive."],
+            ),
+            RelationshipEdge(
+                source="this",
+                target="family_notes",
+                relationship_type="family",
+                relationship_label="Family",
+                evidence=["Notes is inferred from the session note title."],
+            ),
+            RelationshipEdge(
+                source="this",
+                target="pixie_kingdom",
+                relationship_type="place",
+                relationship_label="Place",
+                evidence=["The party traveled to the Pixie Kingdom."],
+            ),
+            RelationshipEdge(
+                source="this",
+                target="forest",
+                relationship_type="place",
+                relationship_label="Place",
+                evidence=["The party moved through the forest."],
+            ),
+        ],
+    )
+
+    combined = build_combined_character_graph([graph])
+
+    assert set(combined.characters) == {"this", "pixie_kingdom", "forest"}
+    assert combined.characters["this"].name == "Session Notes"
+    assert [(edge.source, edge.relationship_label, edge.target) for edge in combined.edges] == [
+        ("this", "Place", "pixie_kingdom"),
+        ("this", "Place", "forest"),
+    ]
 
 
 def test_combined_attribute_rows_include_hidden_metadata_with_evidence(tmp_path):
