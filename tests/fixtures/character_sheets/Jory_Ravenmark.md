@@ -24,4 +24,4 @@ Jory Ravenmark directed her grief to become a beacon of light to her community h
 | Source          | Item   | Value                    | Evidence                                                                                           |
 | --------------- | ------ | ------------------------ | -------------------------------------------------------------------------------------------------- |
 | Character Sheet | Family | Jory Ravenmark's Parents | Her mother died at sea and her father was consumed by loneliness which drove him to drink heavily. |
-| Character Sheet | Client | Neal Lovington           | But Neals favorite client was actually Ms Ravenmark.                                               |
+| Character Sheet | Client | Neal Lovington           | Neal's favorite client was actually Ms. Ravenmark.                                               |

@@ -207,7 +207,9 @@ def normalize_place_markdown(name: str, markdown: str) -> str:
     body = markdown.strip()
     if not body:
         body = f"# {name.strip()}"
-    if not re.search(r"^#\s+", body, re.MULTILINE):
+    if re.search(r"^#\s+", body, re.MULTILINE):
+        body = replace_markdown_title(body, name.strip())
+    else:
         body = f"# {name.strip()}\n\n{body}"
     return body.rstrip() + "\n"
 
@@ -1496,7 +1498,7 @@ def stat_value_for(
 
 
 def replace_markdown_title(text: str, title: str) -> str:
-    return re.sub(r"^#\s+.+?\s*$", f"# {title}", text, count=1, flags=re.MULTILINE)
+    return re.sub(r"^#\s+[^\n]*$", f"# {title}", text, count=1, flags=re.MULTILINE)
 
 
 def replace_title_preamble(text: str, summary: str) -> str:
@@ -1591,5 +1593,3 @@ def append_memory(character: Character, note: str) -> None:
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     with character.memory_path.open("a", encoding="utf-8") as file:
         file.write(f"\n- {stamp}: {note}\n")
-
-

@@ -176,6 +176,27 @@ Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College.
     assert "## The Ravenmark Family" in place.path.read_text(encoding="utf-8")
 
 
+def test_place_markdown_create_replaces_stale_default_title(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "PLACES_DIR", tmp_path / "docs" / "lore" / "places")
+
+    place = create_place_markdown("Brindle Hall", "# New Place\n\nA bright guildhall.")
+
+    assert place.path.name == "Brindle Hall.md"
+    assert place.path.read_text(encoding="utf-8").startswith("# Brindle Hall\n\nA bright guildhall.")
+
+
+def test_place_markdown_save_preserves_edited_markdown_title(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "PLACES_DIR", tmp_path / "docs" / "lore" / "places")
+
+    place = create_place_markdown("Markdown Inn", "This Inn serves non-technical guests.")
+
+    assert place.path.read_text(encoding="utf-8").startswith("# Markdown Inn\n\n")
+
+    write_place_markdown(place, "# Markdown Tavern\n\nThe sign has changed.")
+
+    assert place.path.read_text(encoding="utf-8") == "# Markdown Tavern\n\nThe sign has changed.\n"
+
+
 def test_place_delete_removes_file(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "PLACES_DIR", tmp_path / "docs" / "lore" / "places")
 
@@ -225,6 +246,27 @@ def test_session_note_file_save_overwrites_and_reloads_by_date(tmp_path, monkeyp
     )
     assert session_notes.read_session_note_title(second_save[0].path) == "Silver Key"
     assert session_notes.read_session_note_body(second_save[0].path) == "The party kept better notes."
+
+
+def test_markdown_section_save_updates_section_title(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_notes, "SESSION_NOTES_DIR", tmp_path / "docs" / "lore" / "session_notes")
+    path = tmp_path / "docs" / "lore" / "session_notes" / "Family_Tree.md"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "# Family Tree\n\n"
+        "## The Lovington Family: (Coming Next)\n\n"
+        "Notes coming soon.\n",
+        encoding="utf-8",
+    )
+    section_key = session_notes.markdown_sections(path.read_text(encoding="utf-8"))[1].key
+
+    session_notes.write_markdown_section(path, section_key, "## The Rapture Family\n\nNotes coming soon.")
+
+    sections = session_notes.markdown_sections(path.read_text(encoding="utf-8"))
+    assert [(section.level, section.text) for section in sections] == [
+        (1, "Family Tree"),
+        (2, "The Rapture Family"),
+    ]
 
 
 def test_session_note_delete_removes_file(tmp_path, monkeypatch):

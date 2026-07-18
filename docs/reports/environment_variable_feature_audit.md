@@ -12,9 +12,9 @@ This report answers two questions:
 Commands used:
 
 ```bash
-rg -n "os\.environ|monkeypatch\.(setenv|delenv)|env\[|LOCAL_CHATBOT_|LANGUAGE_MODEL_HARNESS|STREAMLIT_BROWSER" tests -g '*.py'
-rg -n "os\.environ\.get|os\.environ\[|os\.environ\.setdefault|LOCAL_CHATBOT_|LANGUAGE_MODEL_HARNESS|STREAMLIT_BROWSER" character_graph local_chatbot model_harness scripts streamlit_app.py tests -g '*.py'
-.venv/bin/python -m vulture character_graph local_chatbot model_harness scripts streamlit_app.py language_model_harness.py tests --min-confidence 60
+rg -n "os\.environ|monkeypatch\.(setenv|delenv)|env\[|LOCAL_CHATBOT_|STREAMLIT_BROWSER" tests -g '*.py'
+rg -n "os\.environ\.get|os\.environ\[|os\.environ\.setdefault|LOCAL_CHATBOT_|STREAMLIT_BROWSER" character_graph local_chatbot scripts streamlit_app.py tests -g '*.py'
+.venv/bin/python -m vulture character_graph local_chatbot scripts streamlit_app.py tests --min-confidence 60
 ```
 
 ## Variables Used In Tests
@@ -30,7 +30,7 @@ rg -n "os\.environ\.get|os\.environ\[|os\.environ\.setdefault|LOCAL_CHATBOT_|LAN
 | `LOCAL_CHATBOT_CHARACTERS_DIR` | Set in character and session note e2e fixtures. | Read in `local_chatbot/paths.py`. | Keep for isolated character fixtures. |
 | `LOCAL_CHATBOT_PLACES_DIR` | Set in character and session note e2e fixtures. | Read in `local_chatbot/paths.py`. | Keep for isolated place fixtures. |
 | `LOCAL_CHATBOT_SESSION_NOTES_DIR` | Set in character and session note e2e fixtures. | Read in `local_chatbot/paths.py`. | Keep for isolated session note fixtures. |
-| `LANGUAGE_MODEL_HARNESS_DATA_DIR` | Cleared in `tests/test_model_downloads.py` through `environment.DATA_DIR_ENV`. | Read in `model_harness/environment.py`. | Keep only if users need model data override outside `world_building/meta_data/model`. |
+| `LOCAL_CHATBOT_META_DATA_DIR` | Set in character e2e fixtures. | Read in `local_chatbot/paths.py`. | Keep while tests need isolated metadata writes for save-audit fallback assertions. |
 
 ## Variables Read By Code But Not Exercised In Tests
 
@@ -39,11 +39,10 @@ rg -n "os\.environ\.get|os\.environ\[|os\.environ\.setdefault|LOCAL_CHATBOT_|LAN
 | `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES` | Read in `streamlit_app.py` by `graph_rewrites_enabled()`. | No test sets it. Rewrite behavior is unit-tested below the UI. | Candidate to remove as a gate once rewrite functionality is stable. Prefer one working app with buttons present when a character graph/model path is available. |
 | `LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE` | Read in `streamlit_app.py` by `attribute_graph_override_enabled()`. | No test sets it. | Strong deletion candidate. It is described as an internal maintenance feature and is exactly the kind of hidden alternate UI path that increases app variants. |
 | `LOCAL_CHATBOT_DATA_DIR` | Read in `local_chatbot/paths.py`; also used as a fallback for `LOCAL_CHATBOT_META_DATA_DIR`. | No current test sets it. | Candidate to collapse into `LOCAL_CHATBOT_WORLD_BUILDING_DIR` plus fixed `meta_data` subdir. User note says backward compatibility is not required. |
-| `LOCAL_CHATBOT_META_DATA_DIR` | Read in `local_chatbot/paths.py`. | No current test sets it. | Candidate to remove. Keep metadata under `world_building/meta_data`. |
+| `LOCAL_CHATBOT_META_DATA_DIR` | Read in `local_chatbot/paths.py`. | Character e2e tests set it. | Candidate to remove after replacing test setup with a direct path-configuration mechanism. Keep metadata under `world_building/meta_data` by default. |
 | `LOCAL_CHATBOT_WORLD_BUILDING_BACKUP_DIR` | Read in `local_chatbot/paths.py`. | No current test sets it. | Candidate to remove unless custom backup location is a real user requirement. Default `world_building/backup` is simpler. |
 | `LOCAL_CHATBOT_DOCS_LORE_DIR` | Read as fallback in `local_chatbot/paths.py`. | No current test sets it. | Delete. This is backwards-compatibility with the old docs/lore layout, and backwards compatibility is not required. |
 | `LOCAL_CHATBOT_LORE_FIXTURES_DIR` | Read into `LORE_FIXTURES_DIR`, which vulture reports unused. | No current test sets it. | Delete along with `LORE_FIXTURES_DIR`. |
-| `LANGUAGE_MODEL_HARNESS_CONFIG_DIR` | Read in `model_harness/environment.py`. | No test sets or clears it after removing `language_model_harness.py`. | Candidate to keep only if model config override is required. Otherwise use fixed `config/model`. |
 
 ## Proposed Feature Deletions
 
@@ -95,11 +94,10 @@ Remove the remaining environment variables in this order:
    - Risk: high.
    - Reason: tests currently rely on these to isolate filesystem state. Remove only after replacing test setup with a direct path-configuration mechanism.
 
-10. Model harness variables:
-    - `LANGUAGE_MODEL_HARNESS_CONFIG_DIR`
-    - `LANGUAGE_MODEL_HARNESS_DATA_DIR`
-    - Risk: high.
-    - Reason: model config/data overrides belong to `model_harness`, not the local chatbot app. Remove only after deciding model harness should no longer support external config/data roots.
+10. Legacy model harness scripts and variables:
+    - Status: removed from this repository.
+    - Deleted scripts: `scripts/download_model.py`, `scripts/start_model_server.py`, and `scripts/rebuild_download_manifests.py`.
+    - Reason: external language-model downloads and server startup are no longer part of the release path.
 
 ### 1. Delete Attribute Graph Override UI
 
@@ -193,11 +191,7 @@ These are unused by vulture, but are small enough that deletion should follow ne
 - `local_chatbot.session_notes.has_session_note_date`
 - `local_chatbot.storage.create_stub_character`
 - `local_chatbot.storage.read_backstory_template`
-- `model_harness.chat.chat_session_key`
-- `model_harness.downloads.model_is_downloaded`
-- `model_harness.downloads.status_for_option`
-- `model_harness.models.mark_model_downloaded`
-- `model_harness.server.runner_is_installed`
+- legacy model harness runner/download scripts were removed on 2026-07-14
 
 ## Suggested Next Step
 

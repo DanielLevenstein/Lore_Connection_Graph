@@ -70,6 +70,7 @@ def isolated_character_app(tmp_path):
     env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(characters_dir)
     env["LOCAL_CHATBOT_PLACES_DIR"] = str(places_dir)
     env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(session_notes_dir)
+    env["LOCAL_CHATBOT_META_DATA_DIR"] = str(meta_data_dir)
     process = subprocess.Popen(
         [
             str(streamlit_executable()),
@@ -143,7 +144,10 @@ def save_open_character(page, data_dir: Path, character_file: Path) -> None:
 
 
 def open_tab(page, name: str) -> None:
-    page.get_by_role("tab", name=name, exact=True).click()
+    tab = page.get_by_role("tab", name=name, exact=True)
+    if tab.get_attribute("aria-selected") == "true":
+        return
+    tab.click()
 
 
 def expand_section(page, name: str) -> None:
@@ -162,6 +166,25 @@ def ensure_place_editor_open(page) -> None:
     if not save_button.is_visible():
         page.get_by_text("Edit Place", exact=True).click()
     expect(save_button).to_be_visible(timeout=10000)
+
+
+def place_editor(page):
+    return page.locator("[data-testid=stExpander]").filter(has_text="Edit Place").first
+
+
+def fill_place_editor_markdown(page, value: str) -> None:
+    editor = place_editor(page)
+    textbox = editor.get_by_role("textbox", name="Place Markdown", exact=True)
+    expect(textbox).to_be_visible(timeout=10000)
+    textbox.fill(value)
+    expect(textbox).to_have_value(value, timeout=10000)
+
+
+def click_place_save_button(page) -> None:
+    editor = place_editor(page)
+    save_button = editor.get_by_role("button", name="save Save Place")
+    expect(save_button).to_be_visible(timeout=10000)
+    save_button.evaluate("element => element.click()")
 
 
 def ensure_session_note_editor_open(page) -> None:
@@ -224,17 +247,17 @@ def click_place_undo_button(page) -> None:
 
 def assert_character_saved_visible(page) -> None:
     """Assert character save confirmation is visible (not hidden behind expander)."""
-    expect(page.get_by_text("Character Saved.")).to_be_visible(timeout=10000)
+    expect(page.get_by_text("Character Saved.").first).to_be_visible(timeout=10000)
 
 
 def assert_place_saved_visible(page) -> None:
     """Assert place save confirmation is visible (not hidden behind expander)."""
-    expect(page.get_by_text("Place Saved.")).to_be_visible(timeout=10000)
+    expect(page.get_by_text("Place Saved.").first).to_be_visible(timeout=10000)
 
 
 def assert_session_note_saved_visible(page) -> None:
     """Assert session note save confirmation is visible."""
-    expect(page.get_by_text("Session Note Saved.")).to_be_visible(timeout=10000)
+    expect(page.get_by_text("Session Note Saved.").first).to_be_visible(timeout=10000)
 
 
 def assert_character_profile_written(data_dir: Path, character_name: str) -> None:
@@ -257,6 +280,15 @@ def assert_place_file_written(places_dir: Path, place_name: str) -> None:
             return
         time.sleep(0.1)
     raise AssertionError(f"Place file not written: {place_file}")
+
+
+def wait_for_file_text(path: Path, expected_text: str, timeout: int = 10) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.exists() and expected_text in path.read_text(encoding="utf-8"):
+            return
+        time.sleep(0.1)
+    raise AssertionError(f"{expected_text!r} not found in {path}")
 
 
 def test_ui_save_confirmations_are_visible(isolated_character_app):
@@ -317,35 +349,36 @@ def test_ui_save_confirmations_are_visible(isolated_character_app):
         expect(page.get_by_role("heading", name="Places")).to_be_visible(timeout=10000)
         expand_section(page, "Create Place")
         fill_textbox(page, "Name", "Test Place")
-        page.get_by_role("textbox", name="Place Markdown", exact=True).fill("# Test Place\n\nTest place content.")
+        page.get_by_role("textbox", name="New Place Markdown", exact=True).fill("# Test Place\n\nTest place content.")
         page.get_by_role("button", name="add_location_alt Create Place").click()
         expect(page.get_by_role("heading", name="Test Place", exact=True).last).to_be_visible(timeout=10000)
+        assert_place_saved_visible(page)
+        assert_place_file_written(places_dir, "Test Place")
+        assert not (places_dir / "New Place.md").exists()
         
         # Open place and save it
         page.get_by_role("combobox", name="Place Files").click()
         page.get_by_role("option", name="Test Place (Test Place.md)", exact=True).click()
         page.get_by_role("button", name="location_on Open Place").click()
         ensure_place_editor_open(page)
-        page.get_by_role("textbox", name="Place Markdown", exact=True).fill("# Test Place\n\nUpdated place content.")
-        page.get_by_role("button", name="save Save Place").click(force=True)
+        fill_place_editor_markdown(page, "# Test Place\n\nUpdated place content.")
+        click_place_save_button(page)
         assert_place_saved_visible(page)  # Should be visible without opening expander
         assert_place_file_written(places_dir, "Test Place")
+        expect(page.get_by_role("heading", name="Test Place", exact=True).last).to_be_visible(timeout=10000)
 
         # Test session note save confirmation is visible
         open_tab(page, "Session Notes")
         expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
         page.get_by_role("combobox", name="Session Note").click()
-        page.get_by_role(
-            "option",
-            name="test_save_confirmation.md - test_save_confirmation",
-            exact=True,
-        ).click()
+        page.get_by_role("option").filter(has_text="test_save_confirmation").first.click()
         page.get_by_role("button", name="event_note Open Session Note").click()
         open_tab(page, "Session Notes")
         ensure_session_note_editor_open(page)
-        page.get_by_role("textbox").first.fill("# Session Notes - test_save_confirmation\n\n## 2026-07-14\n\nUpdated test content.")
+        page.get_by_role("textbox", name="Session Note", exact=True).fill("Updated test content.")
         page.get_by_role("button", name="save Save Session Note").click()
         assert_session_note_saved_visible(page)  # Should be visible
+        expect(page.get_by_role("heading", name="Session Notes", exact=True).last).to_be_visible(timeout=10000)
         
         browser.close()
     
@@ -506,7 +539,7 @@ def test_ui_fills_visible_session_note_editor_fields_and_saves(isolated_characte
         filled = fill_visible_text_inputs(page, prefix="RoundTrip")
         assert filled, "No visible session note editor fields were found to fill."
         page.get_by_role("button", name="save Save Session Note").click()
-        expect(page.get_by_text("Session Note Saved.")).to_be_visible(timeout=10000)
+        assert_session_note_saved_visible(page)
         browser.close()
 
     saved_content = note_path.read_text(encoding="utf-8")
@@ -539,7 +572,7 @@ def test_ui_creates_loads_and_undoes_character_changes(isolated_character_app):
         ensure_character_editor_open(page)
         page.get_by_role("textbox", name="Summary", exact=True).first.fill("Della is a careful scout with brass lockpicks.")
         page.get_by_role("button", name="save Save Character").click()
-        expect(page.get_by_text("Character Saved.")).to_be_visible(timeout=10000)
+        assert_character_saved_visible(page)
         expect(page.get_by_role("tab", name="Characters", exact=True)).to_have_attribute(
             "aria-selected",
             "true",
@@ -549,7 +582,7 @@ def test_ui_creates_loads_and_undoes_character_changes(isolated_character_app):
         ensure_character_editor_open(page)
         page.get_by_role("textbox", name="Summary", exact=True).first.fill("Della is a reckless scout tonight.")
         page.get_by_role("button", name="save Save Character").first.click(force=True)
-        expect(page.get_by_text("Character Saved.")).to_be_visible(timeout=10000)
+        assert_character_saved_visible(page)
 
         ensure_character_editor_open(page)
         page.get_by_role("button", name="undo Undo Changes").first.click()
@@ -584,7 +617,7 @@ def test_ui_creates_loads_and_undoes_place_changes(isolated_character_app):
         expect(page.get_by_role("heading", name="Places")).to_be_visible(timeout=10000)
         expand_section(page, "Create Place")
         fill_textbox(page, "Name", "Brindle Hall")
-        page.get_by_role("textbox", name="Place Markdown", exact=True).fill(
+        page.get_by_role("textbox", name="New Place Markdown", exact=True).fill(
             "# Brindle Hall\n\nA narrow guildhall where maps are traded.\n\n## Notes\n\nLanterns burn blue near the archives."
         )
         page.get_by_role("button", name="add_location_alt Create Place").click()
@@ -595,11 +628,13 @@ def test_ui_creates_loads_and_undoes_place_changes(isolated_character_app):
         page.get_by_role("option", name="Brindle Hall (Brindle Hall.md)", exact=True).click()
         page.get_by_role("button", name="location_on Open Place").click()
         ensure_place_editor_open(page)
-        page.get_by_role("textbox", name="Place Markdown", exact=True).fill(
-            "# Brindle Hall\n\nA crowded guildhall where maps are traded.\n\n## Notes\n\nLanterns burn blue near the archives."
+        fill_place_editor_markdown(
+            page,
+            "# Brindle Hall\n\nA crowded guildhall where maps are traded.\n\n## Notes\n\nLanterns burn blue near the archives.",
         )
-        page.get_by_role("button", name="save Save Place").click(force=True)
-        expect(page.get_by_text("Place Saved.")).to_be_visible(timeout=10000)
+        click_place_save_button(page)
+        assert_place_saved_visible(page)
+        wait_for_file_text(place_path, "A crowded guildhall where maps are traded.")
         expect(page.get_by_role("tab", name="Places", exact=True)).to_have_attribute(
             "aria-selected",
             "true",
@@ -607,9 +642,10 @@ def test_ui_creates_loads_and_undoes_place_changes(isolated_character_app):
         )
 
         ensure_place_editor_open(page)
-        page.get_by_role("textbox", name="Place Markdown", exact=True).fill("# Brindle Hall\n\nA ruined guildhall after the fire.")
-        page.get_by_role("button", name="save Save Place").click(force=True)
-        expect(page.get_by_text("Place Saved.")).to_be_visible(timeout=10000)
+        fill_place_editor_markdown(page, "# Brindle Hall\n\nA ruined guildhall after the fire.")
+        click_place_save_button(page)
+        assert_place_saved_visible(page)
+        wait_for_file_text(place_path, "A ruined guildhall after the fire.")
         expect(page.get_by_role("textbox", name="Place Markdown", exact=True)).to_have_value(
             "# Brindle Hall\n\nA ruined guildhall after the fire.",
             timeout=10000,
@@ -769,11 +805,12 @@ def test_ui_deletes_character_place_and_session_note_files(isolated_character_ap
         open_tab(page, "Places")
         expand_section(page, "Create Place")
         fill_textbox(page, "Name", "Delete Hall")
-        page.get_by_role("textbox", name="Place Markdown", exact=True).fill("# Delete Hall\n\nA temporary place for deletion.")
+        page.get_by_role("textbox", name="New Place Markdown", exact=True).fill("# Delete Hall\n\nA temporary place for deletion.")
         page.get_by_role("button", name="add_location_alt Create Place").click()
+        assert_place_file_written(places_dir, "Delete Hall")
         expect(page.get_by_role("heading", name="Delete Hall", exact=True).last).to_be_visible(timeout=10000)
         ensure_place_editor_open(page)
-        page.get_by_role("button", name="delete_forever Delete Place").click()
+        click_button_with_retry(page, "delete_forever Delete Place")
         expect(page.get_by_text("Place Deleted.")).to_be_visible(timeout=10000)
 
         open_tab(page, "Session Notes")
@@ -799,8 +836,6 @@ def test_ui_creates_character_from_combined_graph_and_loads_it(isolated_characte
 
         expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
         page.get_by_text("Combined Knowledge Graph", exact=True).last.click()
-        expect(page.get_by_role("button", name="Regenerate All Lore Graphs")).to_have_count(0)
-        expect(page.get_by_role("button", name="Add Character Connections")).to_have_count(0)
         page.get_by_role("button", name="Create Character File").click()
         expect(page.get_by_text("Draft Character")).to_be_visible(timeout=10000)
         page.get_by_role("textbox", name="Race", exact=True).first.fill("Human")

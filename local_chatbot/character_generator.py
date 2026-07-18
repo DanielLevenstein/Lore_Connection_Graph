@@ -2,8 +2,8 @@ import json
 import random
 import re
 from dataclasses import dataclass
+from typing import Any
 
-from model_harness import ModelConfig
 from .paths import CHARACTER_METADATA_DIR
 from .storage import Character, CharacterProfile, create_generated_character, sanitize_name
 
@@ -106,7 +106,7 @@ class RandomCharacterGenerator:
         self.random = random.Random(seed)
         self.world = self.load_world_building()
 
-    def generate_profiles(self, count: int = 5, model_config: ModelConfig | None = None) -> list[CharacterProfile]:
+    def generate_profiles(self, count: int = 5, model_config: Any | None = None) -> list[CharacterProfile]:
         used_names: set[str] = set()
         profiles = []
         for _ in range(count):
@@ -115,7 +115,7 @@ class RandomCharacterGenerator:
             used_names.add(sanitize_name(profile.name))
         return profiles
 
-    def create_characters(self, count: int = 5, model_config: ModelConfig | None = None) -> list[Character]:
+    def create_characters(self, count: int = 5, model_config: Any | None = None) -> list[Character]:
         characters = []
         for profile in self.generate_profiles(count, model_config):
             try:
@@ -128,7 +128,7 @@ class RandomCharacterGenerator:
     def generate_profile(
         self,
         used_names: set[str] | None = None,
-        model_config: ModelConfig | None = None,
+        model_config: Any | None = None,
     ) -> CharacterProfile:
         used_names = used_names or set()
         name = self.unique_name(used_names)
@@ -189,7 +189,7 @@ class RandomCharacterGenerator:
             gender=profile.gender,
         )
 
-    def with_model_backstory(self, profile: CharacterProfile, model_config: ModelConfig) -> CharacterProfile:
+    def with_model_backstory(self, profile: CharacterProfile, model_config: Any) -> CharacterProfile:
         raise RuntimeError(
             "External language-model character generation is disabled for this release. "
             "Use the deterministic in-code generator instead."

@@ -787,7 +787,7 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
         summary = st.text_area(
             "Summary",
             value=draft_profile.summary,
-            placeholder="Ms. Glorious specializes in the study of the dark arts.\n.",
+            placeholder="Ms. Glorious specializes in the study of the dark arts.",
             height=96,
             key=f"{key_prefix}_summary",
         )
@@ -914,7 +914,8 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
                     st.session_state.pop("pending_place_profile", None)
                 clear_place_creator_state(key_prefix)
                 set_active_place(place)
-                st.success(f"Created {name.strip()}.")
+                request_main_navigation_tab("Places")
+                st.session_state[f"place_status_{place.name}"] = "Place Saved."
                 st.rerun()
 
 
@@ -946,7 +947,7 @@ def draft_place_markdown(draft_profile: PlaceProfile) -> str:
 
 def render_place_panel() -> None:
     st.title("Places")
-    place_panel_status = st.session_state.pop("place_panel_status", "")
+    place_panel_status = st.session_state.get("place_panel_status", "")
     if place_panel_status:
         st.success(place_panel_status)
     places = list_places()
@@ -982,10 +983,10 @@ def render_place_info(place: Place) -> None:
         st.markdown(markdown)
     else:
         st.subheader(display_place_name(place))
-    place_message = st.session_state.pop(f"place_status_{place.name}", "")
+    place_message = st.session_state.get(f"place_status_{place.name}", "")
     if place_message:
         st.success(place_message)
-    with st.expander("Edit Place", expanded=False):
+    with st.expander("Edit Place", expanded=bool(place_message)):
         with st.form(f"edit_place_{place.name}"):
             st.text_input("Name", value=display_place_name(place), disabled=True)
             editor_revision = st.session_state.get(f"place_editor_revision_{place.name}", 0)
@@ -1005,6 +1006,7 @@ def render_place_info(place: Place) -> None:
                 delete_place_profile(place)
                 st.session_state.pop(f"place_undo_{place.name}", None)
                 st.session_state.pop(f"place_editor_revision_{place.name}", None)
+                st.session_state.pop(f"place_status_{place.name}", None)
                 st.session_state.pop("active_place", None)
                 st.session_state["place_panel_status"] = "Place Deleted."
                 st.rerun()
@@ -1245,7 +1247,7 @@ def render_session_notes() -> None:
     saved_count = st.session_state.pop("session_notes_saved_count", 0)
     if saved_count:
         st.success(f"Saved {saved_count} Session Note File{'s' if saved_count != 1 else ''}.")
-    session_notes_status = st.session_state.pop("session_notes_status", "")
+    session_notes_status = st.session_state.get("session_notes_status", "")
     if session_notes_status:
         st.success(session_notes_status)
     session_notes_error = st.session_state.pop("session_notes_error", "")
@@ -1533,7 +1535,7 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
 
 def render_character_panel() -> None:
     st.title("Characters")
-    character_panel_status = st.session_state.pop("character_panel_status", "")
+    character_panel_status = st.session_state.get("character_panel_status", "")
     if character_panel_status:
         st.success(character_panel_status)
     characters = list_characters()
@@ -1621,7 +1623,7 @@ def render_external_character_sheet_list() -> None:
 
 def render_character_editor(character: Character) -> None:
     profile = read_character_profile(character)
-    with st.expander("Edit Character", expanded=False):
+    with st.expander("Edit Character", expanded=bool(st.session_state.get(f"character_status_{character.name}", ""))):
         with st.form(f"edit_character_{character.name}"):
             st.text_input("Name", value=profile.name, disabled=True)
             name_cols = st.columns(2)
@@ -1829,7 +1831,7 @@ def render_memory_tools(character: Character) -> None:
 
 def render_character_info(character: Character, model_config=None) -> None:
     st.subheader(display_character_name(character))
-    character_message = st.session_state.pop(f"character_status_{character.name}", "")
+    character_message = st.session_state.get(f"character_status_{character.name}", "")
     if character_message:
         st.success(character_message)
     render_character_editor(character)

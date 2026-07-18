@@ -4,18 +4,28 @@ Date: 2026-07-14
 
 ## Summary
 
-This report captures the current Streamlit UI issue state for the repository. Two categories of problems were found:
+This report captures the current Streamlit UI issue state for the repository. The July 14 save-audit bugs have been fixed and covered by focused Streamlit/Playwright tests.
 
-- test infrastructure and regression validation issues that block UI bug discovery
-- UI state and feature-risk areas in `streamlit_app.py` that are known to be fragile
+## Fixed On 2026-07-14
+
+- `Character Saved.` now remains visible after saving, and the character editor stays expanded so Save/Undo/Delete buttons remain visible after rerun.
+- `Place Saved.` now remains visible after creating or saving a place, and the place editor stays expanded after save.
+- `Session Note Saved.` remains visible after saving session note edits.
+- New places are selected and visible immediately after Create Place.
+- New place Markdown titles are normalized to the submitted place name, preventing stale `# New Place` content and `New Place.md`-style UI confusion.
+- The character creation Summary placeholder no longer shows a stray second period.
+- Legacy model-harness runner/download scripts were removed; the random character script now uses the deterministic in-code generator.
+
+## Verification
+
+- `.venv/bin/python -m pytest tests/test_entity_file_saves.py tests/test_character_rewrite_model_lifecycle.py`
+- `.venv/bin/python -m pytest tests/e2e/test_character_sheet_roundtrip_ui.py`
 
 ## Findings
 
 ### 1. UI test environment is not fully provisioned
 
-- The Playwright browser binary is missing in the dev container.
-- Running the Playwright-based e2e tests fails with `BrowserType.launch: Executable doesn't exist`.
-- Until `playwright install chromium` is run, the Streamlit UI regression suite cannot execute end-to-end.
+- Playwright e2e tests now run in this local environment.
 
 ### 2. Test import path bug
 
@@ -41,17 +51,12 @@ These patterns should be the first focus of UI regression coverage because state
 
 ## Observed UI issue opportunities
 
-- incoming tab/expander state persistence may be fragile on refresh and rerun
+- incoming tab/expander state persistence may still be fragile on refresh and rerun outside the audited save flows
 - explicit UI state is scattered across many session keys instead of a single source of truth
-- the current end-to-end test harness is unable to verify these behaviors until Playwright is installed
 
 ## Recommendations
 
-- Install Playwright browsers in the dev environment:
-  - `source .venv/bin/activate`
-  - `playwright install chromium`
-- Re-run the e2e suite after installation:
-  - `PYTHONPATH=. pytest -q tests/e2e --maxfail=1`
+- Keep the save-audit e2e coverage focused on visible confirmations plus file-write fallback indicators.
 - Add focused Playwright tests for:
   - tab selection persistence after reload
   - expander expanded/collapsed persistence after reload
@@ -61,21 +66,19 @@ These patterns should be the first focus of UI regression coverage because state
 
 ## Next steps
 
-- Confirm Playwright browser installation and rerun the full `tests/e2e` suite.
-- Add a screenshot-based regression test or manual capture once Playwright is working.
-- Prioritize bug fixes around tab and expander state persistence in the Streamlit app.
+- Continue prioritizing tab and expander state persistence in the Streamlit app.
 
 ## UI Save Audit (visible elements before / after Save)
 
 **Characters**
 - Before Save: Heading `Roleplaying Character Creator`; tab `Characters` (selected); heading `Characters`; `Existing Characters` combobox (e.g. Jory Ravenmark); `Open` / `chat Open Character` buttons; character heading (e.g. `Jory Ravenmark`); `Edit Character` expander; `Character Attribute Graph` expander; `New Character` / `Create Character` section; editor textboxes (`Name`, `First Name`, `Family Name`, `Level`, `Race`, `Class`, `Pronouns`, `Backstory`, `Summary`); editor buttons (`person_add Create Character`, `save Save Character`, `undo Undo Changes`, `delete_forever Delete Character`).
 - After Save: transient confirmation `Character Saved.` (may be hidden or brief); tab `Characters` remains selected; character heading remains visible; editor buttons still present. Successful saves typically write a PROFILE.json under the app `meta_data/character_metadata/<name>/PROFILE.json`.
-- The `Character Saved` field not showing up after the save button is clicked is a bug and should be fixed. 
+- Fixed: `Character Saved.` remains visible after Save and the editor buttons remain visible.
 
 **Places**
 - Before Save: tab `Places`; heading `Places`; `Create Place` expander with `Name` textbox and `Place Markdown` textbox; `add_location_alt Create Place` button; existing `Place Files` combobox.
 - After Save: transient confirmation `Place Saved.`; created place heading visible (e.g. `Brindle Hall`); `save Save Place` and `delete_forever Delete Place` buttons available; place file appears under the `places` fixture directory when save completes.
-- place file appears under the `places` fixture directory when save completes.
+- Fixed: created places appear immediately after `Create Place`, and stale `New Place` titles are replaced with the submitted place name.
 
 **Session Notes**
 - Before Save: tab `Session Notes`; heading `Session Notes`; `Session Note` combobox; `Open Session Note` button; editor fields (`Title`, `Session Note` textbox); `edit Edit Section` / `save Save Session Note` buttons.
@@ -85,3 +88,4 @@ Please ensure that the following text fields are visible in the UI after clickin
 They should be visible in plain text and not hidden by other UI elements.
 Tests should assert both visible confirmation and fallback indicators (file writes, tab selection, presence of created headings) to reduce flakiness.
 
+Status: fixed and covered by `tests/e2e/test_character_sheet_roundtrip_ui.py::test_ui_save_confirmations_are_visible`.
