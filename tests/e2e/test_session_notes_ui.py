@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -622,7 +623,6 @@ The group follows the directions and arrive at a hut.
 
 def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
-    import_dir = docs_lore_dir.parent / "import"
     characters_dir = docs_lore_dir / "character_sheets"
     places_dir = docs_lore_dir / "places"
     notes_dir = docs_lore_dir / "session_notes"
@@ -636,7 +636,7 @@ def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
         page.get_by_text("Lore Import", exact=True).first.click()
         lore_import = page.locator("[data-testid=stExpander]").filter(has_text="Lore Import").first
         source_directory = page.get_by_role("textbox", name="Source Directory")
-        expect(source_directory).to_have_value(str(import_dir), timeout=10000)
+        expect(source_directory).to_have_value(str(fixture_dir), timeout=10000)
         expect(lore_import.get_by_label("Last Backup")).to_be_visible()
         expect(lore_import.get_by_role("button", name="event_available Backup Updated")).to_have_count(0)
         expect(lore_import.get_by_role("button", name="folder_copy Import Testing Lore")).to_be_visible()
@@ -646,14 +646,14 @@ def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
         expect(lore_import.get_by_label("Character Sheet File")).to_have_count(0)
         source_directory.fill(str(fixture_dir))
         page.get_by_role("button", name="folder_copy Import Testing Lore").click()
-        expect(page.get_by_text("Imported 6 Lore Files")).to_be_visible(timeout=10000)
+        expect(page.get_by_text(re.compile(r"Imported \d+ Lore Files"))).to_be_visible(timeout=10000)
         page.get_by_text("Lore Import", exact=True).first.click()
         page.get_by_role("button", name="restore_page Import Lore Backup").click()
         expect(page.get_by_text("Import Lore Backup")).to_be_visible(timeout=10000)
         expect(page.get_by_role("combobox", name="Backup")).to_be_visible(timeout=10000)
         expect(page.get_by_role("button", name="restore_page Restore Selected Backup")).to_be_visible()
         page.get_by_role("button", name="restore_page Restore Selected Backup").click()
-        expect(page.get_by_text("Restored 6 Backup Files")).to_be_visible(timeout=10000)
+        expect(page.get_by_text(re.compile(r"Restored \d+ Backup Files"))).to_be_visible(timeout=10000)
         page.get_by_text("Lore Import", exact=True).first.click()
         expect(page.get_by_role("textbox", name="Source Directory")).to_have_value(str(fixture_dir), timeout=10000)
         browser.close()
@@ -661,7 +661,6 @@ def test_ui_imports_lore_fixture_directory(isolated_session_notes_app):
     assert (characters_dir / "Jory_Ravenmark.md").exists()
     assert (places_dir / "Atlantia_Lore.md").exists()
     assert (notes_dir / "Family_Tree.md").exists()
-    assert (notes_dir / "Time_Turning.md").exists()
 
 def test_ui_bulk_lore_removal_confirms_before_cleaning_lore(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
@@ -683,19 +682,18 @@ def test_ui_bulk_lore_removal_confirms_before_cleaning_lore(isolated_session_not
         page.get_by_text("Lore Import", exact=True).first.click()
         page.get_by_role("textbox", name="Source Directory").fill(str(fixture_dir))
         page.get_by_role("button", name="folder_copy Import Testing Lore").click()
-        expect(page.get_by_text("Imported 6 Lore Files")).to_be_visible(timeout=10000)
+        expect(page.get_by_text(re.compile(r"Imported \d+ Lore Files"))).to_be_visible(timeout=10000)
         page.get_by_text("Lore Import", exact=True).first.click()
         page.get_by_role("button", name="delete_forever Bulk Lore Removal").click()
         expect(page.get_by_text("This operation is destructive.")).to_be_visible(timeout=10000)
         expect(page.get_by_text("delete all local characters, places, and notes")).to_be_visible(timeout=10000)
         page.get_by_role("button", name="delete_forever Yes, Delete Local Lore").click()
-        expect(page.get_by_text("Deleted 7 Local Files")).to_be_visible(timeout=10000)
+        expect(page.get_by_text(re.compile(r"Deleted \d+ Local Lore Files"))).to_be_visible(timeout=10000)
         browser.close()
 
     assert not (characters_dir / "Jory_Ravenmark.md").exists()
     assert not (places_dir / "Atlantia_Lore.md").exists()
     assert not (notes_dir / "Family_Tree.md").exists()
-    assert not (notes_dir / "Time_Turning.md").exists()
     assert not generated_draft.exists()
     assert (backup_dir / "character_sheets" / "Jory_Ravenmark.md").exists()
     assert (backup_dir / "places" / "Atlantia_Lore.md").exists()

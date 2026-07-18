@@ -321,8 +321,8 @@ def extract_character_graph(
         places=places,
         relationships=dedupe_relationships(relationships),
         metadata=GraphMetadata(
-            created_at=now,
-            updated_at=now,
+            backup_date=now,
+            snapshot_date=now,
             source_hash=document.source_hash,
         ),
     )

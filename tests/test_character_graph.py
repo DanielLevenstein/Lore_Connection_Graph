@@ -587,8 +587,8 @@ def test_graph_storage_migrates_legacy_attribute_nodes(tmp_path):
                     }
                 ],
                 "metadata": {
-                    "created_at": "2026-07-08T00:00:00",
-                    "updated_at": "2026-07-08T00:00:00",
+                    "snapshot_date": "2026-07-08T00:00:00",
+                    "backup_date": "2026-07-08T00:00:00",
                     "source_hash": "hash",
                 },
             }
