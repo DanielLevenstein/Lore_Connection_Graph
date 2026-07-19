@@ -1,5 +1,28 @@
 # Release Notes
 
+| Version | Summary |
+| --- | --- |
+| v1.0.0 | This release adds a dedicated Knowledge Graph tab that surfaces combined graph data from characters, places, and session notes directly in the Streamlit UI. |
+| v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management, and knowledge graph extraction. |
+
+
+## v1.0.0 - Knowledge Graph Tab
+
+This release adds a dedicated Knowledge Graph tab (v1.0.0) that surfaces combined graph data from characters, places, and session notes directly in the Streamlit UI.
+
+### Highlights
+
+- Added Knowledge Graph tab `v1.0.0` with an interactive graph view and node/edge detail panels.
+- Combined character/place/session knowledge graph aggregation and normalization.
+- Export graph as JSON and Graphviz-compatible formats for downstream tooling.
+- Evidence links in node/edge panels point back to source markdown files.
+- Stable UI selectors added to support Playwright end-to-end tests.
+
+### Notes
+
+- Design docs: see [docs/specs](docs/specs) for graph and UI specifications.
+- Backwards-compatible: generated graph JSON continues to be stored under `world_building/meta_data`.
+
 ## v0.1.0 - First Local Release
 
 This first release packages the local roleplaying character creator as a Streamlit app for managing private campaign lore on disk. The app treats markdown files in `world_building/lore` as the source of truth, stages raw imports under `world_building/import`, keeps runtime metadata under `world_building/meta_data`, and provides UI workflows for characters, places, session notes, and derived knowledge graphs.

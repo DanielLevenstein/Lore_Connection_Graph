@@ -28,6 +28,14 @@ A manual backup button has been added in the `Lore Import` Section for your conv
 - Graph-backed rewrite helpers never overwrite human edits to your character files.
 - Character creator does not enforce a specific character schema or stats system.
 
+## Release Notes
+
+| Version | Summary |
+| --- | --- |
+| v1.0.0 | This release adds a dedicated Knowledge Graph tab that surfaces combined graph data from characters, places, and session notes directly in the Streamlit UI. |
+| v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management, and knowledge graph extraction. |
+
+
 ## Setup
 
 The easiest way to run the app is:
@@ -82,6 +90,5 @@ Everything under `world_building/` is local campaign material, runtime data, or 
 ## Specs
 
 - [Character Parsing Rules](docs/specs/CHARACTER_PARSING_RULES.md)
-- [Place Parsing Rules](docs/specs/PLACE_PARSING_RULES.md)
 - [Knowledge Graph Design](docs/specs/KNOWLEDGE_GRAPH_DESIGN.md)
 - [Combined Knowledge Graph](docs/specs/KNOWLEDGE_GRAPH_DESIGN2.md)
