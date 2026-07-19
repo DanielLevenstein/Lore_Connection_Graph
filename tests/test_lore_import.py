@@ -75,6 +75,25 @@ def test_import_lore_directory_copies_fixture_subdirectories(tmp_path, monkeypat
     assert (session_notes_dir / "Family_Tree.md").exists()
 
 
+def test_import_lore_directory_converts_old_txt_session_notes_to_markdown(tmp_path, monkeypatch):
+    source_dir = tmp_path / "import"
+    source_notes_dir = source_dir / "session_notes"
+    source_notes_dir.mkdir(parents=True)
+    (source_notes_dir / "Session_Notes.txt").write_text("Vivit met Jory near Atlantia.\n", encoding="utf-8")
+    session_notes_dir = tmp_path / "world_building" / "lore" / "session_notes"
+    monkeypatch.setattr(lore_import, "CHARACTERS_DIR", tmp_path / "world_building" / "lore" / "character_sheets")
+    monkeypatch.setattr(lore_import, "PLACES_DIR", tmp_path / "world_building" / "lore" / "places")
+    monkeypatch.setattr(lore_import, "SESSION_NOTES_DIR", session_notes_dir)
+    monkeypatch.setattr(lore_import, "META_DATA_DIR", tmp_path / "world_building" / "meta_data")
+    monkeypatch.setattr(lore_import, "ensure_base_dirs", lambda: None)
+
+    summary = import_lore_directory(source_dir)
+
+    assert summary.session_notes == 1
+    assert not (session_notes_dir / "Session_Notes.txt").exists()
+    assert (session_notes_dir / "Session_Notes.md").read_text(encoding="utf-8") == "Vivit met Jory near Atlantia.\n"
+
+
 def test_import_lore_directory_can_skip_existing_files(tmp_path, monkeypatch):
     places_dir = tmp_path / "docs" / "lore" / "places"
     places_dir.mkdir(parents=True)

@@ -163,7 +163,7 @@ def test_place_markdown_save_round_trips_freeform_headings(tmp_path, monkeypatch
 
 Date and Time values in the days of yore are a fuzzy concept.
 
-## The Nighbloom Family
+## The Nightbloom Family
 
 Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College.
 """,

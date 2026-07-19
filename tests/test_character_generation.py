@@ -583,7 +583,7 @@ Manual summary text.
 | ----- |------------------------------------------|
 | Drive | Entertaining sailors on shore leave.     |
 |Allies | Jory Ravenmark is their favorite client. |
-| Enemies | Mrs Nighbloom wasn't happy when she learned what her husband was doing on her days off.  |
+| Enemies | Mrs Nightbloom wasn't happy when she learned what her husband was doing on her days off.  |
 """,
         encoding="utf-8",
     )
@@ -593,7 +593,7 @@ Manual summary text.
     assert profile.drives == ["Entertaining sailors on shore leave."]
     assert profile.alliances == ["Jory Ravenmark is their favorite client."]
     assert profile.enemies == [
-        "Mrs Nighbloom wasn't happy when she learned what her husband was doing on her days off."
+        "Mrs Nightbloom wasn't happy when she learned what her husband was doing on her days off."
     ]
 
 

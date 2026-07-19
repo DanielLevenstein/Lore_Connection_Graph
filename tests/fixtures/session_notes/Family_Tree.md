@@ -2,7 +2,7 @@
 
 These notes collect family history, inheritance, and local memory for the families connected to Atlantia. They are not a gazetteer of the town itself; they track the people whose choices shaped the stories around it.
 
-## The Nighbloom Family
+## The Nightbloom Family
 
 Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College. She is an elvish mage and her given name is Judeth Ravenmark. This school sits along a rocky outcrop along the eastern coast of Atlantia.
 

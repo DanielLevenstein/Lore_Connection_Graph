@@ -63,7 +63,32 @@ Status: fixed and covered by `tests/e2e/test_character_sheet_roundtrip_ui.py::te
 - Restoring a previous version of lore should delete current lore files not present in back-up. 
 - The Combined Knowledge Graph no longer renders a duplicate top-level heading above its expander.
 - The Combined Knowledge Graph now includes a graph-node detail table below the chart, populated by the selected visible node and its incoming/outgoing evidence-backed edges.
-- Session-note imports no longer project every extracted prose relationship into the visible combined graph. The visible graph now keeps the session-note source and extracted places only, reducing `Session_Notes.txt` from an estimated 24 visible nodes and 30 edges to 4 visible nodes and 3 edges.
+- Session-note imports no longer project the session-note source into the graph view. Session notes are internal evidence sources only.
+- The session-note graph projection was expanded from one-screen pruning to a 2-3 screen target for longer campaigns. The current direct graph trace keeps 28 internal nodes and 28 internal edges for evidence, while the graph view exposes only authored main characters and authored main places as roots.
+- Combined Knowledge Graph tabs and graph root selectors now represent only authored main characters and authored main places. Selecting a root now highlights that node while the graph keeps all main characters together in one vertical party column.
+- The graph DOT now uses stable layout groups: Family Names, Party/Main Characters, Secondary Characters, and Places.
+- Connections outside the party are placed in the Secondary Characters and Places columns and ordered by evidence mention count.
+- In column layout mode, visible relationship edges are non-constraining so they do not pull nodes out of the requested columns.
+- A `Show Full Character Connection Graph` button restores the full non-session character connection graph view; the paired button returns to the party-centered graph.
+- Old `.txt` session-note files imported through bulk lore import are converted to `.md`, so the Session Notes UI and Combined Knowledge Graph pick them up.
+- UI lore file changes now mark the combined graph dirty after creates, edits, imports, restores, deletes, undo actions, and graph regenerations.
+- The `Other Connections` table now shows each evidence item for a repeated connection as its own row.
+- The Family Names column naturally renders empty when no family nodes exist, so no extra visibility checkbox is needed.
+- Source files are no longer shown in the graph itself; source labels remain available in the lower `Extended Notes` detail/list section.
+- Focused graph tracing now recognizes canonical session-note typo variants such as `Dizelvad`, `Typhin`, and `Typhen`, so Dizlevad no longer collapses to a single visible connection.
+- Graph clarity metrics are recorded in markdown reports and tests only; the Combined Knowledge Graph UI does not display graph grades.
+- Combined Knowledge Graph node detail evidence no longer exposes raw filesystem paths; node rows now show compact source labels such as `Source: Dizlevad.md`.
+
+# Fixed on 2026-07-19
+
+- The Combined Knowledge Graph now uses explicit `Single Character` and `Whole Graph` modes instead of a party/full toggle.
+- The single-character graph shows only the connections associated with the selected graph node.
+- Graph nodes are ordered by mention/evidence count within Family Names, Main Characters, Secondary Characters, and Places columns.
+- Duplicate graph edges between the same two nodes are collapsed to the most prominent relationship label.
+- Relationship/evidence tables now keep repeated evidence as separate rows instead of joining evidence into one cell.
+- Evidence columns now strip Markdown bullet/list markers before display.
+- Named session-note source nodes such as `Family Tree` are typed as `source_document` and appear in the Family Names column with a distinct graph shape instead of being promoted as secondary characters.
+- Family-name nodes are labeled as `{Name} Family`, and extracted group names such as `Ignis Cult` appear in the Family Names column with a distinct group shape.
 
 ## Improvements made
 
@@ -74,6 +99,12 @@ Status: fixed and covered by `tests/e2e/test_character_sheet_roundtrip_ui.py::te
 - Combined `docs/specs/KNOWLEDGE_GRAPH_DESIGN2.md` into `docs/specs/KNOWLEDGE_GRAPH_DESIGN.md` so the graph redesign guidance has a single source.
 - Added `docs/specs/KNOWLEDGE_GRAPH_DESIGN3.md` to describe the longer-term session-note extraction strategy.
 - Added a focused graph regression test that keeps false session-note character candidates out of the visible combined graph.
+- Added direct graph tracing coverage for session-note entity extraction, authored-character prioritization, and vertical layout behavior for broad session-note graphs.
+- Added committed-fixture graph layout coverage using the non-hidden Atlantia, Neal, Jory, and Orin fixtures.
+- Added one-paragraph authored main-character stubs for Vivit, Typhon, Dizlevad, Mog, and Flicker so the graph can prioritize the recurring party.
+- Added an opt-in Playwright screenshot capture path gated by `LOCAL_CHATBOT_E2E_LORE_FIXTURE_DIR` and `LOCAL_CHATBOT_E2E_KNOWLEDGE_GRAPH_SCREENSHOT`, so hidden/customer fixtures can be used without committing customer data.
+- Added direct graph coverage that generates and validates character graphs for every character sheet in the default fixtures, or every hidden/customer character sheet when `LOCAL_CHATBOT_CHARACTER_GRAPH_TEST_LORE_DIR` is set.
+- Added `docs/reports/knowledge_graph_fixed_issues_report.md` summarizing the graph issues fixed in this pass.
 
 ### Backup Improvements
 

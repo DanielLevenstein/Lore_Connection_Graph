@@ -10,7 +10,11 @@ from character_graph.combined_graph import (
     combined_attribute_rows,
     combined_node_detail_rows,
     combined_relationship_dot,
-    combined_relationship_rows,
+    clean_evidence_text,
+    full_character_connection_graph,
+    graph_view_root_nodes,
+    other_connection_rows,
+    other_connections_graph,
     compact,
 )
 from character_graph.extraction import extract_character_graph
@@ -18,6 +22,7 @@ from character_graph.graph_view import (
     evidence_rows,
 )
 from character_graph.ingest import load_backstory
+from character_graph.session_entities import derived_lore_entity_relationships
 from character_graph.storage import load_graph
 
 
@@ -83,14 +88,29 @@ from local_chatbot.lore_import import (
     read_lore_backup_date,
     restore_lore_backup,
 )
-from local_chatbot.paths import LORE_DIR, WORLD_BUILDING_BACKUP_DIR, TEST_FIXTURES_DIRECTORY
+from local_chatbot.paths import (
+    CHARACTERS_DIR,
+    LORE_DIR,
+    PLACES_DIR,
+    SESSION_NOTES_DIR,
+    TEST_FIXTURES_DIRECTORY,
+    WORLD_BUILDING_BACKUP_DIR,
+)
 
 ENABLE_CHARACTER_REWRITE = "LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
+DISABLE_LORE_BACKUPS = "LOCAL_CHATBOT_DISABLE_LORE_BACKUPS"
 MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
 LORE_BACKUP_IMPORT_SOURCE_KEY = "lore_backup_import_source"
+
+
+def lore_backups_disabled() -> bool:
+    return os.environ.get(DISABLE_LORE_BACKUPS, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
-backup_lore_files()
+if not lore_backups_disabled():
+    backup_lore_files()
 
 st.markdown(
     """
@@ -262,6 +282,10 @@ def normalized_story_text(value: str) -> str:
     return " ".join(value.split())
 
 
+def mark_combined_graph_dirty() -> None:
+    st.session_state["combined_graph_revision"] = st.session_state.get("combined_graph_revision", 0) + 1
+
+
 def has_distinct_original(current: str, original: str) -> bool:
     return bool(original.strip()) and normalized_story_text(current) != normalized_story_text(original)
 
@@ -360,6 +384,7 @@ def undo_character_changes(character: Character) -> None:
         character.backstory_path.write_text(str(previous).rstrip() + "\n", encoding="utf-8")
     st.session_state[key] = snapshots
     regenerate_character_graph(character)
+    mark_combined_graph_dirty()
     st.session_state[f"character_status_{character.name}"] = "Character Changes Undone."
     st.rerun()
 
@@ -367,6 +392,7 @@ def undo_character_changes(character: Character) -> None:
 def save_character_update(character: Character, updated: CharacterProfile) -> None:
     push_character_undo(character)
     write_character_profile(character, updated)
+    mark_combined_graph_dirty()
     st.session_state[f"character_status_{character.name}"] = "Character Saved."
     st.session_state.pop(f"pending_character_save_{character.name}", None)
     st.rerun()
@@ -415,6 +441,7 @@ def undo_place_changes(place: Place) -> None:
     st.session_state[key] = snapshots
     sync_place_editor_values(place, previous.rstrip())
     bump_place_editor_revision(place)
+    mark_combined_graph_dirty()
     st.session_state[f"place_status_{place.name}"] = "Place Changes Undone."
     st.rerun()
 
@@ -451,6 +478,7 @@ def undo_session_notes_changes() -> None:
             f"session_note_editor_revision_{name}",
             0,
         ) + 1
+    mark_combined_graph_dirty()
     st.session_state["session_notes_status"] = "Session Note Changes Undone."
     st.rerun()
 
@@ -470,6 +498,7 @@ def render_relationship_graph(character: Character) -> None:
             except (OSError, ValueError) as exc:
                 st.error(f"Could Not Regenerate Graph: {exc}")
             else:
+                mark_combined_graph_dirty()
                 st.success("Relationship Graph Regenerated.")
                 st.rerun()
 
@@ -514,10 +543,12 @@ def render_attribute_graph_override_editor(character: Character, evidence: list[
             )
         if save_override:
             write_character_connections(character, edited_rows, manual_override=True)
+            mark_combined_graph_dirty()
             st.success("Attribute Graph Override Saved.")
             st.rerun()
         if clear_override:
             remove_character_connections(character)
+            mark_combined_graph_dirty()
             st.success("Attribute Graph Override Cleared.")
             st.rerun()
 
@@ -550,7 +581,7 @@ def render_combined_character_graph() -> None:
     graphs = load_lore_graphs()
 
     place_sources = [(compact(place.name), place.name, str(place.path)) for place in places]
-    with st.expander("Combined Knowledge Graph", expanded=False):
+    with (st.expander("Combined Knowledge Graph", expanded=False)):
         render_pending_lore_drafts()
         if st.button("Regenerate All Lore Graphs", icon=":material/sync:", key="regen_all_lore_graphs"):
             failures = []
@@ -562,35 +593,42 @@ def render_combined_character_graph() -> None:
             if failures:
                 st.error("Could Not Regenerate Every Lore Graph. " + " ".join(failures))
             else:
+                mark_combined_graph_dirty()
                 st.success("All Lore Graphs Regenerated.")
                 st.rerun()
 
         if not graphs and not place_sources:
             st.info("Add Character Or Place Lore To See The Combined Graph.")
             return
-        combined = build_combined_character_graph(graphs, place_sources, place_lore_relationships(places))
-        rows = combined_relationship_rows(combined)
+        combined = build_combined_character_graph(
+            graphs,
+            place_sources,
+            place_lore_relationships(places) + derived_lore_relationships(characters, places, graphs),
+        )
         detail_rows = combined_attribute_rows(graphs)
-        character_nodes = [node for node in combined.characters.values() if node.node_type == "character"]
-        character_tabs = st.tabs([node.name for node in character_nodes] or ["Lore"])
+        character_nodes = combined_main_tab_nodes(combined, characters, places)
+        if not character_nodes:
+            st.info("Add Main Character Or Place Lore To See Graph Roots.")
+            return
+        graph_revision = st.session_state.get("combined_graph_revision", 0)
+        graph_mode = "Single Character"
+        # st.segmented_control(
+        #     "Graph View",
+        #     ["Single Character", "Whole Graph"],
+        #     default=st.session_state.get("combined_graph_view_mode", "Single Character"),
+        #     key=f"combined_graph_view_mode_{graph_revision}",
+        #     width="content",
+        # )
+        st.session_state["combined_graph_view_mode"] = graph_mode or "Single Character"
+        character_tabs = st.tabs([node.name for node in character_nodes])
         primary_ids = {compact(character.name) for character in characters}
         characters_by_id = {compact(character.name): character for character in characters}
+        main_character_ids = {node.id for node in character_nodes if node.node_type == "character"}
+        main_place_ids = {node.id for node in character_nodes if node.node_type == "place"}
         for tab, node in zip(character_tabs, character_nodes):
             with tab:
                 character_id = node.id
-                scoped_rows = [
-                    row
-                    for row in rows
-                    if compact(row["Character"]) == character_id or compact(row["Connection"]) == character_id
-                ]
-                st.graphviz_chart(combined_relationship_dot(combined), width="stretch")
-                node_options = {
-                    combined_node.name: combined_node_id
-                    for combined_node_id, combined_node in sorted(
-                        combined.characters.items(),
-                        key=lambda item: (item[1].node_type, item[1].name.lower()),
-                    )
-                }
+                node_options = combined_graph_root_node_options(character_nodes)
                 node_labels = list(node_options)
                 default_node_index = (
                     node_labels.index(node.name)
@@ -601,26 +639,52 @@ def render_combined_character_graph() -> None:
                     f"Graph Node For {node.name}",
                     node_labels,
                     index=default_node_index,
-                    key=f"combined_graph_node_{character_id}",
+                    key=f"combined_graph_node_{character_id}_{graph_revision}",
                 )
                 selected_node_id = node_options[selected_node_label]
-                st.table(
-                    combined_node_detail_rows(combined, selected_node_id),
-                    hide_index=True,
+                focused_graph = (
+                    full_character_connection_graph(combined)
+                    if graph_mode == "Whole Graph"
+                    else other_connections_graph(combined, selected_node_id)
+                )
+                associated_rows = other_connection_rows(combined, selected_node_id)
+                node_detail_rows = combined_node_detail_rows(combined, selected_node_id)[:1]
+                st.graphviz_chart(
+                    combined_relationship_dot(
+                        focused_graph,
+                        selected_node_id,
+                        main_character_ids=main_character_ids,
+                        main_place_ids=main_place_ids,
+                        label_font_color=graph_edge_label_font_color(),
+                    ),
                     width="stretch",
                 )
+                if associated_rows:
+                    st.subheader("Other Connections")
+                    st.table(associated_rows, hide_index=True, width="stretch")
+                else:
+                    st.info("No Other Connections Were Found For This Node Yet.")
                 scoped_detail_rows = [
                     row
                     for row in detail_rows
                     if compact(row["Character"]) == character_id
                 ]
-                if scoped_rows:
-                    st.table(scoped_rows, hide_index=True, width="stretch")
-                else:
-                    st.info("No Combined Connections Were Found For This Character Yet.")
                 if scoped_detail_rows:
-                    st.subheader("Character Graph Details")
-                    st.table(scoped_detail_rows, hide_index=True, width="stretch")
+                    with st.expander("Extended Notes"):
+                        st.table(
+                            node_detail_rows,
+                            hide_index=True,
+                            width="stretch",
+                        )
+                        st.subheader("Character Graph Details")
+                        st.table(scoped_detail_rows, hide_index=True, width="stretch")
+                else:
+                    with st.expander("Extended Notes"):
+                        st.table(
+                            node_detail_rows,
+                            hide_index=True,
+                            width="stretch",
+                        )
                 if st.button(
                     "Add Character Connections",
                     icon=":material/account_tree:",
@@ -628,13 +692,16 @@ def render_combined_character_graph() -> None:
                     disabled=character_id not in characters_by_id,
                 ):
                     append_character_connections(characters_by_id[character_id], connection_rows_for_character(combined, character_id))
+                    mark_combined_graph_dirty()
                     st.success("Character Connections Added.")
                     st.rerun()
 
         secondary_characters = [
             node
             for node_id, node in combined.characters.items()
-            if node.node_type == "character" and node_id not in primary_ids
+            if node.node_type == "character"
+            and node_id not in primary_ids
+            and compact(node.name) not in {"sessionnotes", "sessionnote"}
         ]
         secondary_places = [
             node
@@ -663,20 +730,115 @@ def load_lore_graphs():
     for path in lore_markdown_files():
         try:
             document = load_backstory(path, character_id=compact(path.stem))
-            graphs.append(extract_character_graph(document))
+            primary_name = session_note_source_name(path) if path_is_session_note(path) else None
+            graphs.append(extract_character_graph(document, primary_name=primary_name))
         except (OSError, ValueError):
             continue
     return graphs
 
 
+def combined_main_tab_nodes(combined, characters, places):
+    return graph_view_root_nodes(
+        combined,
+        [display_character_name(character) for character in characters],
+        [place.name for place in places],
+    )
+
+
+def combined_graph_root_node_options(nodes):
+    return {node.name: node.id for node in nodes}
+
+
+def derived_lore_relationships(characters, places, graphs) -> list[dict[str, str]]:
+    graph_sources = {
+        Path(graph.primary_character.source_file).resolve(): graph
+        for graph in graphs
+    }
+    known_character_names = [display_character_name(character) for character in characters]
+    known_place_names = [place.name for place in places]
+    relationships: list[dict[str, str]] = []
+    for path in lore_markdown_files():
+        if is_character_lore_path(path):
+            continue
+        graph = graph_sources.get(path.resolve())
+        source_id = graph.primary_character.id if graph else compact(path.stem)
+        source_name = combined_lore_source_name(path, graph)
+        source_type = "place" if is_place_lore_path(path) else "character"
+        try:
+            text = read_text(path)
+        except OSError:
+            continue
+        relationships.extend(
+            derived_lore_entity_relationships(
+                source_id=source_id,
+                source_name=source_name,
+                source_type=source_type,
+                source_file=str(path),
+                text=text,
+                known_character_names=known_character_names,
+                known_place_names=known_place_names,
+            )
+        )
+    return relationships
+
+
+def combined_lore_source_name(path: Path, graph) -> str:
+    if graph is not None and path_is_session_note(path):
+        return session_note_source_name(path)
+    if graph is not None:
+        return graph.primary_character.name
+    return path.stem.replace("_", " ")
+
+
+def is_character_lore_path(path: Path) -> bool:
+    return "character_sheets" in path.parts
+
+
+def is_place_lore_path(path: Path) -> bool:
+    return "places" in path.parts
+
+
+def path_is_session_note(path: Path) -> bool:
+    normalized = str(path).replace("\\", "/").lower()
+    try:
+        path.resolve().relative_to(SESSION_NOTES_DIR.resolve())
+        return True
+    except ValueError:
+        return "/session_notes/" in normalized or compact(path.stem) in {"sessionnote", "sessionnotes"}
+
+
+def session_note_source_name(path: Path) -> str:
+    name = path.stem.replace("_", " ")
+    return name if name else "Session Notes"
+
+
 def lore_markdown_files():
-    if not LORE_DIR.exists():
-        return []
-    return [
-        path
-        for path in sorted(LORE_DIR.rglob("*.md"))
-        if "TEMPLATE" not in path.name.upper() and not path.name.startswith(".")
-    ]
+    paths: dict[Path, Path] = {}
+    for directory in unique_lore_scan_dirs():
+        if not directory.exists():
+            continue
+        for path in sorted(directory.rglob("*.md")):
+            if (
+                "TEMPLATE" not in path.name.upper()
+                and not path.name.startswith(".")
+                and not should_skip_lore_scan_path(path)
+            ):
+                paths[path.resolve()] = path
+    return [paths[key] for key in sorted(paths, key=lambda item: str(item))]
+
+
+def unique_lore_scan_dirs() -> list[Path]:
+    directories: list[Path] = []
+    for directory in [LORE_DIR, CHARACTERS_DIR, PLACES_DIR, SESSION_NOTES_DIR]:
+        if directory not in directories:
+            directories.append(directory)
+    return directories
+
+
+def should_skip_lore_scan_path(path: Path) -> bool:
+    if not lore_backups_disabled():
+        return False
+    return any(part.lower() == "backup" for part in path.parts)
 
 
 def place_lore_relationships(places) -> list[dict[str, str]]:
@@ -761,23 +923,25 @@ def connection_rows_for_character(combined, character_id: str) -> list[dict[str,
         if not source or not target:
             continue
         if compact(source.name) == character_id:
-            rows.append(
-                {
-                    "Source": "Character Sheet",
-                    "Relationship": edge.relationship_label,
-                    "Name": target.name,
-                    "Evidence": " ".join(edge.evidence),
-                }
-            )
+            for evidence in edge.evidence or [""]:
+                rows.append(
+                    {
+                        "Source": "Character Sheet",
+                        "Relationship": edge.relationship_label,
+                        "Name": target.name,
+                        "Evidence": clean_evidence_text(evidence),
+                    }
+                )
         elif compact(target.name) == character_id:
-            rows.append(
-                {
-                    "Source": "Place" if source.node_type == "place" else "Character Sheet",
-                    "Relationship": edge.relationship_label,
-                    "Name": source.name,
-                    "Evidence": " ".join(edge.evidence),
-                }
-            )
+            for evidence in edge.evidence or [""]:
+                rows.append(
+                    {
+                        "Source": "Place" if source.node_type == "place" else "Character Sheet",
+                        "Relationship": edge.relationship_label,
+                        "Name": source.name,
+                        "Evidence": clean_evidence_text(evidence),
+                    }
+                )
     return rows
 
 
@@ -898,8 +1062,13 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
                     st.session_state.pop("pending_character_profile", None)
                 clear_character_creator_state(key_prefix)
                 set_active_character(character)
+                mark_combined_graph_dirty()
                 st.success(f"Created {character.name}.")
                 st.rerun()
+
+
+def graph_edge_label_font_color() -> str:
+    return "#cbd5e1"
 
 
 def clear_character_creator_state(key_prefix: str) -> None:
@@ -959,6 +1128,7 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
                 clear_place_creator_state(key_prefix)
                 set_active_place(place)
                 request_main_navigation_tab("Places")
+                mark_combined_graph_dirty()
                 st.session_state[f"place_status_{place.name}"] = "Place Saved."
                 st.rerun()
 
@@ -1059,6 +1229,7 @@ def render_place_info(place: Place) -> None:
                 st.session_state.pop(f"place_editor_revision_{place.name}", None)
                 st.session_state.pop(f"place_status_{place.name}", None)
                 st.session_state.pop("active_place", None)
+                mark_combined_graph_dirty()
                 st.session_state["place_panel_status"] = "Place Deleted."
                 st.rerun()
             if save_requested:
@@ -1071,6 +1242,7 @@ def render_place_info(place: Place) -> None:
                 write_place_markdown(place, apply_place_title_update(markdown, body, title))
                 sync_place_editor_values(place, read_place_markdown(place).strip())
                 bump_place_editor_revision(place)
+                mark_combined_graph_dirty()
                 st.session_state[f"place_status_{place.name}"] = "Place Saved."
                 st.rerun()
 
@@ -1140,6 +1312,7 @@ def render_lore_import_tools() -> None:
                 f"Imported {summary.total} Lore File{'s' if summary.total != 1 else ''} "
                 f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
             )
+            mark_combined_graph_dirty()
             st.rerun()
         if action_cols[1].button("Create Lore Backup", icon=":material/backup:", key="create_lore_backup"):
             summary = backup_lore_files(snapshot=True, backup_kind=BACKUP_KIND_SNAPSHOT)
@@ -1184,6 +1357,7 @@ def render_lore_backup_restore_dialog(overwrite_existing: bool) -> None:
             f"({summary.characters} Characters, {summary.places} Places, "
             f"{summary.session_notes} Session Notes, {summary.metadata} Metadata Files)."
         )
+        mark_combined_graph_dirty()
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
         st.rerun()
@@ -1203,6 +1377,7 @@ def render_bulk_lore_removal_warning() -> None:
             f"Deleted {summary.total} Local Lore File{'s' if summary.total != 1 else ''} "
             f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
         )
+        mark_combined_graph_dirty()
         for key in ("active_character", "active_place", "active_session_note"):
             st.session_state.pop(key, None)
         st.rerun()
@@ -1220,9 +1395,10 @@ def render_delete_session_note_file_warning(path: Path, section_key: str) -> Non
         icon=":material/delete_forever:",
         key=f"confirm_delete_last_section_file_{path.name}_{section_key}",
         width="stretch",
-    ):
+        ):
         push_session_notes_undo()
         delete_session_note(path)
+        mark_combined_graph_dirty()
         st.session_state.pop(f"session_note_editor_revision_{path.name}", None)
         for key in (
             "active_session_note",
@@ -1277,6 +1453,7 @@ def render_session_import_heading_dialog(
         if saved:
             set_active_session_note(saved[0].path)
             set_active_session_note_section()
+        mark_combined_graph_dirty()
         st.session_state["clear_session_notes_draft"] = True
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
@@ -1462,6 +1639,7 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
                 set_active_session_note_section()
                 st.session_state.pop("active_session_note_editor", None)
                 st.session_state.pop("pending_hide_session_heading", None)
+                mark_combined_graph_dirty()
                 st.session_state["session_notes_status"] = "Heading Hidden."
                 st.rerun()
             if confirm_cols[1].button(
@@ -1492,6 +1670,7 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
             set_active_session_note(path)
             set_active_session_note_section(new_section_key)
             st.session_state["active_session_note_editor"] = f"{path.name}:{new_section_key or 'full'}"
+            mark_combined_graph_dirty()
             st.session_state["session_notes_status"] = "Next Section Added."
             st.rerun()
         if selected_section.level != 1 and bottom_action_cols[2].button(
@@ -1529,6 +1708,7 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
                 set_active_session_note_section()
                 st.session_state.pop("active_session_note_editor", None)
                 st.session_state.pop("pending_delete_session_section", None)
+                mark_combined_graph_dirty()
                 st.session_state["session_notes_status"] = "Section Removed."
                 st.rerun()
             if confirm_cols[1].button(
@@ -1585,12 +1765,14 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
                         remove_markdown_section(path, section_key)
                         set_active_session_note(path)
                         set_active_session_note_section()
+                        mark_combined_graph_dirty()
                         st.session_state["session_notes_status"] = "Section Removed."
                 else:
                     push_session_notes_undo()
                     delete_session_note(path)
                     st.session_state.pop(f"session_note_editor_revision_{path.name}", None)
                     st.session_state.pop("active_session_note", None)
+                    mark_combined_graph_dirty()
                     st.session_state["session_notes_status"] = "Session Note Deleted."
                 st.rerun()
             if save_requested:
@@ -1611,6 +1793,7 @@ def render_session_note_editor(path, show_dates: bool = False, section_key: str 
                 else:
                     write_lore_document(path, body)
                     st.session_state["session_notes_status"] = "Session Note Saved."
+                mark_combined_graph_dirty()
                 st.session_state[f"session_note_editor_revision_{path.name}"] = editor_revision + 1
                 st.session_state.pop("active_session_note_editor", None)
                 st.rerun()
@@ -1684,6 +1867,7 @@ def render_external_character_sheet_import() -> None:
                 st.error(str(exc))
                 return
             request_main_navigation_tab("Characters")
+            mark_combined_graph_dirty()
             st.session_state["character_panel_status"] = f"Imported External Character Sheet: {imported.path.name}."
             st.rerun()
 
@@ -1806,6 +1990,7 @@ def render_character_editor(character: Character) -> None:
                 delete_character_profile(character)
                 st.session_state.pop(f"character_undo_{character.name}", None)
                 st.session_state.pop("active_character", None)
+                mark_combined_graph_dirty()
                 st.session_state["character_panel_status"] = "Character Deleted."
                 st.rerun()
             if save_requested or populate_summary or repopulate_summary or rewrite_backstory:

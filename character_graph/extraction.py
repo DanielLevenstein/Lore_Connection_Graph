@@ -88,6 +88,7 @@ PLACE_SUFFIXES = {
     "University",
     "Village",
 }
+GENERIC_PLACE_NAMES = {suffix.lower() for suffix in PLACE_SUFFIXES}
 MOTIVATION_PATTERNS = [
     re.compile(r"\b(?:wants|seeks|hopes|needs|tries|trying|adventures)\s+to\s+([^.!?;]+)", re.IGNORECASE),
     re.compile(r"\b(?:goal|motivation)\s+(?:is|was)\s+to\s+([^.!?;]+)", re.IGNORECASE),
@@ -748,6 +749,8 @@ def is_probable_place(value: str) -> bool:
     if not is_probable_name(value):
         return False
     lowered = value.lower()
+    if lowered in GENERIC_PLACE_NAMES:
+        return False
     if any(lowered.endswith(suffix.lower()) for suffix in PLACE_SUFFIXES):
         return True
     return bool(re.search(r"\b(?:academy|college|coast|halls?|sea|shores?|tower|village)\b", lowered))

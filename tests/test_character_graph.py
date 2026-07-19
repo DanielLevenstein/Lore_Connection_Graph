@@ -1,4 +1,6 @@
 import json
+import os
+from pathlib import Path
 
 from character_graph.extraction import extract_character_graph
 from character_graph.graph_view import attribute_rows, evidence_rows, place_rows, relationship_dot, relationship_rows
@@ -6,6 +8,10 @@ from character_graph.ingest import load_backstory
 from character_graph.schema import CharacterGraph, CharacterNode, PrimaryCharacterRef, RelationshipEdge
 from character_graph.storage import load_graph, save_graph
 from character_graph.validation import validate_graph
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+CHARACTER_GRAPH_LORE_FIXTURE_ENV = "LOCAL_CHATBOT_CHARACTER_GRAPH_TEST_LORE_DIR"
 
 
 BACKSTORY = """# Arlen Voss
@@ -186,7 +192,7 @@ Neal is a bard with complicated regulars.
 | ----- | ----------- |
 | Drive | Entertaining sailors on shore leave. |
 | Alliances | Jory Ravenmark is their favorite client. |
-| Enemies | Mrs Nighbloom was not happy. |
+| Enemies | Mrs Nightbloom was not happy. |
 """,
         encoding="utf-8",
     )
@@ -201,7 +207,7 @@ Neal is a bard with complicated regulars.
         for edge in graph.relationships
     )
     assert any(
-        edge.relationship_type == "enemy" and graph.characters[edge.target].name == "Mrs Nighbloom"
+        edge.relationship_type == "enemy" and graph.characters[edge.target].name == "Mrs Nightbloom"
         for edge in graph.relationships
     )
 
@@ -230,7 +236,7 @@ Neal is a bard.
 | Field | Description |
 | ----- | ----------- |
 | Alliances | Jory Ravenmark is their favorite client after the harbor incident. |
-| Enemies | Mrs. Nighbloom was not happy about the missing ledger. |
+| Enemies | Mrs. Nightbloom was not happy about the missing ledger. |
 """,
         encoding="utf-8",
     )
@@ -239,9 +245,9 @@ Neal is a bard.
     names = {character.name for character in graph.characters.values()}
 
     assert "Jory Ravenmark" in names
-    assert "Mrs Nighbloom" in names
+    assert "Mrs Nightbloom" in names
     assert "Jory Ravenmark is their favorite client after the harbor incident." not in names
-    assert "Mrs Nighbloom was not happy about the missing ledger." not in names
+    assert "Mrs Nightbloom was not happy about the missing ledger." not in names
 
 
 def test_extract_character_graph_deduplicates_repeated_character_mentions(tmp_path):
@@ -619,6 +625,14 @@ def test_graph_view_helpers_format_relationships_and_dot(tmp_path):
     source = tmp_path / "arlen.md"
     source.write_text(BACKSTORY, encoding="utf-8")
     graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
+    character_relationship = next(
+        relationship
+        for relationship in graph.relationships
+        if relationship.target in graph.characters
+        and relationship.target not in graph.places
+        and relationship.target != graph.primary_character.id
+    )
+    character_relationship.evidence = ["- Bullet evidence should render without a list marker."]
 
     relationships = relationship_rows(graph)
     attributes = attribute_rows(graph)
@@ -631,6 +645,7 @@ def test_graph_view_helpers_format_relationships_and_dot(tmp_path):
     assert any(row["Value"] == "Elf" and row["Attribute"] == "Race" for row in attributes)
     assert any(row["Value"] == "Silver Court" and row["Attribute"] == "Place" for row in places)
     assert any(row["Table"] == "Relationships" and row["Item"] == "Rival" for row in evidence)
+    assert any(row["Evidence"] == "Bullet evidence should render without a list marker." for row in evidence)
     assert any(row["Table"] == "Attributes" and row["Item"] == "Race" for row in evidence)
     assert any(row["Table"] == "Places" and row["Value"] == "Silver Court" for row in evidence)
     assert not any(row["Item"] == "Pronouns" for row in evidence)
@@ -732,4 +747,42 @@ He carries the weight of the Sunstone mage college, a living monument to the pai
     assert not any(
         row["Table"] == "Relationships" and row["Item"] == "Family" and "Sunstone" in row["Value"]
         for row in evidence
+    )
+
+
+def test_generates_valid_character_graphs_for_all_character_sheets():
+    failures = []
+    character_paths = character_graph_test_character_sheets()
+
+    assert character_paths, "Expected at least one character sheet for graph generation coverage."
+
+    for character_path in character_paths:
+        try:
+            graph = extract_character_graph(load_backstory(character_path, character_id=character_path.stem))
+            validation_errors = validate_graph(graph)
+        except Exception as exc:
+            failures.append(f"{character_path}: {exc}")
+            continue
+        if validation_errors:
+            failures.append(f"{character_path}: {'; '.join(validation_errors)}")
+
+    assert not failures, "\n".join(failures)
+
+
+def character_graph_test_character_sheets() -> list[Path]:
+    fixture_root = os.environ.get(CHARACTER_GRAPH_LORE_FIXTURE_ENV)
+    if fixture_root:
+        source = Path(fixture_root).expanduser().resolve()
+        if (source / "lore" / "character_sheets").is_dir():
+            character_dir = source / "lore" / "character_sheets"
+        elif (source / "character_sheets").is_dir():
+            character_dir = source / "character_sheets"
+        else:
+            character_dir = source
+    else:
+        character_dir = ROOT_DIR / "tests" / "fixtures" / "character_sheets"
+    return sorted(
+        path
+        for path in character_dir.glob("*.md")
+        if "TEMPLATE" not in path.name.upper() and not path.name.startswith(".")
     )
