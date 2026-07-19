@@ -1,4 +1,4 @@
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
 import os
@@ -106,6 +106,26 @@ LORE_BACKUP_IMPORT_SOURCE_KEY = "lore_backup_import_source"
 
 def lore_backups_disabled() -> bool:
     return os.environ.get(DISABLE_LORE_BACKUPS, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+@dataclass(frozen=True)
+class KnowledgeGraphView:
+    key: str
+    label: str
+
+
+STRUCTURED_KNOWLEDGE_VIEW = KnowledgeGraphView(
+    key="structured",
+    label="Structured Knowledge View",
+)
+FULL_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
+    key="full_graph",
+    label="Full Knowledge Graph",
+)
+KNOWLEDGE_GRAPH_VIEWS = (
+    STRUCTURED_KNOWLEDGE_VIEW,
+    FULL_KNOWLEDGE_GRAPH_VIEW,
+)
 
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
@@ -611,118 +631,167 @@ def render_combined_character_graph() -> None:
             st.info("Add Main Character Or Place Lore To See Graph Roots.")
             return
         graph_revision = st.session_state.get("combined_graph_revision", 0)
-        graph_mode = "Single Character"
-        # st.segmented_control(
-        #     "Graph View",
-        #     ["Single Character", "Whole Graph"],
-        #     default=st.session_state.get("combined_graph_view_mode", "Single Character"),
-        #     key=f"combined_graph_view_mode_{graph_revision}",
-        #     width="content",
-        # )
-        st.session_state["combined_graph_view_mode"] = graph_mode or "Single Character"
-        character_tabs = st.tabs([node.name for node in character_nodes])
-        primary_ids = {compact(character.name) for character in characters}
-        characters_by_id = {compact(character.name): character for character in characters}
         main_character_ids = {node.id for node in character_nodes if node.node_type == "character"}
         main_place_ids = {node.id for node in character_nodes if node.node_type == "place"}
-        for tab, node in zip(character_tabs, character_nodes):
-            with tab:
-                character_id = node.id
-                node_options = combined_graph_root_node_options(character_nodes)
-                node_labels = list(node_options)
-                default_node_index = (
-                    node_labels.index(node.name)
-                    if node.name in node_options
-                    else 0
-                )
-                selected_node_label = st.selectbox(
-                    f"Graph Node For {node.name}",
-                    node_labels,
-                    index=default_node_index,
-                    key=f"combined_graph_node_{character_id}_{graph_revision}",
-                )
-                selected_node_id = node_options[selected_node_label]
-                focused_graph = (
-                    full_character_connection_graph(combined)
-                    if graph_mode == "Whole Graph"
-                    else other_connections_graph(combined, selected_node_id)
-                )
-                associated_rows = other_connection_rows(combined, selected_node_id)
-                node_detail_rows = combined_node_detail_rows(combined, selected_node_id)[:1]
-                st.graphviz_chart(
-                    combined_relationship_dot(
-                        focused_graph,
-                        selected_node_id,
-                        main_character_ids=main_character_ids,
-                        main_place_ids=main_place_ids,
-                        label_font_color=graph_edge_label_font_color(),
-                    ),
+        selected_view = selected_knowledge_graph_view(graph_revision)
+        if selected_view.key == FULL_KNOWLEDGE_GRAPH_VIEW.key:
+            render_full_knowledge_graph_view(
+                combined,
+                detail_rows,
+                main_character_ids,
+                main_place_ids,
+            )
+        else:
+            render_structured_knowledge_view(
+                combined,
+                detail_rows,
+                characters,
+                places,
+                character_nodes,
+                graph_revision,
+                main_character_ids,
+                main_place_ids,
+            )
+
+
+def selected_knowledge_graph_view(graph_revision: int) -> KnowledgeGraphView:
+    labels = [view.label for view in KNOWLEDGE_GRAPH_VIEWS]
+    selected_label = st.segmented_control(
+        "Knowledge View",
+        labels,
+        default=STRUCTURED_KNOWLEDGE_VIEW.label,
+        key=f"combined_knowledge_view_{graph_revision}",
+        width="content",
+    )
+    label_to_view = {view.label: view for view in KNOWLEDGE_GRAPH_VIEWS}
+    return label_to_view.get(selected_label or STRUCTURED_KNOWLEDGE_VIEW.label, STRUCTURED_KNOWLEDGE_VIEW)
+
+
+def render_structured_knowledge_view(
+    combined,
+    detail_rows,
+    characters,
+    places,
+    character_nodes,
+    graph_revision: int,
+    main_character_ids: set[str],
+    main_place_ids: set[str],
+) -> None:
+    character_tabs = st.tabs([node.name for node in character_nodes])
+    primary_ids = {compact(character.name) for character in characters}
+    characters_by_id = {compact(character.name): character for character in characters}
+    for tab, node in zip(character_tabs, character_nodes):
+        with tab:
+            character_id = node.id
+            node_options = combined_graph_root_node_options(character_nodes)
+            node_labels = list(node_options)
+            default_node_index = (
+                node_labels.index(node.name)
+                if node.name in node_options
+                else 0
+            )
+            selected_node_label = st.selectbox(
+                f"Graph Node For {node.name}",
+                node_labels,
+                index=default_node_index,
+                key=f"combined_graph_node_{character_id}_{graph_revision}",
+            )
+            selected_node_id = node_options[selected_node_label]
+            focused_graph = other_connections_graph(combined, selected_node_id)
+            associated_rows = other_connection_rows(combined, selected_node_id)
+            node_detail_rows = combined_node_detail_rows(combined, selected_node_id)[:1]
+            st.graphviz_chart(
+                combined_relationship_dot(
+                    focused_graph,
+                    selected_node_id,
+                    main_character_ids=main_character_ids,
+                    main_place_ids=main_place_ids,
+                    label_font_color=graph_edge_label_font_color(),
+                ),
+                width="stretch",
+            )
+            if associated_rows:
+                st.subheader("Other Connections")
+                st.table(associated_rows, hide_index=True, width="stretch")
+            else:
+                st.info("No Other Connections Were Found For This Node Yet.")
+            scoped_detail_rows = [
+                row
+                for row in detail_rows
+                if compact(row["Character"]) == character_id
+            ]
+            with st.expander("Extended Notes"):
+                st.table(
+                    node_detail_rows,
+                    hide_index=True,
                     width="stretch",
                 )
-                if associated_rows:
-                    st.subheader("Other Connections")
-                    st.table(associated_rows, hide_index=True, width="stretch")
-                else:
-                    st.info("No Other Connections Were Found For This Node Yet.")
-                scoped_detail_rows = [
-                    row
-                    for row in detail_rows
-                    if compact(row["Character"]) == character_id
-                ]
                 if scoped_detail_rows:
-                    with st.expander("Extended Notes"):
-                        st.table(
-                            node_detail_rows,
-                            hide_index=True,
-                            width="stretch",
-                        )
-                        st.subheader("Character Graph Details")
-                        st.table(scoped_detail_rows, hide_index=True, width="stretch")
-                else:
-                    with st.expander("Extended Notes"):
-                        st.table(
-                            node_detail_rows,
-                            hide_index=True,
-                            width="stretch",
-                        )
-                if st.button(
-                    "Add Character Connections",
-                    icon=":material/account_tree:",
-                    key=f"append_connections_{character_id}",
-                    disabled=character_id not in characters_by_id,
-                ):
-                    append_character_connections(characters_by_id[character_id], connection_rows_for_character(combined, character_id))
-                    mark_combined_graph_dirty()
-                    st.success("Character Connections Added.")
-                    st.rerun()
+                    st.subheader("Character Graph Details")
+                    st.table(scoped_detail_rows, hide_index=True, width="stretch")
+            if st.button(
+                "Add Character Connections",
+                icon=":material/account_tree:",
+                key=f"append_connections_{character_id}",
+                disabled=character_id not in characters_by_id,
+            ):
+                append_character_connections(characters_by_id[character_id], connection_rows_for_character(combined, character_id))
+                mark_combined_graph_dirty()
+                st.success("Character Connections Added.")
+                st.rerun()
 
-        secondary_characters = [
-            node
-            for node_id, node in combined.characters.items()
-            if node.node_type == "character"
-            and node_id not in primary_ids
-            and compact(node.name) not in {"sessionnotes", "sessionnote"}
-        ]
-        secondary_places = [
-            node
-            for node_id, node in combined.characters.items()
-            if node.node_type == "place" and not any(compact(place.name) == node_id for place in places)
-        ]
-        action_cols = st.columns(2)
-        with action_cols[0]:
-            if secondary_characters:
-                labels = [node.name for node in secondary_characters]
-                selected = st.selectbox("Secondary Character", labels, key="secondary_character_file")
-                if st.button("Create Character File", icon=":material/person_add:", key="create_secondary_character"):
-                    prepare_pending_character(selected)
-                    st.rerun()
-        with action_cols[1]:
-            if secondary_places:
-                labels = [node.name for node in secondary_places]
-                selected = st.selectbox("Secondary Place", labels, key="secondary_place_file")
-                if st.button("Create Place File", icon=":material/add_location_alt:", key="create_secondary_place"):
-                    prepare_pending_place(selected)
-                    st.rerun()
+    render_secondary_entity_creation_actions(combined, characters, places)
+
+
+def render_full_knowledge_graph_view(
+    combined,
+    detail_rows,
+    main_character_ids: set[str],
+    main_place_ids: set[str],
+) -> None:
+    st.graphviz_chart(
+        combined_relationship_dot(
+            full_character_connection_graph(combined),
+            main_character_ids=main_character_ids,
+            main_place_ids=main_place_ids,
+            label_font_color=graph_edge_label_font_color(),
+        ),
+        width="stretch",
+    )
+    if detail_rows:
+        with st.expander("Full Graph Details"):
+            st.table(detail_rows, hide_index=True, width="stretch")
+
+
+def render_secondary_entity_creation_actions(combined, characters, places) -> None:
+    primary_ids = {compact(character.name) for character in characters}
+    secondary_characters = [
+        node
+        for node_id, node in combined.characters.items()
+        if node.node_type == "character"
+        and node_id not in primary_ids
+        and compact(node.name) not in {"sessionnotes", "sessionnote"}
+    ]
+    secondary_places = [
+        node
+        for node_id, node in combined.characters.items()
+        if node.node_type == "place" and not any(compact(place.name) == node_id for place in places)
+    ]
+    action_cols = st.columns(2)
+    with action_cols[0]:
+        if secondary_characters:
+            labels = [node.name for node in secondary_characters]
+            selected = st.selectbox("Secondary Character", labels, key="secondary_character_file")
+            if st.button("Create Character File", icon=":material/person_add:", key="create_secondary_character"):
+                prepare_pending_character(selected)
+                st.rerun()
+    with action_cols[1]:
+        if secondary_places:
+            labels = [node.name for node in secondary_places]
+            selected = st.selectbox("Secondary Place", labels, key="secondary_place_file")
+            if st.button("Create Place File", icon=":material/add_location_alt:", key="create_secondary_place"):
+                prepare_pending_place(selected)
+                st.rerun()
 
 
 def load_lore_graphs():

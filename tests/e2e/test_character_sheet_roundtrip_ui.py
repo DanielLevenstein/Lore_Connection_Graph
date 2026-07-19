@@ -497,9 +497,11 @@ def test_capture_knowledge_graph_screenshot(isolated_character_app):
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph", exact=True).click()
         expect(graph_expander.get_by_role("button", name="sync Regenerate All Lore Graphs")).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_role("tab").first).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Structured Knowledge View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Full Knowledge Graph", exact=True)).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_text("Before Selection", exact=True)).not_to_be_visible(timeout=10000)
         expect(graph_expander.get_by_text("Selected View", exact=True)).not_to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab").first).to_be_visible(timeout=10000)
 
         graph_tab = graph_expander.get_by_role("tab", name=graph_node_name, exact=True)
         if graph_tab.count():
@@ -514,6 +516,26 @@ def test_capture_knowledge_graph_screenshot(isolated_character_app):
 
     assert screenshot_path.exists()
     assert screenshot_path.stat().st_size > 0
+
+
+def test_combined_graph_full_knowledge_graph_view_is_separate(isolated_character_app):
+    app_url, _docs_lore_dir, _characters_dir, _places_dir, _session_notes_dir, _data_dir = isolated_character_app
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 900})
+        page.goto(app_url, wait_until="networkidle")
+
+        graph_expander = page.locator("[data-testid=stExpander]").filter(has_text="Combined Knowledge Graph")
+        expect(graph_expander).to_be_visible(timeout=10000)
+        graph_expander.get_by_text("Combined Knowledge Graph", exact=True).click()
+        expect(graph_expander.get_by_text("Structured Knowledge View", exact=True)).to_be_visible(timeout=10000)
+
+        graph_expander.get_by_text("Full Knowledge Graph", exact=True).click()
+        expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Full Graph Details", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True)).not_to_be_visible(timeout=10000)
+        browser.close()
 
 
 def test_knowledge_graph_edge_labels_are_visible_for_position_review(isolated_character_app):

@@ -3,11 +3,9 @@
 - Update `ui_issue_report.md` after UI bugs are fixed. 
 - Remove graph-edge report grade from the UI.
  
-We still aren't using the UI space efficiently.
-1) Neal Lovington is a player character and got moved out of the player character column.
-2) Secondary characters in the UI start from row 1 not row 0 which is odd._
 
 ## Knowledge Graph Display Columns
+
 Column 0: Family Names
 Column 1: Main Characters
 Column 2: Secondary Characters & places
@@ -18,7 +16,6 @@ Allow viewing the graph in two modes, one mode that shows the whole graph and on
 Update the connection type shown on the graph so it shows the most prominent connection between characters or places. 
 
 In the tabular view below, the graph shows each connection a separate table cell for each evidence field rather than combining them with a - characters. 
-
 
 ## Session Planing
 1) Get new screenshot of the existing behavior with the following test data `world_building/import/Session_Notes.txt`
@@ -39,13 +36,10 @@ Commit to `feature/knowledge_graph` prior to implementing changes
 - Updated README, release notes, and rewrite design docs to reflect graph-backed generation instead of model downloads.
 - Testing: run focused graph, rewrite, model-config, semantic-report, and character-generation tests before committing this section.
 
-### Bug Fixes
-- Remove the headings at the top of the knowledge graph page. They don't currently affect the UI, and they clutter up the UI.
-### Improvements
-- When clicking on a specific node in the graph, populate a table below the graph with detailed info about that node. 
-- Move the knowledge graph into a dedicated tab next to session notes
-
-## Completed
+### Structured Knowledge View
+- Lock down the current knowledge graph view under the name "Structured Knowledge View"
+- Refactor the code base so new knowledge views can be created without breaking the existing view.
+- Use the UI code that was formally used to display the full knowledge graph to test this out.
 
 ### Knowledge Graph UI Review And Detail Panel - 2026-07-18
 
