@@ -2186,7 +2186,7 @@ def render_character_info(character: Character, model_config=None) -> None:
     if character_message:
         st.success(character_message)
     render_character_editor(character)
-    render_relationship_graph(character)
+    # render_relationship_graph(character)
 
 
 st.title("Roleplaying Character Creator")
