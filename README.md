@@ -84,4 +84,4 @@ Everything under `world_building/` is local campaign material, runtime data, or 
 - [Character Parsing Rules](docs/specs/CHARACTER_PARSING_RULES.md)
 - [Place Parsing Rules](docs/specs/PLACE_PARSING_RULES.md)
 - [Knowledge Graph Design](docs/specs/KNOWLEDGE_GRAPH_DESIGN.md)
-- [Combined Knowledge Graph](docs/specs/COMBINED_KNOWLEDGE_GRAPH.md)
+- [Combined Knowledge Graph](docs/specs/KNOWLEDGE_GRAPH_DESIGN2.md)

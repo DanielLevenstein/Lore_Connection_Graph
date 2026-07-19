@@ -4,6 +4,7 @@ from character_graph.combined_graph import (
     build_combined_character_graph,
     combined_attribute_rows,
     combined_node_detail_rows,
+    default_graphviz_config,
     full_character_connection_graph,
     graph_clarity_metric,
     graph_clarity_rows,
@@ -1347,6 +1348,40 @@ Neal is a performer.
     assert "regular=true" not in dot
     assert '"neal_lovington" -> "family_lovington" [label="Family"]' in dot
     assert "headlabel=" not in dot
+
+
+def test_combined_relationship_dot_uses_graphviz_node_type_overrides(tmp_path):
+    neal = graph_from_text(
+        tmp_path,
+        "Neal_Lovington.md",
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Neal | Elf | Bard |
+
+## Character Backstory
+
+Neal sings.
+
+## Character Summary
+
+Neal is a performer.
+""",
+    )
+    config = default_graphviz_config()
+    config["node_type_overrides"]["family"]["shape"] = "folder"
+    config["node_type_overrides"]["family"]["fillcolor"] = "#fff7ed"
+
+    dot = combined_relationship_dot(
+        build_combined_character_graph([neal]),
+        graphviz_config=config,
+    )
+
+    assert '"family_lovington" [label="Lovington Family", fillcolor="#fff7ed"' in dot
+    assert 'shape="folder", width=1.9, height=0.8, margin="0.14,0.06"' in dot
 
 
 def test_combined_graph_handles_family_attribute_id_collision():

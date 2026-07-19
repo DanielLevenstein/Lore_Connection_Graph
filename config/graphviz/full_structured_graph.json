@@ -13,25 +13,6 @@
     "rankdir": "LR",
     "vertical_rankdir": "TB"
   },
-  "spacing": {
-    "small_graph": {
-      "max_nodes": 8,
-      "ranksep": 1.15,
-      "nodesep": 0.4
-    },
-    "column_layout": {
-      "ranksep": 0.65,
-      "nodesep": 0.35
-    },
-    "vertical_layout": {
-      "ranksep": 0.6,
-      "nodesep": 0.35
-    },
-    "default": {
-      "ranksep": 0.65,
-      "nodesep": 0.35
-    }
-  },
   "columns": [
     "family_names",
     "main_characters",

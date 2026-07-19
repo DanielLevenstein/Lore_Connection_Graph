@@ -15,12 +15,14 @@ from character_graph.combined_graph import (
     graph_view_root_nodes,
     other_connection_rows,
     other_connections_graph,
+    party_connections_graph,
     compact,
 )
 from character_graph.extraction import extract_character_graph
 from character_graph.graph_view import (
     evidence_rows,
 )
+from character_graph.graphviz_config import load_graphviz_config
 from character_graph.ingest import load_backstory
 from character_graph.session_entities import derived_lore_entity_relationships
 from character_graph.storage import load_graph
@@ -118,6 +120,10 @@ STRUCTURED_KNOWLEDGE_VIEW = KnowledgeGraphView(
     key="character_view",
     label="Character View",
 )
+PARTY_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
+    key="party_view",
+    label="Party View",
+)
 FULL_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
     key="full_structured_graph",
     label="Full Structured Graph",
@@ -125,7 +131,8 @@ FULL_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
 
 KNOWLEDGE_GRAPH_VIEWS = (
     STRUCTURED_KNOWLEDGE_VIEW,
-    FULL_KNOWLEDGE_GRAPH_VIEW,
+    PARTY_KNOWLEDGE_GRAPH_VIEW,
+    # FULL_KNOWLEDGE_GRAPH_VIEW,
 )
 
 
@@ -635,12 +642,27 @@ def render_combined_character_graph() -> None:
         main_character_ids = {node.id for node in character_nodes if node.node_type == "character"}
         main_place_ids = {node.id for node in character_nodes if node.node_type == "place"}
         selected_view = selected_knowledge_graph_view(graph_revision)
+        graphviz_config = load_graphviz_config(selected_view.key)
         if selected_view.key == FULL_KNOWLEDGE_GRAPH_VIEW.key:
             render_full_knowledge_graph_view(
                 combined,
                 detail_rows,
+                characters,
+                places,
                 main_character_ids,
                 main_place_ids,
+                graphviz_config,
+            )
+        elif selected_view.key == PARTY_KNOWLEDGE_GRAPH_VIEW.key:
+            render_party_knowledge_graph_view(
+                combined,
+                detail_rows,
+                characters,
+                places,
+                character_nodes,
+                main_character_ids,
+                main_place_ids,
+                graphviz_config,
             )
         else:
             render_structured_knowledge_view(
@@ -652,6 +674,7 @@ def render_combined_character_graph() -> None:
                 graph_revision,
                 main_character_ids,
                 main_place_ids,
+                graphviz_config,
             )
 
 
@@ -677,6 +700,7 @@ def render_structured_knowledge_view(
     graph_revision: int,
     main_character_ids: set[str],
     main_place_ids: set[str],
+    graphviz_config,
 ) -> None:
     character_tabs = st.tabs([node.name for node in character_nodes])
     primary_ids = {compact(character.name) for character in characters}
@@ -708,11 +732,12 @@ def render_structured_knowledge_view(
                     main_character_ids=main_character_ids,
                     main_place_ids=main_place_ids,
                     label_font_color=graph_edge_label_font_color(),
+                    graphviz_config=graphviz_config,
                 ),
                 width="stretch",
             )
             if associated_rows:
-                st.subheader("Other Connections")
+                st.subheader("Connections")
                 st.table(associated_rows, hide_index=True, width="stretch")
             else:
                 st.info("No Other Connections Were Found For This Node Yet.")
@@ -721,34 +746,41 @@ def render_structured_knowledge_view(
                 for row in detail_rows
                 if compact(row["Character"]) == character_id
             ]
-            with st.expander("Extended Notes"):
-                st.table(
-                    node_detail_rows,
-                    hide_index=True,
-                    width="stretch",
-                )
-                if scoped_detail_rows:
-                    st.subheader("Character Graph Details")
-                    st.table(scoped_detail_rows, hide_index=True, width="stretch")
-            if st.button(
-                "Add Character Connections",
-                icon=":material/account_tree:",
-                key=f"append_connections_{character_id}",
-                disabled=character_id not in characters_by_id,
-            ):
-                append_character_connections(characters_by_id[character_id], connection_rows_for_character(combined, character_id))
-                mark_combined_graph_dirty()
-                st.success("Character Connections Added.")
-                st.rerun()
 
-    render_secondary_entity_creation_actions(combined, characters, places)
+def render_party_knowledge_graph_view(
+    combined,
+    detail_rows,
+    characters,
+    places,
+    character_nodes,
+    main_character_ids: set[str],
+    main_place_ids: set[str],
+    graphviz_config,
+) -> None:
+    root_node_ids = [node.id for node in character_nodes]
+    st.graphviz_chart(
+        combined_relationship_dot(
+            party_connections_graph(combined, root_node_ids),
+            main_character_ids=main_character_ids,
+            main_place_ids=main_place_ids,
+            label_font_color=graph_edge_label_font_color(),
+            graphviz_config=graphviz_config,
+        ),
+        width="stretch",
+    )
+    if detail_rows:
+        with st.expander("Party Graph Details"):
+            st.table(detail_rows, hide_index=True, width="stretch")
 
 
 def render_full_knowledge_graph_view(
     combined,
     detail_rows,
+    characters,
+    places,
     main_character_ids: set[str],
     main_place_ids: set[str],
+    graphviz_config,
 ) -> None:
     st.graphviz_chart(
         combined_relationship_dot(
@@ -756,43 +788,13 @@ def render_full_knowledge_graph_view(
             main_character_ids=main_character_ids,
             main_place_ids=main_place_ids,
             label_font_color=graph_edge_label_font_color(),
+            graphviz_config=graphviz_config,
         ),
         width="stretch",
     )
     if detail_rows:
         with st.expander("Full Graph Details"):
             st.table(detail_rows, hide_index=True, width="stretch")
-
-
-def render_secondary_entity_creation_actions(combined, characters, places) -> None:
-    primary_ids = {compact(character.name) for character in characters}
-    secondary_characters = [
-        node
-        for node_id, node in combined.characters.items()
-        if node.node_type == "character"
-        and node_id not in primary_ids
-        and compact(node.name) not in {"sessionnotes", "sessionnote"}
-    ]
-    secondary_places = [
-        node
-        for node_id, node in combined.characters.items()
-        if node.node_type == "place" and not any(compact(place.name) == node_id for place in places)
-    ]
-    action_cols = st.columns(2)
-    with action_cols[0]:
-        if secondary_characters:
-            labels = [node.name for node in secondary_characters]
-            selected = st.selectbox("Secondary Character", labels, key="secondary_character_file")
-            if st.button("Create Character File", icon=":material/person_add:", key="create_secondary_character"):
-                prepare_pending_character(selected)
-                st.rerun()
-    with action_cols[1]:
-        if secondary_places:
-            labels = [node.name for node in secondary_places]
-            selected = st.selectbox("Secondary Place", labels, key="secondary_place_file")
-            if st.button("Create Place File", icon=":material/add_location_alt:", key="create_secondary_place"):
-                prepare_pending_place(selected)
-                st.rerun()
 
 
 def load_lore_graphs():

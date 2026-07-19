@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass, field, replace
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import Any
 
 from .schema import CharacterGraph
 
@@ -973,7 +974,9 @@ def combined_relationship_dot(
     main_character_ids: set[str] | None = None,
     main_place_ids: set[str] | None = None,
     label_font_color: str = "#cbd5e1",
+    graphviz_config: dict[str, Any] | None = None,
 ) -> str:
+    graphviz_config = graphviz_config or default_graphviz_config()
     main_character_keys = {compact(value) for value in main_character_ids or set()}
     main_place_keys = {compact(value) for value in main_place_ids or set()}
     display_characters = graph.characters
@@ -987,7 +990,12 @@ def combined_relationship_dot(
     display_edges = prominent_relationship_edges(display_edges)
     column_layout_requested = bool(main_character_keys or main_place_keys)
     vertical_layout = should_use_vertical_layout(graph) and not column_layout_requested
-    rankdir = "TB" if vertical_layout else "LR"
+    graph_config = graphviz_config.get("graph", {})
+    rankdir = (
+        graph_config.get("vertical_rankdir", "TB")
+        if vertical_layout
+        else graph_config.get("rankdir", "LR")
+    )
     broad_source = broad_layout_source(
         CombinedCharacterGraph(display_characters, display_edges)
     ) if vertical_layout else ""
@@ -995,44 +1003,25 @@ def combined_relationship_dot(
         len(display_characters),
         column_layout_requested=column_layout_requested,
         vertical_layout=vertical_layout,
+        graphviz_config=graphviz_config,
     )
     lines = [
         "digraph CombinedCharacterRelationships {",
-        f"  graph [rankdir={rankdir}, bgcolor=\"transparent\", ranksep={ranksep}, nodesep={nodesep}, splines=\"line\"];",
-        "  node [style=\"rounded,filled\", fillcolor=\"#dbeafe\", color=\"#94a3b8\", fontname=\"Inter\", fontcolor=\"#000000\", shape=\"box\"];",
-        f"  edge [color=\"#64748b\", fontname=\"Inter\", fontsize=10, fontcolor=\"{escape_dot(label_font_color)}\", labelfontcolor=\"{escape_dot(label_font_color)}\"];",
+        f"  graph [{dot_attributes({**graph_config, 'rankdir': rankdir, 'ranksep': ranksep, 'nodesep': nodesep})}];",
+        f"  node [{dot_attributes(graphviz_config.get('node', {}))}];",
+        f"  edge [{dot_attributes(edge_graphviz_attributes(graphviz_config, label_font_color))}];",
     ]
     column_groups = graph_column_groups(display_characters, display_edges, main_character_keys, main_place_keys)
     column_by_node = graph_column_by_node(column_groups)
     for character_id, character in display_characters.items():
-        fill = (
-            "#fde68a"
-            if character.node_type == "source_document"
-            else "#dcfce7"
-            if character.node_type == "place"
-            else "#e9d5ff"
-            if character.node_type == "group"
-            else "#fef3c7"
-            if character.node_type == "family"
-            else "#dbeafe"
+        node_attributes = graphviz_node_attributes(
+            character.node_type,
+            focused=character_id == focus_node_id,
+            graphviz_config=graphviz_config,
         )
-        color = "#ef4444" if character_id == focus_node_id else "#94a3b8"
-        penwidth = "2.5" if character_id == focus_node_id else "1"
-        shape = (
-            "folder"
-            if character.node_type == "source_document"
-            else "component"
-            if character.node_type == "place"
-            else "trapezium"
-            if character.node_type == "group"
-            else "ellipse"
-            if character.node_type == "family"
-            else "box"
-        )
-        dimensions = node_dimension_attributes(character.node_type)
         lines.append(
             f'  "{escape_dot(character_id)}" [label="{escape_dot(character.name)}", '
-            f'fillcolor="{fill}", color="{color}", penwidth="{penwidth}", shape="{shape}"{dimensions}];'
+            f'{dot_attributes(node_attributes)}];'
         )
     lines.extend(graph_column_rank_lines(column_groups))
     for edge in display_edges:
@@ -1059,22 +1048,125 @@ def combined_relationship_dot(
     return "\n".join(lines)
 
 
-def node_dimension_attributes(node_type: str) -> str:
-    if node_type == "source_document":
-        return ', width=1.65, height=0.7, margin="0.12,0.06"'
-    if node_type == "family":
-        return ', width=1.9, height=0.8, margin="0.14,0.06"'
-    return ""
+def default_graphviz_config() -> dict[str, Any]:
+    return {
+        "graph": {
+            "rankdir": "LR",
+            "vertical_rankdir": "TB",
+            "bgcolor": "transparent",
+            "splines": "line",
+        },
+        "node": {
+            "style": "rounded,filled",
+            "fillcolor": "#dbeafe",
+            "color": "#94a3b8",
+            "fontname": "Inter",
+            "fontcolor": "#000000",
+            "shape": "box",
+        },
+        "edge": {
+            "color": "#64748b",
+            "fontname": "Inter",
+            "fontsize": 10,
+        },
+        "node_type_overrides": {
+            "character": {"fillcolor": "#dbeafe", "shape": "box"},
+            "place": {"fillcolor": "#dcfce7", "shape": "component"},
+            "group": {"fillcolor": "#e9d5ff", "shape": "trapezium"},
+            "family": {
+                "fillcolor": "#fef3c7",
+                "shape": "ellipse",
+                "width": 1.9,
+                "height": 0.8,
+                "margin": "0.14,0.06",
+            },
+            "source_document": {
+                "fillcolor": "#fde68a",
+                "shape": "folder",
+                "width": 1.65,
+                "height": 0.7,
+                "margin": "0.12,0.06",
+            },
+        },
+        "focus_node": {
+            "color": "#ef4444",
+            "penwidth": 2.5,
+        },
+        "spacing": {
+            "small_graph": {"max_nodes": 8, "ranksep": 1.15, "nodesep": 0.4},
+            "column_layout": {"ranksep": 0.65, "nodesep": 0.35},
+            "vertical_layout": {"ranksep": 0.6, "nodesep": 0.35},
+            "default": {"ranksep": 0.65, "nodesep": 0.35},
+        },
+    }
 
 
-def graph_layout_spacing(node_count: int, *, column_layout_requested: bool, vertical_layout: bool) -> tuple[str, str]:
-    if node_count <= 8:
-        return "1.15", "0.4"
+def edge_graphviz_attributes(graphviz_config: dict[str, Any], label_font_color: str) -> dict[str, Any]:
+    edge_config = dict(graphviz_config.get("edge", {}))
+    edge_config.pop("label_attribute", None)
+    edge_config.pop("label_font_color_source", None)
+    edge_config["fontcolor"] = label_font_color
+    edge_config["labelfontcolor"] = label_font_color
+    return edge_config
+
+
+def graphviz_node_attributes(
+    node_type: str,
+    *,
+    focused: bool,
+    graphviz_config: dict[str, Any],
+) -> dict[str, Any]:
+    default_node = graphviz_config.get("node", {})
+    attributes = {
+        "fillcolor": default_node.get("fillcolor", "#dbeafe"),
+        "color": default_node.get("color", "#94a3b8"),
+    }
+    overrides = graphviz_config.get("node_type_overrides", {}).get(node_type, {})
+    attributes.update(overrides)
+    if focused:
+        attributes.update(graphviz_config.get("focus_node", {}))
+    else:
+        attributes.setdefault("penwidth", 1)
+    return attributes
+
+
+def dot_attributes(attributes: dict[str, Any]) -> str:
+    return ", ".join(
+        f'{escape_dot(str(key))}={dot_attribute_value(str(key), value)}'
+        for key, value in attributes.items()
+        if value is not None and key not in {"vertical_rankdir"}
+    )
+
+
+def dot_attribute_value(key: str, value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if key in {"rankdir", "ranksep", "nodesep", "width", "height", "fontsize", "weight"}:
+        return str(value)
+    if isinstance(value, (int, float)):
+        return f'"{value}"'
+    return f'"{escape_dot(str(value))}"'
+
+
+def graph_layout_spacing(
+    node_count: int,
+    *,
+    column_layout_requested: bool,
+    vertical_layout: bool,
+    graphviz_config: dict[str, Any] | None = None,
+) -> tuple[str, str]:
+    spacing = (graphviz_config or default_graphviz_config()).get("spacing", {})
+    small_graph = spacing.get("small_graph", {})
+    if node_count <= small_graph.get("max_nodes", 8):
+        return str(small_graph.get("ranksep", 1.15)), str(small_graph.get("nodesep", 0.4))
     if column_layout_requested:
-        return "0.65", "0.35"
+        column_layout = spacing.get("column_layout", {})
+        return str(column_layout.get("ranksep", 0.65)), str(column_layout.get("nodesep", 0.35))
     if vertical_layout:
-        return "0.6", "0.35"
-    return "0.65", "0.35"
+        vertical = spacing.get("vertical_layout", {})
+        return str(vertical.get("ranksep", 0.6)), str(vertical.get("nodesep", 0.35))
+    default = spacing.get("default", {})
+    return str(default.get("ranksep", 0.65)), str(default.get("nodesep", 0.35))
 
 
 def edge_label_attributes(label: str) -> str:

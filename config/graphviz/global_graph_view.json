@@ -39,14 +39,14 @@
       "fillcolor": "#e9d5ff"
     },
     "family": {
-      "shape": "ellipse",
+      "shape": "folder",
       "fillcolor": "#fef3c7",
       "width": 1.9,
       "height": 0.8,
       "margin": "0.14,0.06"
     },
     "source_document": {
-      "shape": "folder",
+      "shape": "component",
       "fillcolor": "#fde68a",
       "width": 1.65,
       "height": 0.7,
@@ -56,6 +56,25 @@
   "focus_node": {
     "color": "#ef4444",
     "penwidth": 2.5
+  },
+  "spacing": {
+    "small_graph": {
+      "max_nodes": 8,
+      "ranksep": 1.15,
+      "nodesep": 0.4
+    },
+    "column_layout": {
+      "ranksep": 0.65,
+      "nodesep": 0.35
+    },
+    "vertical_layout": {
+      "ranksep": 0.6,
+      "nodesep": 0.35
+    },
+    "default": {
+      "ranksep": 0.65,
+      "nodesep": 0.35
+    }
   },
   "constraint_policy": {
     "same_column_edges": false,
@@ -79,6 +98,7 @@
   },
   "editing_notes": [
     "Update this file first for defaults that should apply to every knowledge view.",
+    "Spacing defaults are defined here and inherited by each knowledge view unless that view explicitly overrides spacing.",
     "Use edge label_attribute=label when relationship text should remain on the edge.",
     "Keep splines=line unless a regression test proves another routing keeps labels better associated with their edges."
   ]

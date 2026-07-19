@@ -1,13 +1,13 @@
 {
   "schema_version": "0.1.0",
   "config_scope": "knowledge_view",
-  "view_key": "character_view",
-  "label": "Character View",
-  "description": "Focused graph for a selected character or place root.",
+  "view_key": "party_view",
+  "label": "Party View",
+  "description": "Combined party graph rooted on all main character and main place nodes.",
   "inherits": "config/graphviz/global_graph_view.json",
   "merge_order": [
     "config/graphviz/global_graph_view.json",
-    "config/graphviz/character_view.json"
+    "config/graphviz/party_view.json"
   ],
   "graph": {
     "rankdir": "LR"
@@ -20,6 +20,6 @@
   ],
   "editing_notes": [
     "Override only values that should differ from config/graphviz/global_graph_view.json.",
-    "After changing spacing or routing, run the graph label-position UI regression."
+    "Use this config for the UI path backed by party_connections_graph."
   ]
 }
