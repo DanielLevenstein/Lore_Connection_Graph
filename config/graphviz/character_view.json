@@ -2,15 +2,34 @@
   "schema_version": "0.1.0",
   "config_scope": "knowledge_view",
   "view_key": "character_view",
-  "label": "Character View",
+  "label": "Single Character View",
   "description": "Focused graph for a selected character or place root.",
-  "inherits": "config/graphviz/global_graph_view.json",
+  "inherits": "config/graphviz/default_global_view.json",
   "merge_order": [
     "config/graphviz/global_graph_view.json",
     "config/graphviz/character_view.json"
   ],
   "graph": {
     "rankdir": "LR"
+  },
+  "spacing": {
+    "small_graph": {
+      "max_nodes": 8,
+      "ranksep": 1.15,
+      "nodesep": 0.4
+    },
+    "column_layout": {
+      "ranksep": 0.65,
+      "nodesep": 0.35
+    },
+    "vertical_layout": {
+      "ranksep": 0.6,
+      "nodesep": 0.35
+    },
+    "default": {
+      "ranksep": 0.65,
+      "nodesep": 0.35
+    }
   },
   "columns": [
     "family_names",
@@ -19,7 +38,7 @@
     "places"
   ],
   "editing_notes": [
-    "Override only values that should differ from config/graphviz/global_graph_view.json.",
+    "Override only values that should differ from config/graphviz/default_graph_view.json.",
     "After changing spacing or routing, run the graph label-position UI regression."
   ]
 }

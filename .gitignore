@@ -4,6 +4,7 @@ __pycache__/
 venv/
 .env
 .DS_Store
+.tmp/
 .streamlit/secrets.toml
 
 # App-generated data, local campaign lore, memory, chat logs, and model folders stay local.

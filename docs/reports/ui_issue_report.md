@@ -95,6 +95,7 @@ Status: fixed and covered by `tests/e2e/test_character_sheet_roundtrip_ui.py::te
 - Character display names are editable in the character editor and continue to update the visible Markdown title/profile name without renaming the underlying file.
 - Character undo now remounts the editor after restoring a previous snapshot, preventing stale form widget values from overwriting the restored profile on a follow-up undo.
 - Added focused Playwright coverage proving a newly created character with only Name and Backstory appears in the Combined Knowledge Graph without manual graph regeneration.
+- Restored the screenshot-era Combined Knowledge Graph UI path for verification and split the visible modes into `Single Character View`, `Test Fixture`, and `Full Structured Graph`. `Test Fixture` is the target for recreating `Structured_Knowledge_Graph_Full.png` from character sheets only, while `Full Structured Graph` keeps the unfiltered combined graph path distinct.
 
 ## Improvements made
 

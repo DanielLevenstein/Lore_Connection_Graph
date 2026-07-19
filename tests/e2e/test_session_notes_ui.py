@@ -120,6 +120,7 @@ Neal is a bard.
 
     env = os.environ.copy()
     env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+    env["LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH"] = "1"
     env["LOCAL_CHATBOT_WORLD_BUILDING_DIR"] = str(world_building_dir)
     env["LOCAL_CHATBOT_WORLD_BUILDING_IMPORT_DIR"] = str(import_dir)
     env["LOCAL_CHATBOT_LORE_DIR"] = str(docs_lore_dir)
@@ -333,7 +334,8 @@ The Ignis cult later attacked the carnival.
         import_session_note_file(page, import_file, imported_file_name="Uploaded Graph Notes.md")
         graph_expander = page.locator("[data-testid=stExpander]").filter(has_text="Combined Knowledge Graph")
         expect(graph_expander).to_be_visible(timeout=10000)
-        graph_expander.get_by_text("Combined Knowledge Graph", exact=True).click()
+        graph_expander.get_by_text("Combined Knowledge Graph").click()
+        graph_expander.get_by_text("Single Character View", exact=True).click()
         expect(graph_expander.get_by_label("Graph Node For Neal Lovington", exact=True)).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_text("Ignis Cult", exact=True).first).to_be_visible(timeout=10000)
         browser.close()

@@ -159,6 +159,16 @@ This first release packages the local roleplaying character creator as a Streaml
 - Tightened the character undo e2e selector to the `Edit Character` expander.
 - Updated `docs/reports/ui_issue_report.md`.
 
+### Completed - Screenshot-Era Graph UI Restore - 2026-07-19 - feature/knowledge_graph2
+
+- Restored the screenshot-era Combined Knowledge Graph UI shape directly for verification.
+- Split the graph controls into `Single Character View`, `Test Fixture`, and `Full Structured Graph`.
+- Marked `Test Fixture` as the screenshot-target renderer for `Structured_Knowledge_Graph_Full.png`.
+- Added `docs/reports/knowledge_graph_migration_path.md` for moving from fixture parity to the current full structured graph.
+- Reconnected the secondary character/place curation controls under the character-focused graph view.
+- Deferred compatibility with the newer party/full split until the restored path is verified.
+- Updated `docs/reports/ui_issue_report.md`.
+
 ## Completed - UI Validation Follow-Up - 2026-07-19
 
 - Pulled latest remote `main` into `develop` before validation.

@@ -53,3 +53,12 @@ Commit to `feature/knowledge_graph` prior to implementing changes
 - Lock down the current knowledge graph view under the name "Structured Knowledge View"
 - Refactor the code base so new knowledge views can be created without breaking the existing view.
 - Use the UI code that was formally used to display the full knowledge graph to test this out.
+
+## Completed - Screenshot-Era Graph UI Restore - 2026-07-19
+
+- Restored the old Combined Knowledge Graph UI shape directly for verification.
+- Split the graph controls into `Single Character View`, `Test Fixture`, and `Full Structured Graph`.
+- Marked `Test Fixture` as the screenshot-target renderer for `Structured_Knowledge_Graph_Full.png`.
+- Added `docs/reports/knowledge_graph_migration_path.md` for moving from fixture parity to the current full structured graph.
+- Reconnected secondary character/place curation controls under the character-focused graph view.
+- Deferred compatibility with the newer party/full split until the restored path is verified.

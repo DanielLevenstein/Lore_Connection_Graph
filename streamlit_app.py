@@ -15,13 +15,14 @@ from character_graph.combined_graph import (
     graph_view_root_nodes,
     other_connection_rows,
     other_connections_graph,
-    party_connections_graph,
     compact,
 )
+from character_graph.extraction import extract_character_graph
 from character_graph.graph_view import (
     evidence_rows,
 )
 from character_graph.graphviz_config import load_graphviz_config
+from character_graph.ingest import load_backstory
 from character_graph.session_entities import derived_lore_entity_relationships
 from character_graph.storage import load_graph
 
@@ -43,12 +44,10 @@ from local_chatbot.storage import (
     list_external_character_sheets,
     list_places,
     list_characters,
-    load_or_regenerate_lore_graph,
     read_place_markdown,
     read_character_profile,
     read_text,
     regenerate_character_graph,
-    regenerate_lore_graph,
     remove_character_connections,
     write_character_connections,
     write_character_profile,
@@ -118,22 +117,23 @@ class KnowledgeGraphView:
 
 STRUCTURED_KNOWLEDGE_VIEW = KnowledgeGraphView(
     key="character_view",
-    label="Character View",
+    label="Single Character View",
 )
-PARTY_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
-    key="party_view",
-    label="Party View",
+TEST_FIXTURE_GRAPH_VIEW = KnowledgeGraphView(
+    key="test_fixture",
+    label="Test Fixture",
 )
-FULL_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
+FULL_STRUCTURED_GRAPH_VIEW = KnowledgeGraphView(
     key="full_structured_graph",
     label="Full Structured Graph",
 )
 
 KNOWLEDGE_GRAPH_VIEWS = (
     STRUCTURED_KNOWLEDGE_VIEW,
-    PARTY_KNOWLEDGE_GRAPH_VIEW,
-    # FULL_KNOWLEDGE_GRAPH_VIEW,
+    TEST_FIXTURE_GRAPH_VIEW,
+    FULL_STRUCTURED_GRAPH_VIEW,
 )
+DEFAULT_KNOWLEDGE_GRAPH_VIEW = TEST_FIXTURE_GRAPH_VIEW
 
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
@@ -412,17 +412,9 @@ def undo_character_changes(character: Character) -> None:
         character.backstory_path.write_text(str(previous).rstrip() + "\n", encoding="utf-8")
     st.session_state[key] = snapshots
     regenerate_character_graph(character)
-    bump_character_editor_revision(character)
     mark_combined_graph_dirty()
     st.session_state[f"character_status_{character.name}"] = "Character Changes Undone."
     st.rerun()
-
-
-def bump_character_editor_revision(character: Character) -> None:
-    st.session_state[f"character_editor_revision_{character.name}"] = st.session_state.get(
-        f"character_editor_revision_{character.name}",
-        0,
-    ) + 1
 
 
 def save_character_update(character: Character, updated: CharacterProfile) -> None:
@@ -610,14 +602,15 @@ def attribute_graph_display_rows(profile: CharacterProfile) -> list[dict[str, st
 
 
 def render_combined_character_graph() -> None:
-    # if os.environ.get("LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH") != "1":
-    #     return
+    if os.environ.get("LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH") != "1":
+        return
     characters = list_characters()
     places = list_places()
     graphs = load_lore_graphs()
 
-    place_sources = [(compact(place.name), place.name, str(place.path)) for place in places]
-    with (st.expander("Combined Knowledge Graph", expanded=False)):
+    place_sources = [(compact(display_place_name(place)), display_place_name(place), str(place.path)) for place in places]
+    source_label = os.environ.get("LOCAL_CHATBOT_KNOWLEDGE_GRAPH_SOURCE_LABEL", "Local Lore")
+    with (st.expander(f"Combined Knowledge Graph - {source_label}", expanded=False)):
         render_pending_lore_drafts()
         if st.button("Regenerate All Lore Graphs", icon=":material/sync:", key="regen_all_lore_graphs"):
             failures = []
@@ -651,23 +644,19 @@ def render_combined_character_graph() -> None:
         main_place_ids = {node.id for node in character_nodes if node.node_type == "place"}
         selected_view = selected_knowledge_graph_view(graph_revision)
         graphviz_config = load_graphviz_config(selected_view.key)
-        if selected_view.key == FULL_KNOWLEDGE_GRAPH_VIEW.key:
-            render_full_knowledge_graph_view(
-                combined,
-                detail_rows,
-                characters,
-                places,
+        if selected_view.key == TEST_FIXTURE_GRAPH_VIEW.key:
+            character_sheet_graphs = character_sheet_lore_graphs(graphs)
+            character_only_combined = build_combined_character_graph(character_sheet_graphs)
+            render_test_fixture_graph_view(
+                character_only_combined,
+                combined_attribute_rows(character_sheet_graphs),
                 main_character_ids,
-                main_place_ids,
                 graphviz_config,
             )
-        elif selected_view.key == PARTY_KNOWLEDGE_GRAPH_VIEW.key:
-            render_party_knowledge_graph_view(
+        elif selected_view.key == FULL_STRUCTURED_GRAPH_VIEW.key:
+            render_full_structured_graph_view(
                 combined,
                 detail_rows,
-                characters,
-                places,
-                character_nodes,
                 main_character_ids,
                 main_place_ids,
                 graphviz_config,
@@ -691,12 +680,12 @@ def selected_knowledge_graph_view(graph_revision: int) -> KnowledgeGraphView:
     selected_label = st.segmented_control(
         "Knowledge View",
         labels,
-        default=STRUCTURED_KNOWLEDGE_VIEW.label,
+        default=DEFAULT_KNOWLEDGE_GRAPH_VIEW.label,
         key=f"combined_knowledge_view_{graph_revision}",
         width="content",
     )
     label_to_view = {view.label: view for view in KNOWLEDGE_GRAPH_VIEWS}
-    return label_to_view.get(selected_label or STRUCTURED_KNOWLEDGE_VIEW.label, STRUCTURED_KNOWLEDGE_VIEW)
+    return label_to_view.get(selected_label or DEFAULT_KNOWLEDGE_GRAPH_VIEW.label, DEFAULT_KNOWLEDGE_GRAPH_VIEW)
 
 
 def render_structured_knowledge_view(
@@ -745,7 +734,7 @@ def render_structured_knowledge_view(
                 width="stretch",
             )
             if associated_rows:
-                st.subheader("Connections")
+                st.subheader("Other Connections")
                 st.table(associated_rows, hide_index=True, width="stretch")
             else:
                 st.info("No Other Connections Were Found For This Node Yet.")
@@ -754,45 +743,59 @@ def render_structured_knowledge_view(
                 for row in detail_rows
                 if compact(row["Character"]) == character_id
             ]
+            with st.expander("Extended Notes"):
+                st.table(
+                    node_detail_rows,
+                    hide_index=True,
+                    width="stretch",
+                )
+                if scoped_detail_rows:
+                    st.subheader("Character Graph Details")
+                    st.table(scoped_detail_rows, hide_index=True, width="stretch")
+            if st.button(
+                "Add Character Connections",
+                icon=":material/account_tree:",
+                key=f"append_connections_{character_id}",
+                disabled=character_id not in characters_by_id,
+            ):
+                append_character_connections(characters_by_id[character_id], connection_rows_for_character(combined, character_id))
+                mark_combined_graph_dirty()
+                st.success("Character Connections Added.")
+                st.rerun()
 
-def render_party_knowledge_graph_view(
+    render_secondary_entity_creation_actions(combined, characters, places)
+
+
+def render_test_fixture_graph_view(
     combined,
     detail_rows,
-    characters,
-    places,
-    character_nodes,
     main_character_ids: set[str],
-    main_place_ids: set[str],
     graphviz_config,
 ) -> None:
-    root_node_ids = [node.id for node in character_nodes]
     st.graphviz_chart(
         combined_relationship_dot(
-            party_connections_graph(combined, root_node_ids),
+            full_character_connection_graph(combined),
             main_character_ids=main_character_ids,
-            main_place_ids=main_place_ids,
             label_font_color=graph_edge_label_font_color(),
             graphviz_config=graphviz_config,
         ),
         width="stretch",
     )
     if detail_rows:
-        with st.expander("Party Graph Details"):
+        with st.expander("Test Fixture Details"):
             st.table(detail_rows, hide_index=True, width="stretch")
 
 
-def render_full_knowledge_graph_view(
+def render_full_structured_graph_view(
     combined,
     detail_rows,
-    characters,
-    places,
     main_character_ids: set[str],
     main_place_ids: set[str],
     graphviz_config,
 ) -> None:
     st.graphviz_chart(
         combined_relationship_dot(
-            full_character_connection_graph(combined),
+            combined,
             main_character_ids=main_character_ids,
             main_place_ids=main_place_ids,
             label_font_color=graph_edge_label_font_color(),
@@ -805,23 +808,63 @@ def render_full_knowledge_graph_view(
             st.table(detail_rows, hide_index=True, width="stretch")
 
 
+def render_secondary_entity_creation_actions(combined, characters, places) -> None:
+    primary_ids = {compact(display_character_name(character)) for character in characters}
+    primary_place_ids = {compact(display_place_name(place)) for place in places}
+    secondary_characters = [
+        node
+        for node_id, node in combined.characters.items()
+        if node.node_type == "character"
+        and node_id not in primary_ids
+        and compact(node.name) not in {"sessionnotes", "sessionnote"}
+    ]
+    secondary_places = [
+        node
+        for node_id, node in combined.characters.items()
+        if node.node_type == "place" and node_id not in primary_place_ids
+    ]
+    action_cols = st.columns(2)
+    with action_cols[0]:
+        if secondary_characters:
+            labels = [node.name for node in secondary_characters]
+            selected = st.selectbox("Secondary Character", labels, key="secondary_character_file")
+            if st.button("Create Character File", icon=":material/person_add:", key="create_secondary_character"):
+                prepare_pending_character(selected)
+                st.rerun()
+    with action_cols[1]:
+        if secondary_places:
+            labels = [node.name for node in secondary_places]
+            selected = st.selectbox("Secondary Place", labels, key="secondary_place_file")
+            if st.button("Create Place File", icon=":material/add_location_alt:", key="create_secondary_place"):
+                prepare_pending_place(selected)
+                st.rerun()
+
+
 def load_lore_graphs():
     graphs = []
     for path in lore_markdown_files():
         try:
-            graph = load_or_regenerate_lore_graph(path)
+            document = load_backstory(path, character_id=compact(path.stem))
+            primary_name = session_note_source_name(path) if path_is_session_note(path) else None
+            graphs.append(extract_character_graph(document, primary_name=primary_name))
         except (OSError, ValueError):
             continue
-        if graph is not None:
-            graphs.append(graph)
     return graphs
+
+
+def character_sheet_lore_graphs(graphs):
+    return [
+        graph
+        for graph in graphs
+        if is_character_lore_path(Path(graph.primary_character.source_file))
+    ]
 
 
 def combined_main_tab_nodes(combined, characters, places):
     return graph_view_root_nodes(
         combined,
         [display_character_name(character) for character in characters],
-        [place.name for place in places],
+        [display_place_name(place) for place in places],
     )
 
 
@@ -835,7 +878,7 @@ def derived_lore_relationships(characters, places, graphs) -> list[dict[str, str
         for graph in graphs
     }
     known_character_names = [display_character_name(character) for character in characters]
-    known_place_names = [place.name for place in places]
+    known_place_names = [display_place_name(place) for place in places]
     relationships: list[dict[str, str]] = []
     for path in lore_markdown_files():
         if is_character_lore_path(path):
@@ -1112,8 +1155,8 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
 
         submitted = st.form_submit_button("Create Character", icon=":material/person_add:")
         if submitted:
-            if not all([name.strip(), backstory.strip()]):
-                st.error("Complete Name And Backstory.")
+            if not all([name.strip(), race.strip(), character_class.strip(), backstory.strip()]):
+                st.error("Complete Name, Race, Class, And Backstory.")
                 return
             try:
                 profile = CharacterProfile(
@@ -1392,7 +1435,6 @@ def render_lore_import_tools() -> None:
                 f"Imported {summary.total} Lore File{'s' if summary.total != 1 else ''} "
                 f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
             )
-            regenerate_all_lore_graph_json()
             mark_combined_graph_dirty()
             st.rerun()
         if action_cols[1].button("Create Lore Backup", icon=":material/backup:", key="create_lore_backup"):
@@ -1438,7 +1480,6 @@ def render_lore_backup_restore_dialog(overwrite_existing: bool) -> None:
             f"({summary.characters} Characters, {summary.places} Places, "
             f"{summary.session_notes} Session Notes, {summary.metadata} Metadata Files)."
         )
-        regenerate_all_lore_graph_json()
         mark_combined_graph_dirty()
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
@@ -1465,16 +1506,6 @@ def render_bulk_lore_removal_warning() -> None:
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
         st.rerun()
-
-
-def regenerate_all_lore_graph_json() -> list[str]:
-    failures: list[str] = []
-    for path in lore_markdown_files():
-        try:
-            regenerate_lore_graph(path)
-        except (OSError, ValueError) as exc:
-            failures.append(f"{path.name}: {exc}")
-    return failures
 
 
 @st.dialog("Delete Session Note File?")
@@ -1983,45 +2014,16 @@ def render_external_character_sheet_list() -> None:
 def render_character_editor(character: Character) -> None:
     profile = read_character_profile(character)
     with st.expander("Edit Character", expanded=bool(st.session_state.get(f"character_status_{character.name}", ""))):
-        editor_revision = st.session_state.get(f"character_editor_revision_{character.name}", 0)
-        with st.form(f"edit_character_{character.name}_{editor_revision}"):
-            display_name = st.text_input(
-                "Name",
-                value=profile.name,
-                key=f"character_name_{character.name}_{editor_revision}",
-            )
+        with st.form(f"edit_character_{character.name}"):
+            st.text_input("Name", value=profile.name, disabled=True)
             name_cols = st.columns(2)
-            first_name = name_cols[0].text_input(
-                "First Name",
-                value=profile.first_name,
-                key=f"character_first_name_{character.name}_{editor_revision}",
-            )
-            family_name = name_cols[1].text_input(
-                "Family Name",
-                value=profile.family_name,
-                key=f"character_family_name_{character.name}_{editor_revision}",
-            )
+            first_name = name_cols[0].text_input("First Name", value=profile.first_name)
+            family_name = name_cols[1].text_input("Family Name", value=profile.family_name)
             stat_cols = st.columns(4)
-            level = stat_cols[0].text_input(
-                "Level",
-                value=profile.level,
-                key=f"character_level_{character.name}_{editor_revision}",
-            )
-            race = stat_cols[1].text_input(
-                "Race",
-                value=profile.race,
-                key=f"character_race_{character.name}_{editor_revision}",
-            )
-            character_class = stat_cols[2].text_input(
-                "Class",
-                value=profile.character_class,
-                key=f"character_class_{character.name}_{editor_revision}",
-            )
-            pronouns = stat_cols[3].text_input(
-                "Pronouns",
-                value=profile.pronouns,
-                key=f"character_pronouns_{character.name}_{editor_revision}",
-            )
+            level = stat_cols[0].text_input("Level", value=profile.level)
+            race = stat_cols[1].text_input("Race", value=profile.race)
+            character_class = stat_cols[2].text_input("Class", value=profile.character_class)
+            pronouns = stat_cols[3].text_input("Pronouns", value=profile.pronouns)
             if has_distinct_original(profile.backstory, profile.original_backstory):
                 backstory_cols = st.columns(2)
                 backstory_cols[0].caption(section_status_label("Character Backstory", profile))
@@ -2029,7 +2031,6 @@ def render_character_editor(character: Character) -> None:
                     "Backstory",
                     value=profile.backstory,
                     height=180,
-                    key=f"character_backstory_{character.name}_{editor_revision}",
                 )
                 backstory_cols[1].caption("Original Character Backstory")
                 backstory_cols[1].text_area(
@@ -2037,16 +2038,10 @@ def render_character_editor(character: Character) -> None:
                     value=profile.original_backstory,
                     height=180,
                     disabled=True,
-                    key=f"character_original_backstory_{character.name}_{editor_revision}",
                 )
             else:
                 render_section_status("Character Backstory", profile)
-                backstory = st.text_area(
-                    "Backstory",
-                    value=profile.backstory,
-                    height=180,
-                    key=f"character_backstory_{character.name}_{editor_revision}",
-                )
+                backstory = st.text_area("Backstory", value=profile.backstory, height=180)
             if has_distinct_original(profile.summary, profile.original_summary):
                 summary_cols = st.columns(2)
                 summary_cols[0].caption(section_status_label("Character Summary", profile))
@@ -2054,7 +2049,6 @@ def render_character_editor(character: Character) -> None:
                     "Summary",
                     value=profile.summary,
                     height=96,
-                    key=f"character_summary_{character.name}_{editor_revision}",
                 )
                 summary_cols[1].caption("Original Character Summary")
                 summary_cols[1].text_area(
@@ -2062,43 +2056,17 @@ def render_character_editor(character: Character) -> None:
                     value=profile.original_summary,
                     height=96,
                     disabled=True,
-                    key=f"character_original_summary_{character.name}_{editor_revision}",
                 )
             else:
                 render_section_status("Character Summary", profile)
-                summary = st.text_area(
-                    "Summary",
-                    value=profile.summary,
-                    height=96,
-                    key=f"character_summary_{character.name}_{editor_revision}",
-                )
+                summary = st.text_area("Summary", value=profile.summary, height=96)
             with st.expander("Optional Metadata", expanded=character_optional_metadata_present(profile)):
                 detail_cols = st.columns(3)
-                drives = detail_cols[0].text_area(
-                    "Drives",
-                    value=render_list_field(profile.drives),
-                    height=96,
-                    key=f"character_drives_{character.name}_{editor_revision}",
-                )
-                alliances = detail_cols[1].text_area(
-                    "Alliances",
-                    value=render_list_field(profile.alliances),
-                    height=96,
-                    key=f"character_alliances_{character.name}_{editor_revision}",
-                )
-                enemies = detail_cols[2].text_area(
-                    "Enemies",
-                    value=render_list_field(profile.enemies),
-                    height=96,
-                    key=f"character_enemies_{character.name}_{editor_revision}",
-                )
+                drives = detail_cols[0].text_area("Drives", value=render_list_field(profile.drives), height=96)
+                alliances = detail_cols[1].text_area("Alliances", value=render_list_field(profile.alliances), height=96)
+                enemies = detail_cols[2].text_area("Enemies", value=render_list_field(profile.enemies), height=96)
                 details_value = profile.details or default_details(profile)
-                details = st.text_area(
-                    "Character Details",
-                    value=details_value,
-                    height=120,
-                    key=f"character_details_{character.name}_{editor_revision}",
-                )
+                details = st.text_area("Character Details", value=details_value, height=120)
             action_cols = st.columns(5 if graph_rewrites_enabled() else 3)
             save_requested = action_cols[0].form_submit_button(
                 "Save Character",
@@ -2144,7 +2112,6 @@ def render_character_editor(character: Character) -> None:
             if delete_requested:
                 delete_character_profile(character)
                 st.session_state.pop(f"character_undo_{character.name}", None)
-                st.session_state.pop(f"character_editor_revision_{character.name}", None)
                 st.session_state.pop("active_character", None)
                 mark_combined_graph_dirty()
                 st.session_state["character_panel_status"] = "Character Deleted."
@@ -2196,7 +2163,7 @@ def render_character_editor(character: Character) -> None:
                 ):
                     updated_sections = mark_updated_section(updated_sections, "Character Summary")
                 updated = CharacterProfile(
-                    name=display_name.strip() or profile.name,
+                    name=profile.name,
                     pronouns=pronouns.strip(),
                     level=level.strip(),
                     race=race.strip(),
@@ -2270,7 +2237,7 @@ def render_character_info(character: Character, model_config=None) -> None:
     if character_message:
         st.success(character_message)
     render_character_editor(character)
-    # render_relationship_graph(character)
+    render_relationship_graph(character)
 
 
 st.title("Roleplaying Character Creator")

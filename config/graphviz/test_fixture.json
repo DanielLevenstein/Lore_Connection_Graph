@@ -1,13 +1,13 @@
 {
   "schema_version": "0.1.0",
   "config_scope": "knowledge_view",
-  "view_key": "full_structured_graph",
-  "label": "Full Structured Graph",
-  "description": "Whole visible knowledge graph across character, family, source, secondary, and place nodes.",
+  "view_key": "test_fixture",
+  "label": "Test Fixture",
+  "description": "Screenshot-era whole graph view built only from character sheet data.",
   "inherits": "config/graphviz/global_graph_view.json",
   "merge_order": [
     "config/graphviz/global_graph_view.json",
-    "config/graphviz/full_structured_graph.json"
+    "config/graphviz/test_fixture.json"
   ],
   "graph": {
     "rankdir": "LR",
@@ -39,7 +39,9 @@
     "places"
   ],
   "editing_notes": [
+    "This is the target renderer for docs/screenshots/Structured_Knowledge_Graph_Full.png.",
+    "Use character-sheet data only; exclude place and session-note lore even when those files exist in the active lore directory.",
     "Override only values that should differ from config/graphviz/global_graph_view.json.",
-    "After changing spacing or routing, regenerate docs/screenshots/Structured_Knowledge_Graph_Full.png and run the full graph label-position UI regression."
+    "After changing spacing or routing, regenerate docs/screenshots/Structured_Knowledge_Graph_Full.png and run the simplified graph label-position UI regression."
   ]
 }
