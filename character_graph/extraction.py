@@ -98,7 +98,7 @@ RELATIONSHIP_RULES = [
     ("former_mentor", "Former mentor", "complicated", ("former mentor", "trained", "teacher", "mentor")),
     ("family", "Family", "positive", ("sister", "brother", "mother", "father", "parent", "child", "family")),
     ("client", "Client", "positive", ("client", "customer", "patron", "regular")),
-    ("rival", "Rival", "hostile", ("rival", "competitor")),
+    ("rival", "Rivals", "hostile", ("rival", "competitor")),
     ("enemy", "Enemy", "hostile", ("enemy", "foe", "hates", "opposes", "against")),
     ("ally", "Ally", "positive", ("ally", "companion", "friend", "trusted")),
     ("lover", "Lover", "positive", ("lover", "beloved", "romance", "romantic")),
@@ -602,6 +602,7 @@ def character_relationships(
     relationship_columns = [
         ("client", "Client", ["clients", "client"]),
         ("ally", "Ally", ["allies", "alliances", "ally"]),
+        ("rival", "Rivals", ["rivals", "rival"]),
         ("enemy", "Enemy", ["enemies", "enemy"]),
         ("lover", "Lover", ["lovers", "lover"]),
     ]

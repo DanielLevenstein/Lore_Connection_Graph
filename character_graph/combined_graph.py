@@ -25,6 +25,7 @@ CANONICAL_SESSION_NAME_VARIANTS = {
     "sauriv": {"Sauriv-Isk", "Surriv"},
     "typhon": {"Typheb", "Typhen", "Typhin"},
 }
+MAX_FOCUSED_GRAPH_CONNECTIONS = 6
 
 
 @dataclass(frozen=True)
@@ -199,7 +200,7 @@ def build_combined_character_graph(
         if not source_id or not target_id or source_id == target_id:
             continue
         relationship_type = one_word_relationship(relationship.get("relationship", "reference"))
-        relationship_label = relationship_type.title()
+        relationship_label = relationship_display_label(relationship_type)
         key = (source_id, target_id, relationship_type)
         edge = by_key.get(key)
         if edge is None:
@@ -379,10 +380,16 @@ def fuzzy_name_score(candidate_name: str, primary_name: str) -> float:
 
 def combined_relationship_type(relationship_type: str) -> tuple[str, str]:
     if relationship_type in PRESERVED_RELATIONSHIP_TYPES:
-        return relationship_type, relationship_type.replace("_", " ").title()
+        return relationship_type, relationship_display_label(relationship_type)
     if relationship_type == "place":
         return "place", "Place"
     return "reference", "Referenced"
+
+
+def relationship_display_label(relationship_type: str) -> str:
+    if relationship_type == "rival":
+        return "Rivals"
+    return relationship_type.replace("_", " ").title()
 
 
 def one_word_relationship(value: str) -> str:
@@ -710,6 +717,7 @@ def other_connection_rows(graph: CombinedCharacterGraph, node_id: str) -> list[d
 def associated_connection_items(
     graph: CombinedCharacterGraph,
     node_id: str,
+    max_items: int = MAX_FOCUSED_GRAPH_CONNECTIONS,
 ) -> list[tuple[CombinedCharacterNode, list[str]]]:
     node = graph.characters.get(node_id)
     if node is None:
@@ -727,19 +735,44 @@ def associated_connection_items(
     ]
     items: list[tuple[CombinedCharacterNode, list[str]]] = []
     weights = node_mention_weights(graph.edges)
-    for associated_node in sorted(
-        associated,
-        key=lambda item: (
-            item.node_type,
-            -weights.get(item.id, 0),
-            item.name.lower(),
-        ),
-    ):
+    for associated_node in sorted(associated, key=lambda item: association_sort_key(graph, node_id, item, weights)):
         evidence = evidence_between_or_from_source(graph, node_id, associated_node.id)
         if not evidence:
             continue
         items.append((associated_node, evidence))
-    return items
+    if len(items) <= max_items:
+        return items
+    protected_items = [
+        item
+        for item in items
+        if item[0].node_type in {"family", "group", "source_document"}
+    ]
+    remaining_items = [item for item in items if item not in protected_items]
+    return protected_items + remaining_items[: max(max_items - len(protected_items), 0)]
+
+
+def association_sort_key(
+    graph: CombinedCharacterGraph,
+    node_id: str,
+    associated_node: CombinedCharacterNode,
+    weights: dict[str, int],
+) -> tuple[int, int, int, int, str]:
+    relationship_type, _relationship_label = prominent_relationship_between(graph, node_id, associated_node.id)
+    direct = associated_node.id in directly_associated_node_ids(graph, node_id)
+    type_rank = {
+        "family": 0,
+        "source_document": 1,
+        "character": 2,
+        "place": 3,
+        "group": 4,
+    }.get(associated_node.node_type, 5)
+    return (
+        0 if direct else 1,
+        relationship_prominence_rank(relationship_type),
+        type_rank,
+        -weights.get(associated_node.id, 0),
+        associated_node.name.lower(),
+    )
 
 
 def directly_associated_node_ids(graph: CombinedCharacterGraph, node_id: str) -> set[str]:
@@ -1002,7 +1035,7 @@ def combined_relationship_dot(
         )
     lines.extend(graph_column_rank_lines(column_groups))
     for edge in display_edges:
-        constraint = ', constraint="false"' if column_layout_requested or (vertical_layout and edge.source == broad_source) else ""
+        constraint = ', constraint="false"' if vertical_layout and edge.source == broad_source else ""
         lines.append(edge_dot_statement(edge, display_characters, constraint))
     if vertical_layout and broad_source:
         targets = [
@@ -1029,16 +1062,16 @@ def node_dimension_attributes(node_type: str) -> str:
 
 def graph_layout_spacing(node_count: int, *, column_layout_requested: bool, vertical_layout: bool) -> tuple[str, str]:
     if node_count <= 8:
-        return "1.8", "1.05"
+        return "1.15", "0.4"
     if column_layout_requested:
-        return "0.85", "0.55"
+        return "0.65", "0.35"
     if vertical_layout:
-        return "0.75", "0.55"
-    return "0.85", "0.55"
+        return "0.6", "0.35"
+    return "0.65", "0.35"
 
 
 def edge_label_attributes(label: str) -> str:
-    return f'taillabel="{escape_dot(label)}"'
+    return f'label="{escape_dot(label)}"'
 
 
 def edge_dot_statement(
@@ -1081,15 +1114,26 @@ def graph_column_groups(
             groups["column_1_main_characters"].append(node_id)
         else:
             groups["column_2_secondary_characters"].append(node_id)
-    for group_ids in groups.values():
+    for group_name, group_ids in groups.items():
         group_ids.sort(
             key=lambda current_id: (
+                graph_column_node_type_rank(group_name, nodes[current_id].node_type),
                 0 if compact(nodes[current_id].name) in main_place_keys or compact(current_id) in main_place_keys else 1,
                 -weights.get(current_id, 0),
                 nodes[current_id].name.lower(),
             )
         )
     return groups
+
+
+def graph_column_node_type_rank(group_name: str, node_type: str) -> int:
+    if group_name == "column_0_family_names":
+        return {
+            "source_document": 0,
+            "family": 1,
+            "group": 2,
+        }.get(node_type, 3)
+    return 0
 
 
 def prominent_relationship_edges(edges: list[CombinedRelationshipEdge]) -> list[CombinedRelationshipEdge]:

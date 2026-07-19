@@ -115,6 +115,33 @@ def test_extract_character_graph_creates_stats_and_known_prose_relationships(tmp
     assert validate_graph(graph) == []
 
 
+def test_extract_character_graph_reads_rivals_from_stats_table(tmp_path):
+    source = tmp_path / "arlen.md"
+    source.write_text(
+        """# Arlen Voss
+
+## Character Stats
+
+| Name | Race | Class | Rivals |
+|------|------|-------|--------|
+| Arlen | Elf | Wizard | Torvak; Silver Court |
+
+## Character Backstory
+
+Arlen keeps careful notes on every opponent.
+""",
+        encoding="utf-8",
+    )
+
+    graph = extract_character_graph(load_backstory(source, character_id="arlen_voss"))
+
+    rival_edges = [edge for edge in graph.relationships if edge.relationship_type == "rival"]
+    assert {edge.target for edge in rival_edges} == {"torvak", "silver_court"}
+    assert all(edge.relationship_label == "Rivals" for edge in rival_edges)
+    assert "torvak" in graph.characters
+    assert "silver_court" in graph.places
+
+
 def test_extract_character_graph_is_idempotent_for_same_source(tmp_path):
     source = tmp_path / "arlen.md"
     source.write_text(BACKSTORY, encoding="utf-8")
@@ -644,7 +671,7 @@ def test_graph_view_helpers_format_relationships_and_dot(tmp_path):
     assert all(row["Relationship"] not in {"Race", "Class", "Pronouns", "Drive"} for row in relationships)
     assert any(row["Value"] == "Elf" and row["Attribute"] == "Race" for row in attributes)
     assert any(row["Value"] == "Silver Court" and row["Attribute"] == "Place" for row in places)
-    assert any(row["Table"] == "Relationships" and row["Item"] == "Rival" for row in evidence)
+    assert any(row["Table"] == "Relationships" and row["Item"] == "Rivals" for row in evidence)
     assert any(row["Evidence"] == "Bullet evidence should render without a list marker." for row in evidence)
     assert any(row["Table"] == "Attributes" and row["Item"] == "Race" for row in evidence)
     assert any(row["Table"] == "Places" and row["Value"] == "Silver Court" for row in evidence)

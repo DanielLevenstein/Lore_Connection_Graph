@@ -209,7 +209,7 @@ def derived_lore_entity_relationships(
         relationship = {
             "character": "Mentioned",
             "place": "Location",
-            "group": "Group",
+            "group": "Mentioned",
         }.get(candidate.entity_type, "Mentioned")
         evidence_items = candidate.evidence or [""]
         for evidence in evidence_items:

@@ -18,6 +18,7 @@ FIXTURE_CHARACTER_SHEETS_DIR = ROOT_DIR / "tests" / "fixtures" / "character_shee
 HIDDEN_LORE_FIXTURE_ENV = "LOCAL_CHATBOT_E2E_LORE_FIXTURE_DIR"
 KNOWLEDGE_GRAPH_SCREENSHOT_ENV = "LOCAL_CHATBOT_E2E_KNOWLEDGE_GRAPH_SCREENSHOT"
 KNOWLEDGE_GRAPH_SCREENSHOT_NODE_ENV = "LOCAL_CHATBOT_E2E_KNOWLEDGE_GRAPH_NODE"
+KNOWLEDGE_GRAPH_LABEL_POSITION_SCREENSHOT = ROOT_DIR / "docs" / "screenshots" / "Knowledge_Graph_Label_Position_Test.png"
 
 
 def streamlit_executable() -> Path:
@@ -513,6 +514,38 @@ def test_capture_knowledge_graph_screenshot(isolated_character_app):
 
     assert screenshot_path.exists()
     assert screenshot_path.stat().st_size > 0
+
+
+def test_knowledge_graph_edge_labels_are_visible_for_position_review(isolated_character_app):
+    app_url, _docs_lore_dir, _characters_dir, _places_dir, _session_notes_dir, _data_dir = isolated_character_app
+    KNOWLEDGE_GRAPH_LABEL_POSITION_SCREENSHOT.parent.mkdir(parents=True, exist_ok=True)
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 900})
+        page.goto(app_url, wait_until="networkidle")
+        page.evaluate("document.body.style.zoom = '1.15'")
+
+        graph_expander = page.locator("[data-testid=stExpander]").filter(has_text="Combined Knowledge Graph")
+        expect(graph_expander).to_be_visible(timeout=10000)
+        graph_expander.get_by_text("Combined Knowledge Graph", exact=True).click()
+        expect(graph_expander.get_by_role("tab").first).to_be_visible(timeout=10000)
+
+        graph_tab = graph_expander.get_by_role("tab", name="Jory Ravenmark", exact=True)
+        if graph_tab.count():
+            graph_tab.click()
+        graph_node_select = graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True).first
+        expect(graph_node_select).to_have_value("Jory Ravenmark", timeout=10000)
+
+        graph_image = graph_expander.get_by_role("img").first
+        expect(graph_image).to_be_visible(timeout=10000)
+
+        graph_expander.scroll_into_view_if_needed()
+        page.screenshot(path=str(KNOWLEDGE_GRAPH_LABEL_POSITION_SCREENSHOT))
+        browser.close()
+
+    assert KNOWLEDGE_GRAPH_LABEL_POSITION_SCREENSHOT.exists()
+    assert KNOWLEDGE_GRAPH_LABEL_POSITION_SCREENSHOT.stat().st_size > 0
 
 
 def test_ui_fills_only_visible_character_editor_fields_and_saves(isolated_character_app):

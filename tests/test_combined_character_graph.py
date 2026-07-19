@@ -153,7 +153,7 @@ Neal is a performer.
     dot = combined_relationship_dot(combined)
 
     assert 'splines="line"' in dot
-    assert 'ranksep=1.8, nodesep=1.05' in dot
+    assert 'ranksep=1.15, nodesep=0.4' in dot
     assert 'fontcolor="#cbd5e1"' in dot
     assert 'labelfontcolor="#cbd5e1"' in dot
     assert combined.characters["royal_tittles"].node_type == "place"
@@ -262,9 +262,9 @@ def test_fixture_graph_uses_party_column_layout_without_hidden_fixtures():
     assert '"mrs_nightbloom"' in dot
     assert 'subgraph "cluster_column_3_places"' in dot
     assert "Session Notes" not in dot
-    visible_edges = [line for line in dot.splitlines() if "->" in line and "taillabel=" in line]
+    visible_edges = [line for line in dot.splitlines() if "->" in line and "label=" in line]
     assert visible_edges
-    assert all('constraint="false"' in line for line in visible_edges)
+    assert all('constraint="false"' not in line for line in visible_edges)
     intra_column_edges = [
         line
         for line in dot.splitlines()
@@ -755,6 +755,9 @@ def test_session_note_entity_extraction_promotes_group_names_to_family_column():
 
     assert combined.characters["igniscult"].name == "Ignis Cult"
     assert combined.characters["igniscult"].node_type == "group"
+    assert ("session_notes", "igniscult", "mentioned") in {
+        (edge.source, edge.target, edge.relationship_type) for edge in combined.edges
+    }
     assert '"igniscult" [label="Ignis Cult", fillcolor="#e9d5ff"' in dot
     assert 'shape="trapezium"' in dot
     assert '"igniscult"' in family_column
@@ -835,8 +838,8 @@ def test_other_connections_graph_summarizes_session_note_relationships():
 
     assert set(focused.characters) == {"character_3", "mentor", "pixie_kingdom"}
     assert [(edge.source, edge.relationship_label, edge.target) for edge in focused.edges] == [
-        ("character_3", "Mentioned", "mentor"),
         ("character_3", "Location", "pixie_kingdom"),
+        ("character_3", "Mentioned", "mentor"),
     ]
     assert "session_notes" not in focused.characters
     assert "Session Notes" not in combined_relationship_dot(focused, "character_3")
@@ -904,6 +907,43 @@ Dizlevad later spoke with Mog.
     assert "John Doctor" not in connections
 
 
+def test_other_connections_graph_limits_broad_session_note_connections():
+    relationships = [
+        {
+            "source_id": "session_notes",
+            "source_name": "Session Notes",
+            "source_type": "character",
+            "source_file": "world_building/lore/session_notes/Session_Notes.md",
+            "target_id": "typhon",
+            "target_name": "Typhon",
+            "target_type": "character",
+            "relationship": "Mentioned",
+            "evidence": "Typhon crossed paths with several people at the carnival.",
+        }
+    ]
+    for index in range(12):
+        relationships.append(
+            {
+                "source_id": "session_notes",
+                "source_name": "Session Notes",
+                "source_type": "character",
+                "source_file": "world_building/lore/session_notes/Session_Notes.md",
+                "target_id": f"connection_{index}",
+                "target_name": f"Connection {index}",
+                "target_type": "character",
+                "relationship": "Mentioned",
+                "evidence": f"Typhon crossed paths with Connection {index} at the carnival.",
+            }
+        )
+    combined = build_combined_character_graph([], lore_relationships=relationships)
+
+    focused = other_connections_graph(combined, "typhon")
+    rows = other_connection_rows(combined, "typhon")
+
+    assert len(focused.edges) == 6
+    assert len(rows) == 6
+
+
 def test_combined_relationship_dot_highlights_focused_node():
     relationships = [
         {
@@ -963,8 +1003,30 @@ def test_combined_relationship_dot_shows_most_prominent_connection_label():
     dot = combined_relationship_dot(build_combined_character_graph([], lore_relationships=relationships))
 
     assert dot.count('"neal_lovington" -> "jory_ravenmark"') == 1
-    assert '[taillabel="Enemy"' in dot
-    assert '[taillabel="Mentioned"' not in dot
+    assert '[label="Enemy"' in dot
+    assert '[label="Mentioned"' not in dot
+
+
+def test_combined_relationship_dot_displays_rivals_label():
+    combined = build_combined_character_graph(
+        [],
+        lore_relationships=[
+            {
+                "source_id": "arlen_voss",
+                "source_name": "Arlen Voss",
+                "source_type": "character",
+                "target_id": "torvak",
+                "target_name": "Torvak",
+                "target_type": "character",
+                "relationship": "Rival",
+                "evidence": "Torvak is Arlen's rival.",
+            }
+        ],
+    )
+
+    dot = combined_relationship_dot(combined)
+
+    assert '"arlen_voss" -> "torvak" [label="Rivals"]' in dot
 
 
 def test_combined_relationship_dot_stacks_focused_targets_in_same_column():
@@ -1020,10 +1082,10 @@ def test_combined_relationship_dot_stacks_focused_targets_in_same_column():
     assert '"mrs_nightbloom"' in secondary_column
     assert '"sunstone_mage_college"' in secondary_column
     assert '"sunstone_mage_college"' not in place_cluster_line
-    assert '"family_tree" -> "orin_nightbloom" [taillabel="Family", dir=back' in dot
-    assert '"orin_nightbloom" -> "mrs_nightbloom" [taillabel="Family"' in dot
-    assert '"orin_nightbloom" -> "sunstone_mage_college" [taillabel="Place"' in dot
-    assert '[label="Family"' not in dot
+    assert '"orin_nightbloom" -> "family_tree" [label="Family"' in dot
+    assert '"orin_nightbloom" -> "mrs_nightbloom" [label="Family"' in dot
+    assert '"orin_nightbloom" -> "sunstone_mage_college" [label="Place"' in dot
+    assert "taillabel=" not in dot
 
 
 def test_combined_attribute_rows_include_hidden_metadata_with_evidence(tmp_path):
@@ -1270,7 +1332,7 @@ Neal is a performer.
     assert '"family_lovington" [label="Lovington Family", fillcolor="#fef3c7"' in dot
     assert 'shape="ellipse", width=1.9, height=0.8, margin="0.14,0.06"' in dot
     assert "regular=true" not in dot
-    assert '"family_lovington" -> "neal_lovington" [taillabel="Family", dir=back]' in dot
+    assert '"neal_lovington" -> "family_lovington" [label="Family"]' in dot
     assert "headlabel=" not in dot
 
 
