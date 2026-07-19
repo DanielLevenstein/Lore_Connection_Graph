@@ -70,11 +70,14 @@ def build_combined_character_graph(
     combined = CombinedCharacterGraph()
     for graph in graphs:
         session_note_graph = is_session_note_graph(graph)
-        combined.characters[graph.primary_character.id] = CombinedCharacterNode(
-            id=graph.primary_character.id,
-            name=combined_primary_display_name(graph, session_note_graph),
-            source_file=graph.primary_character.source_file,
-            node_type=combined_primary_node_type(graph, session_note_graph),
+        set_combined_node(
+            combined,
+            CombinedCharacterNode(
+                id=graph.primary_character.id,
+                name=combined_primary_display_name(graph, session_note_graph),
+                source_file=graph.primary_character.source_file,
+                node_type=combined_primary_node_type(graph, session_note_graph),
+            ),
         )
         if not session_note_graph:
             for character_id, character in graph.characters.items():
@@ -222,6 +225,13 @@ def build_combined_character_graph(
     prune_disconnected_nodes(combined)
     clarify_duplicate_display_names(combined)
     return combined
+
+
+def set_combined_node(graph: CombinedCharacterGraph, node: CombinedCharacterNode) -> None:
+    existing = graph.characters.get(node.id)
+    if existing is not None and existing.node_type == "source_document" and node.node_type != "source_document":
+        return
+    graph.characters[node.id] = node
 
 
 def is_session_note_graph(graph: CharacterGraph) -> bool:

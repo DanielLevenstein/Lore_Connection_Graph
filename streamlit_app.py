@@ -18,12 +18,10 @@ from character_graph.combined_graph import (
     party_connections_graph,
     compact,
 )
-from character_graph.extraction import extract_character_graph
 from character_graph.graph_view import (
     evidence_rows,
 )
 from character_graph.graphviz_config import load_graphviz_config
-from character_graph.ingest import load_backstory
 from character_graph.session_entities import derived_lore_entity_relationships
 from character_graph.storage import load_graph
 
@@ -45,10 +43,12 @@ from local_chatbot.storage import (
     list_external_character_sheets,
     list_places,
     list_characters,
+    load_or_regenerate_lore_graph,
     read_place_markdown,
     read_character_profile,
     read_text,
     regenerate_character_graph,
+    regenerate_lore_graph,
     remove_character_connections,
     write_character_connections,
     write_character_profile,
@@ -801,11 +801,11 @@ def load_lore_graphs():
     graphs = []
     for path in lore_markdown_files():
         try:
-            document = load_backstory(path, character_id=compact(path.stem))
-            primary_name = session_note_source_name(path) if path_is_session_note(path) else None
-            graphs.append(extract_character_graph(document, primary_name=primary_name))
+            graph = load_or_regenerate_lore_graph(path)
         except (OSError, ValueError):
             continue
+        if graph is not None:
+            graphs.append(graph)
     return graphs
 
 
@@ -1104,8 +1104,8 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
 
         submitted = st.form_submit_button("Create Character", icon=":material/person_add:")
         if submitted:
-            if not all([name.strip(), race.strip(), character_class.strip(), backstory.strip()]):
-                st.error("Complete Name, Race, Class, And Backstory.")
+            if not all([name.strip(), backstory.strip()]):
+                st.error("Complete Name And Backstory.")
                 return
             try:
                 profile = CharacterProfile(
@@ -1384,6 +1384,7 @@ def render_lore_import_tools() -> None:
                 f"Imported {summary.total} Lore File{'s' if summary.total != 1 else ''} "
                 f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
             )
+            regenerate_all_lore_graph_json()
             mark_combined_graph_dirty()
             st.rerun()
         if action_cols[1].button("Create Lore Backup", icon=":material/backup:", key="create_lore_backup"):
@@ -1429,6 +1430,7 @@ def render_lore_backup_restore_dialog(overwrite_existing: bool) -> None:
             f"({summary.characters} Characters, {summary.places} Places, "
             f"{summary.session_notes} Session Notes, {summary.metadata} Metadata Files)."
         )
+        regenerate_all_lore_graph_json()
         mark_combined_graph_dirty()
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
@@ -1455,6 +1457,16 @@ def render_bulk_lore_removal_warning() -> None:
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
         st.rerun()
+
+
+def regenerate_all_lore_graph_json() -> list[str]:
+    failures: list[str] = []
+    for path in lore_markdown_files():
+        try:
+            regenerate_lore_graph(path)
+        except (OSError, ValueError) as exc:
+            failures.append(f"{path.name}: {exc}")
+    return failures
 
 
 @st.dialog("Delete Session Note File?")
@@ -1964,7 +1976,7 @@ def render_character_editor(character: Character) -> None:
     profile = read_character_profile(character)
     with st.expander("Edit Character", expanded=bool(st.session_state.get(f"character_status_{character.name}", ""))):
         with st.form(f"edit_character_{character.name}"):
-            st.text_input("Name", value=profile.name, disabled=True)
+            display_name = st.text_input("Name", value=profile.name)
             name_cols = st.columns(2)
             first_name = name_cols[0].text_input("First Name", value=profile.first_name)
             family_name = name_cols[1].text_input("Family Name", value=profile.family_name)
@@ -2112,7 +2124,7 @@ def render_character_editor(character: Character) -> None:
                 ):
                     updated_sections = mark_updated_section(updated_sections, "Character Summary")
                 updated = CharacterProfile(
-                    name=profile.name,
+                    name=display_name.strip() or profile.name,
                     pronouns=pronouns.strip(),
                     level=level.strip(),
                     race=race.strip(),

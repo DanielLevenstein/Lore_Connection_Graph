@@ -977,7 +977,10 @@ def test_combined_relationship_dot_highlights_focused_node():
         focus_node_id="vivit",
     )
 
-    assert '"vivit" [label="Vivit", fillcolor="#dbeafe", color="#ef4444", penwidth="2.5"' in dot
+    vivit_line = next(line for line in dot.splitlines() if '"vivit" [label=' in line)
+    assert 'fillcolor="#dbeafe"' in vivit_line
+    assert 'color="#ef4444"' in vivit_line
+    assert 'penwidth="2.5"' in vivit_line
 
 
 def test_combined_relationship_dot_shows_most_prominent_connection_label():
@@ -1573,6 +1576,54 @@ def test_combined_graph_includes_lore_relationships_without_character_sheets():
     assert combined.edges[0].relationship_type == "performs"
     assert rows[0]["Relationship"] == "Performs"
     assert rows[0]["Connection"] == "Neal Lovington"
+
+
+def test_combined_graph_keeps_session_source_type_when_duplicate_lore_graph_follows():
+    session_graph = CharacterGraph(
+        schema_version="0.3.0",
+        primary_character=PrimaryCharacterRef(
+            id="uploaded_graph_notes",
+            name="Uploaded Graph Notes",
+            source_file="external/session_notes/Uploaded_Graph_Notes.md",
+        ),
+    )
+    loose_graph = CharacterGraph(
+        schema_version="0.3.0",
+        primary_character=PrimaryCharacterRef(
+            id="uploaded_graph_notes",
+            name="Uploaded Graph Notes",
+            source_file="world_building/lore/graph_upload.md",
+        ),
+    )
+    relationships = [
+        {
+            "source_id": "uploaded_graph_notes",
+            "source_name": "Uploaded Graph Notes",
+            "source_type": "character",
+            "source_file": "external/session_notes/Uploaded_Graph_Notes.md",
+            "target_id": "neal_lovington",
+            "target_name": "Neal Lovington",
+            "target_type": "character",
+            "relationship": "Mentioned",
+            "evidence": "Neal Lovington warned the party about the Cult of Ignis.",
+        },
+        {
+            "source_id": "uploaded_graph_notes",
+            "source_name": "Uploaded Graph Notes",
+            "source_type": "character",
+            "source_file": "external/session_notes/Uploaded_Graph_Notes.md",
+            "target_id": "ignis_cult",
+            "target_name": "Ignis Cult",
+            "target_type": "group",
+            "relationship": "Mentioned",
+            "evidence": "Neal Lovington warned the party about the Cult of Ignis.",
+        },
+    ]
+
+    combined = build_combined_character_graph([session_graph, loose_graph], lore_relationships=relationships)
+
+    assert combined.characters["uploaded_graph_notes"].node_type == "source_document"
+    assert any(row["Connection"] == "Ignis Cult" for row in other_connection_rows(combined, "neal_lovington"))
 
 
 def test_combined_relationship_rows_split_edge_evidence_into_rows():
