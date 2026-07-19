@@ -99,3 +99,13 @@ Commit to `feature/knowledge_graph` prior to implementing changes
 - Fixed `Family Tree` only appearing for directly mentioned characters by deriving family-node links from family section headings and surfacing source documents connected through a character's family node.
 - Normalized the `Nighbloom` family heading to the existing `Nightbloom Family` node and stripped Markdown heading markers from evidence display.
 - Verified with `.venv/bin/python -m pytest -q tests/test_character_graph.py tests/test_combined_character_graph.py`.
+
+### Completed - Graph JSON Saves And Character Form Improvements - 2026-07-19
+
+- Pulled the latest `develop` branch from the `main` remote before implementation.
+- Added graph JSON generation for place saves, session-note saves/imports, and bulk lore import/restore backfills.
+- Changed the Combined Knowledge Graph loader to prefer saved graph JSON and regenerate missing JSON as a backfill.
+- Preserved session-note `source_document` node type when duplicate loose import-source markdown has the same graph id.
+- Made character display names editable and allowed new characters to be saved without Race or Class.
+- Updated `docs/reports/ui_issue_report.md`.
+- Verified with `.venv/bin/python -m pytest -q tests/test_entity_file_saves.py`, `.venv/bin/python -m pytest -q tests/test_session_notes.py tests/test_combined_character_graph.py tests/test_character_graph.py`, `.venv/bin/python -m pytest -q tests/e2e/test_session_notes_ui.py::test_ui_uploaded_session_note_updates_combined_graph_from_configured_notes_dir`, and `.venv/bin/python -m pytest -q tests/e2e/test_character_sheet_roundtrip_ui.py::test_create_validation_preserves_entered_fields`.

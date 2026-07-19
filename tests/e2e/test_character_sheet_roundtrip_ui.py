@@ -963,7 +963,7 @@ def test_create_validation_preserves_entered_fields(isolated_character_app):
         fill_textbox(page, "Race", "Human")
         fill_textbox(page, "Class", "Bard")
         page.get_by_role("button", name="person_add Create Character").click()
-        expect(page.get_by_text("Complete Name, Race, Class, And Backstory.")).to_be_visible(timeout=10000)
+        expect(page.get_by_text("Complete Name And Backstory.")).to_be_visible(timeout=10000)
         expect(page.get_by_role("textbox", name="Name", exact=True).first).to_have_value("Keeps Draft")
         expect(page.get_by_role("textbox", name="Race", exact=True).first).to_have_value("Human")
         expect(page.get_by_role("textbox", name="Class", exact=True).first).to_have_value("Bard")

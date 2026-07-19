@@ -124,6 +124,7 @@ def import_lore_document_text(text: str, title: str = "") -> SessionNote:
     if path.exists():
         body = merge_new_markdown_sections(path.read_text(encoding="utf-8"), body)
     path.write_text(f"{body}\n", encoding="utf-8")
+    regenerate_session_note_graph(path)
     return SessionNote(note_date=None, body=body, path=path, title=inferred_title)
 
 
@@ -497,6 +498,7 @@ def write_markdown_section(path: Path, section_key: str, body: str) -> SessionNo
     updated_lines = lines[: section.start_line] + replacement + lines[section.end_line :]
     updated = "\n".join(updated_lines).strip()
     path.write_text(f"{updated}\n", encoding="utf-8")
+    regenerate_session_note_graph(path)
     title = markdown_title(updated) or path.stem.replace("_", " ")
     return SessionNote(note_date=None, body=updated, path=path, title=title)
 
@@ -719,6 +721,7 @@ def save_session_notes(
         path = session_note_path(note_date, note_title)
         content = render_session_note(note_date, body, note_title)
         path.write_text(content, encoding="utf-8")
+        regenerate_session_note_graph(path)
         notes.append(SessionNote(note_date=note_date, body=body, path=path, title=note_title))
     return notes
 
@@ -756,6 +759,7 @@ def import_discord_session_notes_text(text: str, split_sessions: bool = True) ->
     for note_date, title, body in split_discord_session_notes(text, split_sessions=split_sessions):
         note_path = session_note_path(note_date, title)
         note_path.write_text(render_session_note(note_date, body, title), encoding="utf-8")
+        regenerate_session_note_graph(note_path)
         notes.append(SessionNote(note_date=note_date, body=body, path=note_path, title=title))
     return notes
 
@@ -956,6 +960,7 @@ def normalize_session_note_file_headings(path: Path, today: date | None = None) 
     if normalized == text.strip():
         return False
     path.write_text(f"{normalized}\n", encoding="utf-8")
+    regenerate_session_note_graph(path)
     return True
 
 
@@ -1033,17 +1038,32 @@ def write_session_note(path: Path, body: str, title: str = "", session_date: str
     if not note_date:
         note_date = session_note_date_from_path(path)
     path.write_text(render_session_note(note_date, body, title), encoding="utf-8")
+    regenerate_session_note_graph(path)
     return SessionNote(note_date=note_date, body=body.strip(), path=path, title=title.strip())
 
 
 def write_lore_document(path: Path, body: str) -> SessionNote:
     title = markdown_title(body) or path.stem.replace("_", " ")
     path.write_text(f"{body.strip()}\n", encoding="utf-8")
+    regenerate_session_note_graph(path)
     return SessionNote(note_date=None, body=body.strip(), path=path, title=title)
+
+
+def regenerate_session_note_graph(path: Path) -> None:
+    from local_chatbot.storage import regenerate_lore_graph
+
+    regenerate_lore_graph(path)
+
+
+def delete_session_note_graph(path: Path) -> None:
+    from local_chatbot.storage import graph_path_for_lore_path
+
+    graph_path_for_lore_path(path).unlink(missing_ok=True)
 
 
 def delete_session_note(path: Path) -> None:
     path.unlink(missing_ok=True)
+    delete_session_note_graph(path)
 
 
 def render_session_note(note_date: date | str, body: str, title: str = "") -> str:

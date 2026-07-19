@@ -89,6 +89,10 @@ Status: fixed and covered by `tests/e2e/test_character_sheet_roundtrip_ui.py::te
 - Evidence columns now strip Markdown bullet/list markers before display.
 - Named session-note source nodes such as `Family Tree` are typed as `source_document` and appear in the Family Names column with a distinct graph shape instead of being promoted as secondary characters.
 - Family-name nodes are labeled as `{Name} Family`, and extracted group names such as `Ignis Cult` appear in the Family Names column with a distinct group shape.
+- Character, place, and session-note saves now write graph JSON immediately, so newly created lore does not wait for a later graph regeneration before appearing in the Combined Knowledge Graph.
+- Imported session notes now write graph JSON during import and retain their `source_document` graph type even when duplicate loose import-source files exist, so related entities such as `Ignis Cult` remain visible from the associated character graph.
+- Character Race and Class are optional in the create/save UI; only Name and Backstory are required for new characters.
+- Character display names are editable in the character editor and continue to update the visible Markdown title/profile name without renaming the underlying file.
 
 ## Improvements made
 
