@@ -109,3 +109,18 @@ Commit to `feature/knowledge_graph` prior to implementing changes
 - Made character display names editable and allowed new characters to be saved without Race or Class.
 - Updated `docs/reports/ui_issue_report.md`.
 - Verified with `.venv/bin/python -m pytest -q tests/test_entity_file_saves.py`, `.venv/bin/python -m pytest -q tests/test_session_notes.py tests/test_combined_character_graph.py tests/test_character_graph.py`, `.venv/bin/python -m pytest -q tests/e2e/test_session_notes_ui.py::test_ui_uploaded_session_note_updates_combined_graph_from_configured_notes_dir`, and `.venv/bin/python -m pytest -q tests/e2e/test_character_sheet_roundtrip_ui.py::test_create_validation_preserves_entered_fields`.
+
+### Graph Improvements And UI Follow-Up - 2026-07-19
+
+- Pull the latest `develop` branch from the `main` remote before implementation.
+- Update `docs/reports/ui_issue_report.md` after the UI/graph bugs are fixed.
+- Update the changelog at the bottom of `RELEASE_NOTES.md`; tag each entry with date and branch.
+- Keep graph-edge report grades out of the UI.
+- Ensure newly created characters show up on the knowledge graph.
+- Ensure imported session notes show up in the knowledge graph.
+- Make user/character display names editable.
+- Allow saving users/characters without defining Class or Race.
+- Set a configurable max number of secondary places and secondary characters in the graph.
+- Identify and fix why `Justice` and `Night bloom` appear in the knowledge graph even though they are not characters or places.
+- Do not render party-to-party connections in Party View.
+- Test the graph display and focused regressions before committing implementation changes.
