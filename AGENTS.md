@@ -1,7 +1,7 @@
 # Commit Working Changes
 - Between each section in a TODO list commit working changes to create a stable checkpoint. 
 - Do not commit changes until testing for each section is complete.
-- If no testing section is present, add one to the TODO and commit it with the feature commit. 
+- Changelogs have been moved to the bottom of RELEASE_NOTES.md and should include a date stamp and the branch you are working on.
 
 ## Semantic Aware Model
 - Install semantic informed model locally for character rewrites and knowledge graph summary sections.

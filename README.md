@@ -30,11 +30,11 @@ A manual backup button has been added in the `Lore Import` Section for your conv
 
 ## Release Notes
 
-| Version | Summary |
-| --- | --- |
-| v1.0.0 | This release adds a dedicated Knowledge Graph UI using graphviz.|
-| v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management. |
 
+| Version | Summary                                                                           |
+| ------- | --------------------------------------------------------------------------------- |
+| v1.0.0  | This release adds a dedicated Knowledge Graph UI using graphviz.                  |
+| v0.1.0  | Packaged as a Streamlit app for local character sheets, campaign lore management. |
 
 ## Setup
 
@@ -56,6 +56,8 @@ streamlit run streamlit_app.py
 ```
 
 ## Project Screenshots
+
+![Knowledge Graph](docs/screenshots/Structured_Knowledge_Graph_Full.png)
 
 ## Storage Source Of Truth
 
@@ -86,6 +88,49 @@ world_building/meta_data/character_graph/*.graph.json
 ```
 
 Everything under `world_building/` is local campaign material, runtime data, or generated output and should not be committed.
+
+## Environmental Variables
+
+The app works without any environment variables. By default, it reads and writes under `world_building/` in the repository root.
+
+The `LOCAL_CHATBOT_` prefix is legacy naming from when this project started as a local chatbot. 
+The current app is the roleplaying lore and knowledge graph tool; the prefix remains because these are the names currently read by the code.
+
+Feature and development flags:
+
+| Variable | Enabled Value | Purpose |
+| -------- | ------------- | ------- |
+| `LOCAL_CHATBOT_DISABLE_LORE_BACKUPS` | `1`, `true`, `yes`, or `on` | Skips the automatic backup that normally runs when the Streamlit app starts. |
+| `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES` | `1` | Shows graph-backed summary and backstory rewrite controls in the character editor. |
+| `LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE` | `1` | Shows the internal attribute graph override editor. This is a maintenance/debug surface, not part of the normal app flow. |
+
+Test-only variables:
+
+| Variable | Purpose |
+| -------- | ------- |
+| `LOCAL_CHATBOT_E2E_LORE_FIXTURE_DIR` | Points e2e graph tests at an alternate hidden/customer lore fixture directory. |
+| `LOCAL_CHATBOT_E2E_KNOWLEDGE_GRAPH_SCREENSHOT` | Saves an opt-in Combined Knowledge Graph screenshot during the screenshot e2e test. |
+| `LOCAL_CHATBOT_E2E_KNOWLEDGE_GRAPH_NODE` | Selects the graph node used by the screenshot e2e test. Defaults to `Dizlevad`. |
+| `LOCAL_CHATBOT_CHARACTER_GRAPH_TEST_LORE_DIR` | Points direct character graph tests at an alternate lore directory. |
+
+Directory Overrides:
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `LOCAL_CHATBOT_WORLD_BUILDING_DIR` | `world_building` | Root directory for local campaign data, imports, backups, lore, and runtime metadata. |
+| `LOCAL_CHATBOT_WORLD_BUILDING_IMPORT_DIR` | `$LOCAL_CHATBOT_WORLD_BUILDING_DIR/import` | Raw markdown or text files staged for lore import. |
+| `LOCAL_CHATBOT_WORLD_BUILDING_BACKUP_DIR` | `$LOCAL_CHATBOT_WORLD_BUILDING_DIR/backup` | Backup directory used by automatic and manual lore backups. |
+| `LOCAL_CHATBOT_LORE_DIR` | `$LOCAL_CHATBOT_WORLD_BUILDING_DIR/lore` | Root directory for canonical authored lore. |
+| `LOCAL_CHATBOT_CHARACTERS_DIR` | `$LOCAL_CHATBOT_LORE_DIR/character_sheets` | Authored character sheet markdown files. |
+| `LOCAL_CHATBOT_PLACES_DIR` | `$LOCAL_CHATBOT_LORE_DIR/places` | Authored place lore markdown files. |
+| `LOCAL_CHATBOT_SESSION_NOTES_DIR` | `$LOCAL_CHATBOT_LORE_DIR/session_notes` | Authored or imported session note markdown files. |
+| `LOCAL_CHATBOT_META_DATA_DIR` | `$LOCAL_CHATBOT_WORLD_BUILDING_DIR/meta_data` | Runtime metadata, character profiles, memories, and derived graph JSON. |
+| `LOCAL_CHATBOT_LORE_FIXTURES_DIR` | `tests/fixtures` | Test fixture root used by the built-in lore import tools. |
+
+Example isolated run:
+
+```bash
+LOCAL_CHATBOT_WORLD_BUILDING_DIR=/tmp/lore_graph_sandbox ./run_streamlit.sh
+```
 
 ## Specs
 
