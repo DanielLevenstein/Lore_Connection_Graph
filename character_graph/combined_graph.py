@@ -1003,6 +1003,7 @@ def combined_relationship_dot(
         f"  edge [color=\"#64748b\", fontname=\"Inter\", fontsize=10, fontcolor=\"{escape_dot(label_font_color)}\", labelfontcolor=\"{escape_dot(label_font_color)}\"];",
     ]
     column_groups = graph_column_groups(display_characters, display_edges, main_character_keys, main_place_keys)
+    column_by_node = graph_column_by_node(column_groups)
     for character_id, character in display_characters.items():
         fill = (
             "#fde68a"
@@ -1035,7 +1036,13 @@ def combined_relationship_dot(
         )
     lines.extend(graph_column_rank_lines(column_groups))
     for edge in display_edges:
-        constraint = ', constraint="false"' if vertical_layout and edge.source == broad_source else ""
+        constraint = edge_constraint_attribute(
+            edge,
+            column_by_node,
+            column_layout_requested,
+            vertical_layout,
+            broad_source,
+        )
         lines.append(edge_dot_statement(edge, display_characters, constraint))
     if vertical_layout and broad_source:
         targets = [
@@ -1134,6 +1141,28 @@ def graph_column_node_type_rank(group_name: str, node_type: str) -> int:
             "group": 2,
         }.get(node_type, 3)
     return 0
+
+
+def graph_column_by_node(column_groups: dict[str, list[str]]) -> dict[str, str]:
+    return {
+        node_id: group_name
+        for group_name, node_ids in column_groups.items()
+        for node_id in node_ids
+    }
+
+
+def edge_constraint_attribute(
+    edge: CombinedRelationshipEdge,
+    column_by_node: dict[str, str],
+    column_layout_requested: bool,
+    vertical_layout: bool,
+    broad_source: str,
+) -> str:
+    if vertical_layout and edge.source == broad_source:
+        return ', constraint="false"'
+    if column_layout_requested and column_by_node.get(edge.source) == column_by_node.get(edge.target):
+        return ', constraint="false"'
+    return ""
 
 
 def prominent_relationship_edges(edges: list[CombinedRelationshipEdge]) -> list[CombinedRelationshipEdge]:

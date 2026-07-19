@@ -2,13 +2,15 @@
 - pull the latest changes from the main before writing code.
 - Update `ui_issue_report.md` after UI bugs are fixed. 
 - Remove graph-edge report grade from the UI.
-
+ 
+We still aren't using the UI space efficiently.
+1) Neal Lovington is a player character and got moved out of the player character column.
+2) Secondary characters in the UI start from row 1 not row 0 which is odd._
 
 ## Knowledge Graph Display Columns
 Column 0: Family Names
 Column 1: Main Characters
-Column 2: Secondary Characters
-Column 3: Main Places
+Column 2: Secondary Characters & places
 
 Order all items in the graph based on how many times they are mentioned in the lore.
 Allow viewing the graph in two modes, one mode that shows the whole graph and one which shows the connections associated with a single character.

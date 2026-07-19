@@ -264,7 +264,20 @@ def test_fixture_graph_uses_party_column_layout_without_hidden_fixtures():
     assert "Session Notes" not in dot
     visible_edges = [line for line in dot.splitlines() if "->" in line and "label=" in line]
     assert visible_edges
-    assert all('constraint="false"' not in line for line in visible_edges)
+    assert '"jory_ravenmark" -> "neal_lovington" [label="Client", constraint="false"]' in dot
+    assert '"neal_lovington" -> "jory_ravenmark" [label="Client", constraint="false"]' in dot
+    cross_column_edges = [
+        line
+        for line in visible_edges
+        if not any(
+            same_column_edge in line
+            for same_column_edge in [
+                '"jory_ravenmark" -> "neal_lovington"',
+                '"neal_lovington" -> "jory_ravenmark"',
+            ]
+        )
+    ]
+    assert all('constraint="false"' not in line for line in cross_column_edges)
     intra_column_edges = [
         line
         for line in dot.splitlines()
