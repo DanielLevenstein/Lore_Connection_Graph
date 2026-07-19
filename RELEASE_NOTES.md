@@ -2,13 +2,21 @@
 
 | Version | Summary |
 | --- | --- |
-| v1.0.0 | This release adds a dedicated Knowledge Graph tab that surfaces combined graph data from characters, places, and session notes directly in the Streamlit UI. |
-| v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management, and knowledge graph extraction. |
+| v1.0.0 | This release adds a dedicated Knowledge Graph UI using graphviz.|
+| v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management. |
 
 
 ## v1.0.0 - Knowledge Graph Tab
 
 This release adds a dedicated Knowledge Graph tab (v1.0.0) that surfaces combined graph data from characters, places, and session notes directly in the Streamlit UI.
+
+Supported Views:
+**Character View**, **Party View**
+
+### Knowledge Graph Columns 
+Column 0: Family Names
+Column 1: Main Characters
+Column 2: Secondary Characters & places
 
 ### Highlights
 
