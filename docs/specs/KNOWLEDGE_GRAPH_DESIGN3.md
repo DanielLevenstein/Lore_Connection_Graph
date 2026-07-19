@@ -19,7 +19,38 @@ The best fix is a two-stage session-note graph pipeline:
 
 This keeps the combined graph strict while preserving potentially useful extracted details for review.
 
-## Proposed Model
+## Graphviz Default Options
+
+| Area | Default | Reason |
+| --- | --- | --- |
+| Graph direction | `rankdir=LR` | Keeps the focused character graph readable as a left-to-right relationship map. |
+| Background | `bgcolor="transparent"` | Lets the Streamlit theme show through without a boxed chart background. |
+| Edge routing | `splines="line"` | Keeps labels visually attached to straight edges instead of drifting onto curved routing. |
+| Node style | `style="rounded,filled"` | Matches the readable card-like node treatment in the liked character view. |
+| Default node fill | `fillcolor="#dbeafe"` | Distinguishes normal character nodes from typed lore nodes. |
+| Node outline | `color="#94a3b8"` | Gives visible boundaries without heavy contrast. |
+| Node font | `fontname="Inter"`, `fontcolor="#000000"` | Keeps node labels stable and readable in Graphviz SVG output. |
+| Default node shape | `shape="box"` | Keeps character nodes compact and easy to scan. |
+| Edge color | `color="#64748b"` | Provides enough edge contrast without overpowering node labels. |
+| Edge font | `fontname="Inter"`, `fontsize=10` | Keeps relationship labels compact enough to sit on edges. |
+| Edge label color | `fontcolor` and `labelfontcolor` from the active theme | Keeps labels readable in light and dark mode. |
+| Edge label placement | `label="Relationship"` | Places the relationship text on the associated edge path. |
+| Endpoint labels | Avoid `headlabel` and `taillabel` by default | Endpoint labels looked less attached to their relationships in this UI. |
+| Same-column edge constraints | `constraint="false"` only for same-column edges | Prevents intra-column relationships from breaking the intended column layout. |
+| Broad-source fanout constraints | `constraint="false"` for broad-source vertical fanout edges | Lets vertical broad-source layouts stay readable when one source points to many targets. |
+| Invisible column anchors | `style=invis`, `weight=100` between column anchors | Preserves the family/source, main character, secondary, and place column order. |
+| Invisible intra-column stackers | `style=invis`, `weight=50`, `constraint="false"` | Stacks related nodes within a column without making those guide edges visible. |
+
+
+### Typed Node Overrides
+
+| Node type | Shape | Fill | Extra dimensions |
+| --- | --- | --- | --- |
+| Character | `box` | `#dbeafe` | None |
+| Place | `component` | `#dcfce7` | None |
+| Group | `trapezium` | `#e9d5ff` | None |
+| Family | `ellipse` | `#fef3c7` | `width=1.9`, `height=0.8`, `margin="0.14,0.06"` |
+| Source document | `folder` | `#fde68a` | `width=1.65`, `height=0.7`, `margin="0.12,0.06"` |
 
 ### Session Note Attribute Graph
 
@@ -98,9 +129,3 @@ Add focused tests for `Session_Notes.txt` or a smaller representative fixture:
 - Rejected or candidate session-note facts remain available in a review table.
 - Accepted rows project into the combined graph.
 - The graph screenshot contains only recognizable people, places, or approved family/group nodes.
-
-## Migration
-
-No migration is needed for existing generated graph JSON. Session-note graphs are derived data and can be regenerated.
-
-Keep current character graph behavior intact while adding the session-note-specific path. Once the new path exists, `load_lore_graphs()` should route files by lore type instead of feeding every markdown file through `extract_character_graph()`.

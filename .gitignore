@@ -11,5 +11,5 @@ data/
 world_building/
 meta_data/
 /.idea/
-/config/*
-!/character_graph/character_graph.json
+
+/scripts/generate_random_characters.py

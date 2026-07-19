@@ -18,7 +18,7 @@ FIXTURE_CHARACTER_SHEETS_DIR = ROOT_DIR / "tests" / "fixtures" / "character_shee
 HIDDEN_LORE_FIXTURE_ENV = "LOCAL_CHATBOT_E2E_LORE_FIXTURE_DIR"
 KNOWLEDGE_GRAPH_SCREENSHOT_ENV = "LOCAL_CHATBOT_E2E_KNOWLEDGE_GRAPH_SCREENSHOT"
 KNOWLEDGE_GRAPH_SCREENSHOT_NODE_ENV = "LOCAL_CHATBOT_E2E_KNOWLEDGE_GRAPH_NODE"
-KNOWLEDGE_GRAPH_LABEL_POSITION_SCREENSHOT = ROOT_DIR / "docs" / "screenshots" / "Knowledge_Graph_Label_Position_Test.png"
+STRUCTURED_KNOWLEDGE_GRAPH_FULL_SCREENSHOT = ROOT_DIR / "docs" / "screenshots" / "Structured_Knowledge_Graph_Full.png"
 
 
 def streamlit_executable() -> Path:
@@ -497,8 +497,8 @@ def test_capture_knowledge_graph_screenshot(isolated_character_app):
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph", exact=True).click()
         expect(graph_expander.get_by_role("button", name="sync Regenerate All Lore Graphs")).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Structured Knowledge View", exact=True)).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Full Knowledge Graph", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Character View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Full Structured Graph", exact=True)).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_text("Before Selection", exact=True)).not_to_be_visible(timeout=10000)
         expect(graph_expander.get_by_text("Selected View", exact=True)).not_to_be_visible(timeout=10000)
         expect(graph_expander.get_by_role("tab").first).to_be_visible(timeout=10000)
@@ -529,18 +529,92 @@ def test_combined_graph_full_knowledge_graph_view_is_separate(isolated_character
         graph_expander = page.locator("[data-testid=stExpander]").filter(has_text="Combined Knowledge Graph")
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph", exact=True).click()
-        expect(graph_expander.get_by_text("Structured Knowledge View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Character View", exact=True)).to_be_visible(timeout=10000)
 
-        graph_expander.get_by_text("Full Knowledge Graph", exact=True).click()
+        graph_expander.get_by_text("Full Structured Graph", exact=True).click()
         expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_text("Full Graph Details", exact=True)).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True)).not_to_be_visible(timeout=10000)
         browser.close()
 
 
-def test_knowledge_graph_edge_labels_are_visible_for_position_review(isolated_character_app):
+def graph_edge_label_position_issues(graph_expander) -> list[dict[str, object]]:
+    return graph_expander.evaluate(
+        """(root) => {
+            const svg = root.querySelector("svg");
+            if (!svg) {
+                throw new Error("Graphviz SVG was not rendered.");
+            }
+            const issues = [];
+            const tolerance = 6;
+            for (const edge of svg.querySelectorAll("g.edge")) {
+                const title = edge.querySelector("title")?.textContent?.trim() || "(untitled edge)";
+                const geometry = [
+                    ...edge.querySelectorAll("path, polygon, polyline, line")
+                ].filter((element) => {
+                    const box = element.getBBox();
+                    return box.width > 0 || box.height > 0;
+                });
+                const labels = [...edge.querySelectorAll("text")].filter((element) => {
+                    return (element.textContent || "").trim().length > 0;
+                });
+                if (!geometry.length && labels.length) {
+                    issues.push({edge: title, label: labels[0].textContent.trim(), reason: "missing edge geometry"});
+                    continue;
+                }
+                for (const label of labels) {
+                    const labelBox = label.getBBox();
+                    const labelCenter = {
+                        x: labelBox.x + labelBox.width / 2,
+                        y: labelBox.y + labelBox.height / 2,
+                    };
+                    const associated = geometry.some((element) => {
+                        if (typeof element.getPointAtLength === "function") {
+                            const length = element.getTotalLength();
+                            const samples = Math.max(24, Math.ceil(length / 18));
+                            for (let index = 0; index <= samples; index += 1) {
+                                const point = element.getPointAtLength(length * index / samples);
+                                if (
+                                    point.x >= labelBox.x - tolerance &&
+                                    point.x <= labelBox.x + labelBox.width + tolerance &&
+                                    point.y >= labelBox.y - tolerance &&
+                                    point.y <= labelBox.y + labelBox.height + tolerance
+                                ) {
+                                    return true;
+                                }
+                            }
+                        }
+                        const box = element.getBBox();
+                        return (
+                            labelCenter.x >= box.x - tolerance &&
+                            labelCenter.x <= box.x + box.width + tolerance &&
+                            labelCenter.y >= box.y - tolerance &&
+                            labelCenter.y <= box.y + box.height + tolerance
+                        );
+                    });
+                    if (!associated) {
+                        issues.push({
+                            edge: title,
+                            label: label.textContent.trim(),
+                            labelBox: {
+                                x: Math.round(labelBox.x),
+                                y: Math.round(labelBox.y),
+                                width: Math.round(labelBox.width),
+                                height: Math.round(labelBox.height),
+                            },
+                            reason: "label is not located on its owning edge geometry",
+                        });
+                    }
+                }
+            }
+            return issues;
+        }"""
+    )
+
+
+def test_full_knowledge_graph_edge_labels_are_located_on_their_edges(isolated_character_app):
     app_url, _docs_lore_dir, _characters_dir, _places_dir, _session_notes_dir, _data_dir = isolated_character_app
-    KNOWLEDGE_GRAPH_LABEL_POSITION_SCREENSHOT.parent.mkdir(parents=True, exist_ok=True)
+    STRUCTURED_KNOWLEDGE_GRAPH_FULL_SCREENSHOT.parent.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -551,23 +625,22 @@ def test_knowledge_graph_edge_labels_are_visible_for_position_review(isolated_ch
         graph_expander = page.locator("[data-testid=stExpander]").filter(has_text="Combined Knowledge Graph")
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph", exact=True).click()
-        expect(graph_expander.get_by_role("tab").first).to_be_visible(timeout=10000)
-
-        graph_tab = graph_expander.get_by_role("tab", name="Jory Ravenmark", exact=True)
-        if graph_tab.count():
-            graph_tab.click()
-        graph_node_select = graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True).first
-        expect(graph_node_select).to_have_value("Jory Ravenmark", timeout=10000)
+        expect(graph_expander.get_by_text("Character View", exact=True)).to_be_visible(timeout=10000)
+        graph_expander.get_by_text("Full Structured Graph", exact=True).click()
 
         graph_image = graph_expander.get_by_role("img").first
         expect(graph_image).to_be_visible(timeout=10000)
+        expect(graph_expander.locator("svg").first).to_be_visible(timeout=10000)
+
+        edge_label_issues = graph_edge_label_position_issues(graph_expander)
+        assert edge_label_issues == []
 
         graph_expander.scroll_into_view_if_needed()
-        page.screenshot(path=str(KNOWLEDGE_GRAPH_LABEL_POSITION_SCREENSHOT))
+        page.screenshot(path=str(STRUCTURED_KNOWLEDGE_GRAPH_FULL_SCREENSHOT))
         browser.close()
 
-    assert KNOWLEDGE_GRAPH_LABEL_POSITION_SCREENSHOT.exists()
-    assert KNOWLEDGE_GRAPH_LABEL_POSITION_SCREENSHOT.stat().st_size > 0
+    assert STRUCTURED_KNOWLEDGE_GRAPH_FULL_SCREENSHOT.exists()
+    assert STRUCTURED_KNOWLEDGE_GRAPH_FULL_SCREENSHOT.stat().st_size > 0
 
 
 def test_ui_fills_only_visible_character_editor_fields_and_saves(isolated_character_app):

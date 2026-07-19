@@ -1,0 +1,85 @@
+{
+  "schema_version": "0.1.0",
+  "config_scope": "global",
+  "description": "Shared Graphviz defaults applied before any knowledge-view-specific config.",
+  "merge_order": [
+    "config/graphviz/global_graph_view.json",
+    "config/graphviz/<knowledge_view>.json"
+  ],
+  "graph": {
+    "bgcolor": "transparent",
+    "splines": "line"
+  },
+  "node": {
+    "style": "rounded,filled",
+    "fillcolor": "#dbeafe",
+    "color": "#94a3b8",
+    "fontname": "Inter",
+    "fontcolor": "#000000",
+    "shape": "box"
+  },
+  "edge": {
+    "color": "#64748b",
+    "fontname": "Inter",
+    "fontsize": 10,
+    "label_attribute": "label",
+    "label_font_color_source": "active_theme"
+  },
+  "node_type_overrides": {
+    "character": {
+      "shape": "box",
+      "fillcolor": "#dbeafe"
+    },
+    "place": {
+      "shape": "component",
+      "fillcolor": "#dcfce7"
+    },
+    "group": {
+      "shape": "trapezium",
+      "fillcolor": "#e9d5ff"
+    },
+    "family": {
+      "shape": "ellipse",
+      "fillcolor": "#fef3c7",
+      "width": 1.9,
+      "height": 0.8,
+      "margin": "0.14,0.06"
+    },
+    "source_document": {
+      "shape": "folder",
+      "fillcolor": "#fde68a",
+      "width": 1.65,
+      "height": 0.7,
+      "margin": "0.12,0.06"
+    }
+  },
+  "focus_node": {
+    "color": "#ef4444",
+    "penwidth": 2.5
+  },
+  "constraint_policy": {
+    "same_column_edges": false,
+    "broad_source_vertical_fanout_edges": false,
+    "all_other_visible_edges": true
+  },
+  "invisible_layout_guides": {
+    "column_anchor_edge": {
+      "style": "invis",
+      "weight": 100
+    },
+    "intra_column_stack_edge": {
+      "style": "invis",
+      "weight": 50,
+      "constraint": false
+    },
+    "vertical_broad_source_stack_edge": {
+      "style": "invis",
+      "weight": 20
+    }
+  },
+  "editing_notes": [
+    "Update this file first for defaults that should apply to every knowledge view.",
+    "Use edge label_attribute=label when relationship text should remain on the edge.",
+    "Keep splines=line unless a regression test proves another routing keeps labels better associated with their edges."
+  ]
+}

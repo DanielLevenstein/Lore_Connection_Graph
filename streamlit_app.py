@@ -115,13 +115,14 @@ class KnowledgeGraphView:
 
 
 STRUCTURED_KNOWLEDGE_VIEW = KnowledgeGraphView(
-    key="structured",
-    label="Structured Knowledge View",
+    key="character_view",
+    label="Character View",
 )
 FULL_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
-    key="full_graph",
-    label="Full Knowledge Graph",
+    key="full_structured_graph",
+    label="Full Structured Graph",
 )
+
 KNOWLEDGE_GRAPH_VIEWS = (
     STRUCTURED_KNOWLEDGE_VIEW,
     FULL_KNOWLEDGE_GRAPH_VIEW,

@@ -2,6 +2,7 @@
 - pull the latest changes from the main before writing code.
 - Update `ui_issue_report.md` after UI bugs are fixed. 
 - Remove graph-edge report grade from the UI.
+- 
  
 
 ## Knowledge Graph Display Columns
