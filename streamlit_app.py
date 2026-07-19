@@ -15,6 +15,7 @@ from character_graph.combined_graph import (
     graph_view_root_nodes,
     other_connection_rows,
     other_connections_graph,
+    party_connections_graph,
     compact,
 )
 from character_graph.extraction import extract_character_graph
@@ -117,20 +118,25 @@ class KnowledgeGraphView:
 
 STRUCTURED_KNOWLEDGE_VIEW = KnowledgeGraphView(
     key="character_view",
-    label="Single Character View",
+    label="Single Character",
 )
 TEST_FIXTURE_GRAPH_VIEW = KnowledgeGraphView(
     key="test_fixture",
-    label="Test Fixture",
+    label="Character Data Only",
+)
+PARTY_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
+    key="party_view",
+    label="Party View",
 )
 FULL_STRUCTURED_GRAPH_VIEW = KnowledgeGraphView(
     key="full_structured_graph",
-    label="Full Structured Graph",
+    label="Full Knowledge Graph",
 )
 
 KNOWLEDGE_GRAPH_VIEWS = (
     STRUCTURED_KNOWLEDGE_VIEW,
     TEST_FIXTURE_GRAPH_VIEW,
+    PARTY_KNOWLEDGE_GRAPH_VIEW,
     FULL_STRUCTURED_GRAPH_VIEW,
 )
 DEFAULT_KNOWLEDGE_GRAPH_VIEW = TEST_FIXTURE_GRAPH_VIEW
@@ -647,14 +653,23 @@ def render_combined_character_graph() -> None:
         if selected_view.key == TEST_FIXTURE_GRAPH_VIEW.key:
             character_sheet_graphs = character_sheet_lore_graphs(graphs)
             character_only_combined = build_combined_character_graph(character_sheet_graphs)
-            render_test_fixture_graph_view(
+            render_character_data_only_graph_view(
                 character_only_combined,
                 combined_attribute_rows(character_sheet_graphs),
                 main_character_ids,
                 graphviz_config,
             )
+        elif selected_view.key == PARTY_KNOWLEDGE_GRAPH_VIEW.key:
+            render_party_knowledge_graph_view(
+                combined,
+                detail_rows,
+                [node.id for node in character_nodes],
+                main_character_ids,
+                main_place_ids,
+                graphviz_config,
+            )
         elif selected_view.key == FULL_STRUCTURED_GRAPH_VIEW.key:
-            render_full_structured_graph_view(
+            render_full_knowledge_graph_view(
                 combined,
                 detail_rows,
                 main_character_ids,
@@ -766,7 +781,7 @@ def render_structured_knowledge_view(
     render_secondary_entity_creation_actions(combined, characters, places)
 
 
-def render_test_fixture_graph_view(
+def render_character_data_only_graph_view(
     combined,
     detail_rows,
     main_character_ids: set[str],
@@ -782,11 +797,34 @@ def render_test_fixture_graph_view(
         width="stretch",
     )
     if detail_rows:
-        with st.expander("Test Fixture Details"):
+        with st.expander("Character Data Details"):
             st.table(detail_rows, hide_index=True, width="stretch")
 
 
-def render_full_structured_graph_view(
+def render_party_knowledge_graph_view(
+    combined,
+    detail_rows,
+    root_node_ids: list[str],
+    main_character_ids: set[str],
+    main_place_ids: set[str],
+    graphviz_config,
+) -> None:
+    st.graphviz_chart(
+        combined_relationship_dot(
+            party_connections_graph(combined, root_node_ids),
+            main_character_ids=main_character_ids,
+            main_place_ids=main_place_ids,
+            label_font_color=graph_edge_label_font_color(),
+            graphviz_config=graphviz_config,
+        ),
+        width="stretch",
+    )
+    if detail_rows:
+        with st.expander("Party Graph Details"):
+            st.table(detail_rows, hide_index=True, width="stretch")
+
+
+def render_full_knowledge_graph_view(
     combined,
     detail_rows,
     main_character_ids: set[str],
@@ -804,7 +842,7 @@ def render_full_structured_graph_view(
         width="stretch",
     )
     if detail_rows:
-        with st.expander("Full Graph Details"):
+        with st.expander("Full Knowledge Graph Details"):
             st.table(detail_rows, hide_index=True, width="stretch")
 
 

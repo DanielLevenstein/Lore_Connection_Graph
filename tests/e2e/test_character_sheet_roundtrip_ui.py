@@ -497,13 +497,14 @@ def test_capture_knowledge_graph_screenshot(isolated_character_app):
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph").click()
         expect(graph_expander.get_by_role("button", name="sync Regenerate All Lore Graphs")).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Single Character View", exact=True)).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Test Fixture", exact=True)).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Full Structured Graph", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Single Character", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Character Data Only", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Party View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Full Knowledge Graph", exact=True)).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_text("Before Selection", exact=True)).not_to_be_visible(timeout=10000)
         expect(graph_expander.get_by_text("Selected View", exact=True)).not_to_be_visible(timeout=10000)
         if graph_node_name:
-            graph_expander.get_by_text("Single Character View", exact=True).click()
+            graph_expander.get_by_text("Single Character", exact=True).click()
             expect(graph_expander.get_by_role("tab").first).to_be_visible(timeout=10000)
             graph_tab = graph_expander.get_by_role("tab", name=graph_node_name, exact=True)
             if graph_tab.count():
@@ -511,7 +512,7 @@ def test_capture_knowledge_graph_screenshot(isolated_character_app):
             graph_node_select = graph_expander.get_by_label(f"Graph Node For {graph_node_name}", exact=True).first
             expect(graph_node_select).to_have_value(graph_node_name, timeout=10000)
         else:
-            graph_expander.get_by_text("Test Fixture", exact=True).click()
+            graph_expander.get_by_text("Character Data Only", exact=True).click()
             expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
         page.wait_for_timeout(1000)
 
@@ -534,16 +535,21 @@ def test_combined_graph_structured_graph_views_are_separate(isolated_character_a
         graph_expander = page.locator("[data-testid=stExpander]").filter(has_text="Combined Knowledge Graph")
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph").click()
-        expect(graph_expander.get_by_text("Single Character View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Single Character", exact=True)).to_be_visible(timeout=10000)
 
-        graph_expander.get_by_text("Test Fixture", exact=True).click()
+        graph_expander.get_by_text("Character Data Only", exact=True).click()
         expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Test Fixture Details", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Character Data Details", exact=True)).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True)).not_to_be_visible(timeout=10000)
 
-        graph_expander.get_by_text("Full Structured Graph", exact=True).click()
+        graph_expander.get_by_text("Party View", exact=True).click()
         expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Full Graph Details", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Party Graph Details", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True)).not_to_be_visible(timeout=10000)
+
+        graph_expander.get_by_text("Full Knowledge Graph", exact=True).click()
+        expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Full Knowledge Graph Details", exact=True)).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True)).not_to_be_visible(timeout=10000)
         browser.close()
 
@@ -577,16 +583,16 @@ def test_test_fixture_view_uses_only_character_sheet_data(isolated_character_app
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph").click()
 
-        graph_expander.get_by_text("Test Fixture", exact=True).click()
+        graph_expander.get_by_text("Character Data Only", exact=True).click()
         expect(graph_expander.locator("svg").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Test Fixture Details", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Character Data Details", exact=True)).to_be_visible(timeout=10000)
         full_character_titles = graph_node_titles(graph_expander)
         assert "Family Tree" not in full_character_titles
         assert "Atlantia Lore" not in full_character_titles
 
-        graph_expander.get_by_text("Full Structured Graph", exact=True).click()
+        graph_expander.get_by_text("Full Knowledge Graph", exact=True).click()
         expect(graph_expander.locator("svg").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Full Graph Details", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Full Knowledge Graph Details", exact=True)).to_be_visible(timeout=10000)
         full_structured_titles = graph_node_titles(graph_expander)
         assert "Family Tree" in full_structured_titles
         browser.close()
@@ -679,8 +685,8 @@ def test_full_knowledge_graph_edge_labels_are_located_on_their_edges(isolated_ch
         graph_expander = page.locator("[data-testid=stExpander]").filter(has_text="Combined Knowledge Graph")
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph").click()
-        expect(graph_expander.get_by_text("Single Character View", exact=True)).to_be_visible(timeout=10000)
-        graph_expander.get_by_text("Test Fixture", exact=True).click()
+        expect(graph_expander.get_by_text("Single Character", exact=True)).to_be_visible(timeout=10000)
+        graph_expander.get_by_text("Character Data Only", exact=True).click()
 
         graph_image = graph_expander.get_by_role("img").first
         expect(graph_image).to_be_visible(timeout=10000)
@@ -1082,7 +1088,7 @@ def test_ui_creates_character_from_combined_graph_and_loads_it(isolated_characte
 
         expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
         page.get_by_text("Combined Knowledge Graph").last.click()
-        page.get_by_text("Single Character View", exact=True).click()
+        page.get_by_text("Single Character", exact=True).click()
         expect(page.get_by_label("Graph Node For Orin Nightbloom", exact=True)).to_be_visible(timeout=10000)
         expect(page.get_by_text("Other Connections", exact=True).first).to_be_visible(timeout=10000)
         page.get_by_role("button", name="Create Character File").click()

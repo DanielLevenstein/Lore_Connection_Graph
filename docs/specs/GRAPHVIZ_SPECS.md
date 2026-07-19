@@ -1,6 +1,6 @@
 # Graphviz Specs
 
-These defaults capture the Graphviz options that have worked well for the character-specific `Single Character View`. Keep this as the baseline before changing the full graph layout.
+These defaults capture the Graphviz options that have worked well for the character-specific `Single Character` view. Keep this as the baseline before changing the full graph layout.
 
 Editable defaults live under `config/graphviz/`. Global defaults are applied first from `config/graphviz/global_graph_view.json`, then each knowledge view applies its own override file such as `config/graphviz/character_view.json` or `config/graphviz/full_structured_graph.json`.
 

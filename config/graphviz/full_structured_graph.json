@@ -2,7 +2,7 @@
   "schema_version": "0.1.0",
   "config_scope": "knowledge_view",
   "view_key": "full_structured_graph",
-  "label": "Full Structured Graph",
+  "label": "Full Knowledge Graph",
   "description": "Whole visible knowledge graph across character, family, source, secondary, and place nodes.",
   "inherits": "config/graphviz/global_graph_view.json",
   "merge_order": [

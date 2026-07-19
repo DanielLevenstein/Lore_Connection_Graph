@@ -2,7 +2,7 @@
   "schema_version": "0.1.0",
   "config_scope": "knowledge_view",
   "view_key": "test_fixture",
-  "label": "Test Fixture",
+  "label": "Character Data Only",
   "description": "Screenshot-era whole graph view built only from character sheet data.",
   "inherits": "config/graphviz/global_graph_view.json",
   "merge_order": [
