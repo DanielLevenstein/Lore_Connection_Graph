@@ -93,6 +93,8 @@ Status: fixed and covered by `tests/e2e/test_character_sheet_roundtrip_ui.py::te
 - Imported session notes now write graph JSON during import and retain their `source_document` graph type even when duplicate loose import-source files exist, so related entities such as `Ignis Cult` remain visible from the associated character graph.
 - Character Race and Class are optional in the create/save UI; only Name and Backstory are required for new characters.
 - Character display names are editable in the character editor and continue to update the visible Markdown title/profile name without renaming the underlying file.
+- Character undo now remounts the editor after restoring a previous snapshot, preventing stale form widget values from overwriting the restored profile on a follow-up undo.
+- Added focused Playwright coverage proving a newly created character with only Name and Backstory appears in the Combined Knowledge Graph without manual graph regeneration.
 
 ## Improvements made
 

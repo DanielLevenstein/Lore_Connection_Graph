@@ -148,3 +148,21 @@ This first release packages the local roleplaying character creator as a Streaml
 - Identify and fix why `Justice` and `Night bloom` appear in the knowledge graph even though they are not characters or places.
 - Do not render party-to-party connections in Party View.
 - Test the graph display and focused regressions before committing implementation changes.
+
+### Completed - UI Validation Follow-Up - 2026-07-19 - develop
+
+- Pulled the latest remote `main` into `develop` before validation.
+- Confirmed the changelog remains at the bottom of `RELEASE_NOTES.md`.
+- Validated graph clarity grades remain out of the Combined Knowledge Graph UI.
+- Added Playwright coverage that creates a character with only Name and Backstory and verifies it appears in the Combined Knowledge Graph immediately.
+- Fixed character undo editor state so repeated undo actions remount restored form values instead of reusing stale widget state.
+- Tightened the character undo e2e selector to the `Edit Character` expander.
+- Updated `docs/reports/ui_issue_report.md`.
+
+## Completed - UI Validation Follow-Up - 2026-07-19
+
+- Pulled latest remote `main` into `develop` before validation.
+- Validated the completed graph JSON saves and character form improvements.
+- Added Playwright coverage for newly created characters appearing in the Combined Knowledge Graph.
+- Fixed repeated character undo so restored snapshots are not overwritten by stale Streamlit editor widget state.
+- Updated `docs/reports/ui_issue_report.md` and the bottom changelog in `RELEASE_NOTES.md`.

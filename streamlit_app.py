@@ -412,9 +412,17 @@ def undo_character_changes(character: Character) -> None:
         character.backstory_path.write_text(str(previous).rstrip() + "\n", encoding="utf-8")
     st.session_state[key] = snapshots
     regenerate_character_graph(character)
+    bump_character_editor_revision(character)
     mark_combined_graph_dirty()
     st.session_state[f"character_status_{character.name}"] = "Character Changes Undone."
     st.rerun()
+
+
+def bump_character_editor_revision(character: Character) -> None:
+    st.session_state[f"character_editor_revision_{character.name}"] = st.session_state.get(
+        f"character_editor_revision_{character.name}",
+        0,
+    ) + 1
 
 
 def save_character_update(character: Character, updated: CharacterProfile) -> None:
@@ -1975,16 +1983,45 @@ def render_external_character_sheet_list() -> None:
 def render_character_editor(character: Character) -> None:
     profile = read_character_profile(character)
     with st.expander("Edit Character", expanded=bool(st.session_state.get(f"character_status_{character.name}", ""))):
-        with st.form(f"edit_character_{character.name}"):
-            display_name = st.text_input("Name", value=profile.name)
+        editor_revision = st.session_state.get(f"character_editor_revision_{character.name}", 0)
+        with st.form(f"edit_character_{character.name}_{editor_revision}"):
+            display_name = st.text_input(
+                "Name",
+                value=profile.name,
+                key=f"character_name_{character.name}_{editor_revision}",
+            )
             name_cols = st.columns(2)
-            first_name = name_cols[0].text_input("First Name", value=profile.first_name)
-            family_name = name_cols[1].text_input("Family Name", value=profile.family_name)
+            first_name = name_cols[0].text_input(
+                "First Name",
+                value=profile.first_name,
+                key=f"character_first_name_{character.name}_{editor_revision}",
+            )
+            family_name = name_cols[1].text_input(
+                "Family Name",
+                value=profile.family_name,
+                key=f"character_family_name_{character.name}_{editor_revision}",
+            )
             stat_cols = st.columns(4)
-            level = stat_cols[0].text_input("Level", value=profile.level)
-            race = stat_cols[1].text_input("Race", value=profile.race)
-            character_class = stat_cols[2].text_input("Class", value=profile.character_class)
-            pronouns = stat_cols[3].text_input("Pronouns", value=profile.pronouns)
+            level = stat_cols[0].text_input(
+                "Level",
+                value=profile.level,
+                key=f"character_level_{character.name}_{editor_revision}",
+            )
+            race = stat_cols[1].text_input(
+                "Race",
+                value=profile.race,
+                key=f"character_race_{character.name}_{editor_revision}",
+            )
+            character_class = stat_cols[2].text_input(
+                "Class",
+                value=profile.character_class,
+                key=f"character_class_{character.name}_{editor_revision}",
+            )
+            pronouns = stat_cols[3].text_input(
+                "Pronouns",
+                value=profile.pronouns,
+                key=f"character_pronouns_{character.name}_{editor_revision}",
+            )
             if has_distinct_original(profile.backstory, profile.original_backstory):
                 backstory_cols = st.columns(2)
                 backstory_cols[0].caption(section_status_label("Character Backstory", profile))
@@ -1992,6 +2029,7 @@ def render_character_editor(character: Character) -> None:
                     "Backstory",
                     value=profile.backstory,
                     height=180,
+                    key=f"character_backstory_{character.name}_{editor_revision}",
                 )
                 backstory_cols[1].caption("Original Character Backstory")
                 backstory_cols[1].text_area(
@@ -1999,10 +2037,16 @@ def render_character_editor(character: Character) -> None:
                     value=profile.original_backstory,
                     height=180,
                     disabled=True,
+                    key=f"character_original_backstory_{character.name}_{editor_revision}",
                 )
             else:
                 render_section_status("Character Backstory", profile)
-                backstory = st.text_area("Backstory", value=profile.backstory, height=180)
+                backstory = st.text_area(
+                    "Backstory",
+                    value=profile.backstory,
+                    height=180,
+                    key=f"character_backstory_{character.name}_{editor_revision}",
+                )
             if has_distinct_original(profile.summary, profile.original_summary):
                 summary_cols = st.columns(2)
                 summary_cols[0].caption(section_status_label("Character Summary", profile))
@@ -2010,6 +2054,7 @@ def render_character_editor(character: Character) -> None:
                     "Summary",
                     value=profile.summary,
                     height=96,
+                    key=f"character_summary_{character.name}_{editor_revision}",
                 )
                 summary_cols[1].caption("Original Character Summary")
                 summary_cols[1].text_area(
@@ -2017,17 +2062,43 @@ def render_character_editor(character: Character) -> None:
                     value=profile.original_summary,
                     height=96,
                     disabled=True,
+                    key=f"character_original_summary_{character.name}_{editor_revision}",
                 )
             else:
                 render_section_status("Character Summary", profile)
-                summary = st.text_area("Summary", value=profile.summary, height=96)
+                summary = st.text_area(
+                    "Summary",
+                    value=profile.summary,
+                    height=96,
+                    key=f"character_summary_{character.name}_{editor_revision}",
+                )
             with st.expander("Optional Metadata", expanded=character_optional_metadata_present(profile)):
                 detail_cols = st.columns(3)
-                drives = detail_cols[0].text_area("Drives", value=render_list_field(profile.drives), height=96)
-                alliances = detail_cols[1].text_area("Alliances", value=render_list_field(profile.alliances), height=96)
-                enemies = detail_cols[2].text_area("Enemies", value=render_list_field(profile.enemies), height=96)
+                drives = detail_cols[0].text_area(
+                    "Drives",
+                    value=render_list_field(profile.drives),
+                    height=96,
+                    key=f"character_drives_{character.name}_{editor_revision}",
+                )
+                alliances = detail_cols[1].text_area(
+                    "Alliances",
+                    value=render_list_field(profile.alliances),
+                    height=96,
+                    key=f"character_alliances_{character.name}_{editor_revision}",
+                )
+                enemies = detail_cols[2].text_area(
+                    "Enemies",
+                    value=render_list_field(profile.enemies),
+                    height=96,
+                    key=f"character_enemies_{character.name}_{editor_revision}",
+                )
                 details_value = profile.details or default_details(profile)
-                details = st.text_area("Character Details", value=details_value, height=120)
+                details = st.text_area(
+                    "Character Details",
+                    value=details_value,
+                    height=120,
+                    key=f"character_details_{character.name}_{editor_revision}",
+                )
             action_cols = st.columns(5 if graph_rewrites_enabled() else 3)
             save_requested = action_cols[0].form_submit_button(
                 "Save Character",
@@ -2073,6 +2144,7 @@ def render_character_editor(character: Character) -> None:
             if delete_requested:
                 delete_character_profile(character)
                 st.session_state.pop(f"character_undo_{character.name}", None)
+                st.session_state.pop(f"character_editor_revision_{character.name}", None)
                 st.session_state.pop("active_character", None)
                 mark_combined_graph_dirty()
                 st.session_state["character_panel_status"] = "Character Deleted."

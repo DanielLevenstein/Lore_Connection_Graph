@@ -54,3 +54,10 @@ Commit to `feature/knowledge_graph` prior to implementing changes
 - Refactor the code base so new knowledge views can be created without breaking the existing view.
 - Use the UI code that was formally used to display the full knowledge graph to test this out.
 
+## Completed - UI Validation Follow-Up - 2026-07-19
+
+- Pulled latest remote `main` into `develop` before validation.
+- Validated the completed graph JSON saves and character form improvements.
+- Added Playwright coverage for newly created characters appearing in the Combined Knowledge Graph.
+- Fixed repeated character undo so restored snapshots are not overwritten by stale Streamlit editor widget state.
+- Updated `docs/reports/ui_issue_report.md` and the bottom changelog in `RELEASE_NOTES.md`.

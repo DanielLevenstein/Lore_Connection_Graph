@@ -270,6 +270,13 @@ def click_place_undo_button(page) -> None:
     undo_button.evaluate("element => element.click()")
 
 
+def click_character_undo_button(page) -> None:
+    editor = page.locator("[data-testid=stExpander]").filter(has_text="Edit Character").first
+    undo_button = editor.get_by_role("button", name="undo Undo Changes")
+    expect(undo_button).to_be_visible(timeout=10000)
+    undo_button.click(force=True)
+
+
 def assert_character_saved_visible(page) -> None:
     """Assert character save confirmation is visible (not hidden behind expander)."""
     expect(page.get_by_text("Character Saved.").first).to_be_visible(timeout=10000)
@@ -799,10 +806,10 @@ def test_ui_creates_loads_and_undoes_character_changes(isolated_character_app):
         assert_character_saved_visible(page)
 
         ensure_character_editor_open(page)
-        page.get_by_role("button", name="undo Undo Changes").first.click()
+        click_character_undo_button(page)
         expect(page.get_by_text("Character Changes Undone.")).to_be_visible(timeout=10000)
         ensure_character_editor_open(page)
-        page.get_by_role("button", name="undo Undo Changes").first.click()
+        click_character_undo_button(page)
         expect(page.get_by_text("Character Changes Undone.")).to_be_visible(timeout=10000)
         browser.close()
 
@@ -816,6 +823,30 @@ def test_ui_creates_loads_and_undoes_character_changes(isolated_character_app):
     assert profile.pronouns == "she/her"
     assert profile.backstory == "Della maps locked doors beneath the old city."
     assert profile.summary == "Della is a careful scout."
+
+
+def test_ui_new_character_appears_in_combined_knowledge_graph(isolated_character_app):
+    app_url, _docs_lore_dir, _characters_dir, _places_dir, _session_notes_dir, _data_dir = isolated_character_app
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
+        expand_section(page, "Create Character")
+        fill_textbox(page, "Name", "Della Moor")
+        page.get_by_role("textbox", name="Backstory", exact=True).fill("Della maps locked doors beneath the old city.")
+        page.get_by_role("button", name="person_add Create Character").click()
+        expect(page.get_by_role("heading", name="Della Moor", exact=True)).to_be_visible(timeout=10000)
+
+        graph_expander = page.locator("[data-testid=stExpander]").filter(has_text="Combined Knowledge Graph")
+        expect(graph_expander).to_be_visible(timeout=10000)
+        graph_expander.get_by_text("Combined Knowledge Graph", exact=True).click()
+        expect(graph_expander.get_by_role("tab", name="Della Moor", exact=True)).to_be_visible(timeout=10000)
+        graph_expander.get_by_role("tab", name="Della Moor", exact=True).click()
+        expect(graph_expander.get_by_label("Graph Node For Della Moor", exact=True)).to_be_visible(timeout=10000)
+        browser.close()
 
 
 def test_ui_creates_loads_and_undoes_place_changes(isolated_character_app):
