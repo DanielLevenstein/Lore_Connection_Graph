@@ -18,11 +18,7 @@ The combined knowledge graph is a campaign-level view built from authored lore i
 
 ## Visibility
 
-The combined graph UI is hidden by default and enabled only when an environment variable is set:
-
-```text
-LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH=1
-```
+Knowledge graph is now enabled by default, but was previously gated behind `LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH`
 
 ## Inputs
 
@@ -44,7 +40,6 @@ When generating the combined graph, the app should parse all supported lore file
 
 ## UI Requirements
 
-- The combined graph should not appear unless `LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH=1`.
 - Each tab should show the graph for a different character or lore source.
 - The UI should not require manual file loading.
 - Players should be able to create new place and character files from secondary character/place nodes.

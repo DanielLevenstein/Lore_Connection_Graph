@@ -90,7 +90,6 @@ def isolated_character_app(tmp_path):
 
     env = os.environ.copy()
     env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-    env["LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH"] = "1"
     env["LOCAL_CHATBOT_WORLD_BUILDING_DIR"] = str(world_building_dir)
     env["LOCAL_CHATBOT_LORE_DIR"] = str(docs_lore_dir)
     env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(characters_dir)

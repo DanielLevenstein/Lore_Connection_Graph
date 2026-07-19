@@ -22,7 +22,6 @@ rg -n "os\.environ\.get|os\.environ\[|os\.environ\.setdefault|LOCAL_CHATBOT_|STR
 | Variable | Test Usage | App/Code Usage | Notes |
 | --- | --- | --- | --- |
 | `STREAMLIT_BROWSER_GATHER_USAGE_STATS` | Set to `false` in all Streamlit e2e app fixtures. | Streamlit runtime setting, not app code. | Keep in tests only. |
-| `LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH` | Set to `1` in `tests/e2e/test_character_sheet_roundtrip_ui.py`. | Read in `streamlit_app.py` to hide/show Combined Knowledge Graph. | This is a feature gate currently used by e2e tests. |
 | `LOCAL_CHATBOT_WORLD_BUILDING_DIR` | Set in character and session note e2e fixtures. | Read in `local_chatbot/paths.py`. | Keep for isolated tests and local sandboxing. |
 | `LOCAL_CHATBOT_WORLD_BUILDING_IMPORT_DIR` | Set in session note e2e fixtures. | Read in `local_chatbot/paths.py`. | Keep for isolated import fixtures. |
 | `LOCAL_CHATBOT_LORE_DIR` | Set in character and session note e2e fixtures. | Read in `local_chatbot/paths.py`. | Keep for isolated lore fixtures. |
@@ -83,7 +82,8 @@ Remove the remaining environment variables in this order:
 8. `LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH`
    - Risk: medium to high.
    - Reason: tested feature gate around the combined graph. Remove the variable by making the combined knowledge graph normal app behavior, not by deleting the graph.
-
+   - Removed after feature because stable
+   
 9. Directory isolation variables used by e2e fixtures:
    - `LOCAL_CHATBOT_WORLD_BUILDING_DIR`
    - `LOCAL_CHATBOT_WORLD_BUILDING_IMPORT_DIR`
@@ -134,7 +134,7 @@ Why:
 - `LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH` is actively used in e2e tests.
 - The user’s current direction says the new global knowledge graph needs processing information from all sections.
 - If this is now core functionality, a hidden environment gate creates two app variants.
-
+- Disabled after feature stabilized
 Recommendation:
 
 - Do not delete the combined graph feature.

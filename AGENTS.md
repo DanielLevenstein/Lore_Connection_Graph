@@ -32,7 +32,7 @@
 - Use `./run_streamlit.sh` to bootstrap the local `.venv` and start the Streamlit app.
 - The source of truth is `world_building/lore`; files in `world_building/meta_data` are derived runtime data and should not be committed.
 - `tests/e2e` fixtures start `streamlit_app.py` on `http://127.0.0.1:8512` and rely on environment overrides such as `LOCAL_CHATBOT_WORLD_BUILDING_DIR`, `LOCAL_CHATBOT_CHARACTERS_DIR`, `LOCAL_CHATBOT_SESSION_NOTES_DIR`, and `LOCAL_CHATBOT_LORE_DIR`.
-- Hidden Streamlit feature flags are gated by environment variables in `streamlit_app.py`: `LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH`, `LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT`, `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES`, `LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE`.
+- Hidden Streamlit feature flags are gated by environment variables in `streamlit_app.py`:  `LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT`, `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES`, `LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE`.
 - UI changes must preserve accessible button/tab names and stable Playwright selectors; if Streamlit labels change, update the tests accordingly.
 
 ### Notes for UI work

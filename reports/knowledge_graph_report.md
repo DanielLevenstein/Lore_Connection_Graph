@@ -8,8 +8,6 @@ Date: 2026-07-18
 - Reference screenshot: `docs/screenshots/Knowledge_Graph.png`
 - Test import: `world_building/import/Session_Notes.txt`
 
-The current screenshot was captured from an isolated Streamlit run with `LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH=1` after importing `Session_Notes.txt` through the Session Notes upload flow.
-
 ## Current UI Strengths
 
 - The import flow can ingest the large session-note text file and still render the combined knowledge graph without crashing.

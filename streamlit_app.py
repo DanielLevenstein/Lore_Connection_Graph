@@ -602,8 +602,8 @@ def attribute_graph_display_rows(profile: CharacterProfile) -> list[dict[str, st
 
 
 def render_combined_character_graph() -> None:
-    if os.environ.get("LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH") != "1":
-        return
+    # if os.environ.get("LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH") != "1":
+    #     return
     characters = list_characters()
     places = list_places()
     graphs = load_lore_graphs()
