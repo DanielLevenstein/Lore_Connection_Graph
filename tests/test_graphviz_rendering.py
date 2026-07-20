@@ -11,6 +11,7 @@ from graphviz_rendering import (
     PARTY_VIEW_TAB,
     SESSION_VIEW_TAB,
     SINGLE_CHARACTER_TAB,
+    PLACES_FILE_VIEW_TAB,
     graph_without_lore_source_knots,
     graph_tab_names,
     place_lore_connection_rows,
@@ -24,7 +25,7 @@ from graphviz_rendering import (
 def test_graph_tabs_follow_active_main_tab():
     assert graph_tab_names("Characters") == [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
     assert graph_tab_names("Places") == [
-        FILE_VIEW_TAB,
+        PLACES_FILE_VIEW_TAB,
         DIRECTORY_FILE_VIEW_TAB,
     ]
     assert graph_tab_names("Session Notes") == [

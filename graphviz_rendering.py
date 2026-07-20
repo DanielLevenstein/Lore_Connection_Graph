@@ -43,6 +43,11 @@ PARTY_VIEW_TAB = "Party View"
 FILE_VIEW_TAB = "File View"
 SESSION_VIEW_TAB = "Section View"
 DIRECTORY_FILE_VIEW_TAB = "Directory File View"
+PLACES_HEADING_VIEW_TAB = "Heading View"
+PLACES_FILE_VIEW_TAB = "Location View"
+SESSION_HEADING_VIEW_TAB = "Heading View"
+SESSION_FILE_VIEW_TAB = "Location View"
+
 DIRECTORY_SESSION_VIEW_TAB = "Directory Section View"
 FULL_KNOWLEDGE_GRAPH_TAB = "Full Knowledge Graph"
 
@@ -153,6 +158,11 @@ def render_knowledge_graph_tabs(
                         combined=combined,
                         label_font_color=label_font_color,
                     )
+            elif tab_name == PLACES_FILE_VIEW_TAB:
+                    render_place_file_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                    )
             elif tab_name == DIRECTORY_FILE_VIEW_TAB:
                 if active_main_tab == "Session Notes":
                     render_session_file_view_tab(
@@ -169,6 +179,43 @@ def render_knowledge_graph_tabs(
                         column_layout="place_lore_directory",
                         title=DIRECTORY_FILE_VIEW_TAB,
                         key="place_lore_directory_file_view_source_file",
+                    )
+
+            elif tab_name == SESSION_FILE_VIEW_TAB:
+                if active_main_tab == "Session Notes":
+                    render_session_file_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                        column_layout="place_lore_directory",
+                        title=SESSION_FILE_VIEW_TAB,
+                        key="place_lore_directory_file_view_source_file",
+                    )
+            elif tab_name == SESSION_HEADING_VIEW_TAB:
+                if active_main_tab == "Places":
+                    render_session_file_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                        column_layout="place_lore_directory",
+                        title=SESSION_HEADING_VIEW_TAB,
+                        key="places_directory_file_view_source_file",
+                    )
+            elif tab_name == PLACES_FILE_VIEW_TAB:
+                if active_main_tab == "Places":
+                    render_place_file_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                        column_layout="place_lore_directory",
+                        title=PLACES_FILE_VIEW_TAB,
+                        key="place_lore_directory_file_view_source_file",
+                    )
+            elif tab_name == PLACES_HEADING_VIEW_TAB:
+                if active_main_tab == "Places":
+                    render_place_heading_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                        column_layout="place_lore_directory",
+                        title=SESSION_HEADING_VIEW_TAB,
+                        key="places_directory_file_view_source_file",
                     )
             elif tab_name == SESSION_VIEW_TAB:
                 if active_main_tab == "Session Notes":
@@ -209,9 +256,9 @@ def render_knowledge_graph_tabs(
 
 def graph_tab_names(active_main_tab: str) -> list[str]:
     if active_main_tab == "Places":
-        return [FILE_VIEW_TAB, DIRECTORY_FILE_VIEW_TAB]
+        return [PLACES_FILE_VIEW_TAB, PLACES_HEADING_VIEW_TAB]
     if active_main_tab == "Session Notes":
-        return [FILE_VIEW_TAB, SESSION_VIEW_TAB, DIRECTORY_FILE_VIEW_TAB, DIRECTORY_SESSION_VIEW_TAB]
+        return [SESSION_FILE_VIEW_TAB, DIRECTORY_FILE_VIEW_TAB]
     return [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
 
 
@@ -258,7 +305,7 @@ def render_place_file_view_tab(
     combined: CombinedCharacterGraph,
     label_font_color: str,
     column_layout: str = "place_lore",
-    title: str = FILE_VIEW_TAB,
+    title: str = PLACES_FILE_VIEW_TAB,
     key: str = "place_lore_file_view_source_file",
     show_lore_notes: bool = False,
 ) -> None:
