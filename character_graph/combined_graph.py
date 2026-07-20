@@ -28,6 +28,7 @@ CANONICAL_SESSION_NAME_VARIANTS = {
 }
 MAX_FOCUSED_GRAPH_CONNECTIONS = 6
 EvidenceRewriteClient = Callable[[list[dict[str, str]]], str]
+SERVER_TAG_EVIDENCE_RE = re.compile(r"\bServer Tag:\s*TABLEKEEPER\s*[-\u2013\u2014]")
 
 
 @dataclass(frozen=True)
@@ -432,7 +433,7 @@ def combined_relationship_rows(
     for edge in graph.edges:
         source = graph.characters.get(edge.source)
         target = graph.characters.get(edge.target)
-        for evidence in edge.evidence or [""]:
+        for evidence in relationship_row_evidence(edge.evidence):
             rows.append(
                 {
                     "Character": source.name if source else edge.source,
@@ -443,6 +444,20 @@ def combined_relationship_rows(
                 }
             )
     return rows
+
+
+def relationship_row_evidence(evidence: list[str]) -> list[str]:
+    if not evidence:
+        return [""]
+    return [
+        item
+        for item in evidence
+        if not is_server_tag_tablekeeper_evidence(item)
+    ]
+
+
+def is_server_tag_tablekeeper_evidence(value: str) -> bool:
+    return bool(SERVER_TAG_EVIDENCE_RE.search(value))
 
 
 def combined_attribute_rows(graphs: list[CharacterGraph]) -> list[dict[str, str]]:
@@ -1264,7 +1279,7 @@ def graph_column_groups(
     weights = node_mention_weights(edges)
     connection_counts = node_connection_counts(edges)
     for node_id, node in nodes.items():
-        if column_layout in {"place_lore", "session_note_lore"}:
+        if is_markdown_lore_column_layout(column_layout):
             group_name = markdown_lore_column_group(node, column_layout)
             groups[group_name].append(node_id)
             continue
@@ -1284,7 +1299,7 @@ def graph_column_groups(
         else:
             groups["column_2_secondary_characters"].append(node_id)
     for group_name, group_ids in groups.items():
-        if column_layout in {"place_lore", "session_note_lore"}:
+        if is_markdown_lore_column_layout(column_layout):
             group_ids.sort(
                 key=lambda current_id: (
                     -connection_counts.get(current_id, 0),
@@ -1305,7 +1320,7 @@ def graph_column_groups(
 
 
 def graph_column_group_template(column_layout: str) -> dict[str, list[str]]:
-    if column_layout in {"place_lore", "session_note_lore"}:
+    if is_markdown_lore_column_layout(column_layout):
         return {
             markdown_lore_column_0_name(column_layout): [],
             "column_1_markdown_heading_1": [],
@@ -1322,7 +1337,9 @@ def graph_column_group_template(column_layout: str) -> dict[str, list[str]]:
 
 
 def markdown_lore_column_0_name(column_layout: str) -> str:
-    if column_layout == "session_note_lore":
+    if column_layout == "place_lore_directory":
+        return "column_0_source_documents"
+    if column_layout in {"session_note_lore", "session_note_lore_directory"}:
         return "column_0_source_documents_groups"
     return "column_0_source_documents_places"
 
@@ -1330,6 +1347,30 @@ def markdown_lore_column_0_name(column_layout: str) -> str:
 def markdown_lore_column_group(node: CombinedCharacterNode, column_layout: str) -> str:
     if node.node_type == "source_document":
         return markdown_lore_column_0_name(column_layout)
+    if column_layout == "place_lore_directory":
+        if node.node_type == "place":
+            return "column_1_markdown_heading_1"
+        if node.node_type == "group":
+            return "column_4_character_connections"
+        heading_level = source_heading_level(node.node_type)
+        if heading_level is not None:
+            heading_level = min(3, heading_level)
+            return f"column_{heading_level}_markdown_heading_{heading_level}"
+        if node.node_type == "character":
+            return "column_4_character_connections"
+        return "column_4_character_connections"
+    if column_layout == "session_note_lore_directory":
+        if node.node_type == "group":
+            return "column_0_source_documents_groups"
+        if node.node_type == "place":
+            return "column_1_markdown_heading_1"
+        heading_level = source_heading_level(node.node_type)
+        if heading_level is not None:
+            heading_level = min(3, heading_level)
+            return f"column_{heading_level}_markdown_heading_{heading_level}"
+        if node.node_type == "character":
+            return "column_4_character_connections"
+        return "column_4_character_connections"
     if column_layout == "place_lore" and node.node_type == "place":
         return "column_0_source_documents_places"
     if column_layout == "place_lore" and node.node_type == "group":
@@ -1348,7 +1389,7 @@ def markdown_lore_column_group(node: CombinedCharacterNode, column_layout: str) 
 
 
 def graph_column_node_type_rank(group_name: str, node_type: str) -> int:
-    if group_name in {"column_0_family_names", "column_0_source_documents_places", "column_0_source_documents_groups"}:
+    if group_name in {"column_0_family_names", "column_0_source_documents", "column_0_source_documents_places", "column_0_source_documents_groups"}:
         entity_type = source_heading_entity_type(node_type)
         return {
             "source_document": 0,
@@ -1393,6 +1434,7 @@ def edge_constraint_attribute(
         target_column = column_by_node.get(edge.target)
         if source_column in {
             "column_0_family_names",
+            "column_0_source_documents",
             "column_0_source_documents_places",
             "column_0_source_documents_groups",
         } and target_column in {
@@ -1406,6 +1448,7 @@ def edge_constraint_attribute(
             attributes.extend(["tailport=e", "headport=w"])
         elif target_column in {
             "column_0_family_names",
+            "column_0_source_documents",
             "column_0_source_documents_places",
             "column_0_source_documents_groups",
         } and source_column in {
@@ -1420,6 +1463,15 @@ def edge_constraint_attribute(
     if not attributes:
         return ""
     return ", " + ", ".join(dict.fromkeys(attributes))
+
+
+def is_markdown_lore_column_layout(column_layout: str) -> bool:
+    return column_layout in {
+        "place_lore",
+        "place_lore_directory",
+        "session_note_lore",
+        "session_note_lore_directory",
+    }
 
 
 def prominent_relationship_edges(edges: list[CombinedRelationshipEdge]) -> list[CombinedRelationshipEdge]:

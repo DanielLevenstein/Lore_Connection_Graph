@@ -69,3 +69,6 @@
 
 ### Place Heading Semantics And Lore Notes
 - Kept place and group Markdown headings in their authored heading-level columns while styling them with semantic place/group icons, fanned out derived place headings to character connections, and added non-graph lore summaries for descriptive headings such as `Town Overview`.
+
+### Directory Graph View Variants
+- Added parallel Directory File and Directory Session views for Places and Session Notes so the original graph views remain available while the directory-structured column layout can be compared in screenshots.

@@ -5,6 +5,8 @@ from character_graph.combined_graph import (
     combined_relationship_dot,
 )
 from graphviz_rendering import (
+    DIRECTORY_FILE_VIEW_TAB,
+    DIRECTORY_SESSION_VIEW_TAB,
     FILE_VIEW_TAB,
     PARTY_VIEW_TAB,
     SESSION_VIEW_TAB,
@@ -21,8 +23,18 @@ from graphviz_rendering import (
 
 def test_graph_tabs_follow_active_main_tab():
     assert graph_tab_names("Characters") == [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
-    assert graph_tab_names("Places") == [FILE_VIEW_TAB, SESSION_VIEW_TAB]
-    assert graph_tab_names("Session Notes") == [FILE_VIEW_TAB, SESSION_VIEW_TAB]
+    assert graph_tab_names("Places") == [
+        FILE_VIEW_TAB,
+        SESSION_VIEW_TAB,
+        DIRECTORY_FILE_VIEW_TAB,
+        DIRECTORY_SESSION_VIEW_TAB,
+    ]
+    assert graph_tab_names("Session Notes") == [
+        FILE_VIEW_TAB,
+        SESSION_VIEW_TAB,
+        DIRECTORY_FILE_VIEW_TAB,
+        DIRECTORY_SESSION_VIEW_TAB,
+    ]
 
 
 def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path):
@@ -402,6 +414,164 @@ def test_place_lore_dot_uses_source_heading_place_character_columns():
         '{ rank=same; style=invis; "graph_column_4"; "jory_ravenmark"; }'
     ) in dot
     assert '"atlantia" -> "jory_ravenmark" [label="Home", tailport=e, headport=w];' in dot
+
+
+def test_directory_place_lore_dot_keeps_source_documents_in_column_zero():
+    graph = CombinedCharacterGraph(
+        characters={
+            "source_document__atlantia_lore": CombinedCharacterNode(
+                id="source_document__atlantia_lore",
+                name="Atlantia Lore",
+                source_file="world_building/lore/places/Atlantia_Lore.md",
+                node_type="source_document",
+            ),
+            "atlantia": CombinedCharacterNode(
+                id="atlantia",
+                name="Atlantia",
+                source_file="world_building/lore/places/Atlantia_Lore.md",
+                node_type="place",
+            ),
+            "source_heading__atlantia__harbor": CombinedCharacterNode(
+                id="source_heading__atlantia__harbor",
+                name="Harbor",
+                source_file="world_building/lore/places/Atlantia_Lore.md",
+                node_type="source_heading_place_2",
+            ),
+            "source_heading__atlantia__faculty": CombinedCharacterNode(
+                id="source_heading__atlantia__faculty",
+                name="Faculty",
+                source_file="world_building/lore/places/Atlantia_Lore.md",
+                node_type="source_heading_3",
+            ),
+            "jory_ravenmark": CombinedCharacterNode(
+                id="jory_ravenmark",
+                name="Jory Ravenmark",
+                source_file="world_building/lore/character_sheets/Jory_Ravenmark.md",
+                node_type="character",
+            ),
+        },
+        edges=[
+            CombinedRelationshipEdge(
+                source="source_document__atlantia_lore",
+                target="atlantia",
+                relationship_type="place",
+                relationship_label="",
+            ),
+            CombinedRelationshipEdge(
+                source="atlantia",
+                target="source_heading__atlantia__harbor",
+                relationship_type="contains",
+                relationship_label="Contains",
+            ),
+            CombinedRelationshipEdge(
+                source="source_heading__atlantia__harbor",
+                target="source_heading__atlantia__faculty",
+                relationship_type="heading",
+                relationship_label="",
+            ),
+            CombinedRelationshipEdge(
+                source="source_heading__atlantia__harbor",
+                target="jory_ravenmark",
+                relationship_type="home",
+                relationship_label="Home",
+            ),
+        ],
+    )
+
+    dot = combined_relationship_dot(
+        graph,
+        main_character_ids=set(graph.characters),
+        graphviz_config={"column_layout": "place_lore_directory"},
+    )
+
+    source_column = dot[dot.index('subgraph "cluster_column_0_source_documents"') :]
+    heading_1_column = dot[dot.index('subgraph "cluster_column_1_markdown_heading_1"') :]
+    heading_2_column = dot[dot.index('subgraph "cluster_column_2_markdown_heading_2"') :]
+    heading_3_column = dot[dot.index('subgraph "cluster_column_3_markdown_heading_3"') :]
+
+    assert source_column.index('"source_document__atlantia_lore"') < source_column.index('subgraph "cluster_column_1_markdown_heading_1"')
+    assert heading_1_column.index('"atlantia"') < heading_1_column.index('subgraph "cluster_column_2_markdown_heading_2"')
+    assert heading_2_column.index('"source_heading__atlantia__harbor"') < heading_2_column.index('subgraph "cluster_column_3_markdown_heading_3"')
+    assert heading_3_column.index('"source_heading__atlantia__faculty"') < heading_3_column.index('subgraph "cluster_column_4_character_connections"')
+    assert '"source_heading__atlantia__harbor" [label="Harbor", fillcolor="#dcfce7", color="#94a3b8", shape="component"' in dot
+
+
+def test_directory_session_lore_dot_keeps_groups_in_column_zero_and_places_in_heading_one():
+    graph = CombinedCharacterGraph(
+        characters={
+            "session_1": CombinedCharacterNode(
+                id="session_1",
+                name="Session 1",
+                source_file="world_building/lore/session_notes/Session_1.md",
+                node_type="source_document",
+            ),
+            "ravenmark_family": CombinedCharacterNode(
+                id="ravenmark_family",
+                name="Ravenmark Family",
+                source_file="world_building/lore/session_notes/Session_1.md",
+                node_type="group",
+            ),
+            "atlantia": CombinedCharacterNode(
+                id="atlantia",
+                name="Atlantia",
+                source_file="world_building/lore/places/Atlantia_Lore.md",
+                node_type="place",
+            ),
+            "source_heading__session_1__harbor": CombinedCharacterNode(
+                id="source_heading__session_1__harbor",
+                name="Harbor",
+                source_file="world_building/lore/session_notes/Session_1.md",
+                node_type="source_heading_place_2",
+            ),
+            "jory_ravenmark": CombinedCharacterNode(
+                id="jory_ravenmark",
+                name="Jory Ravenmark",
+                source_file="world_building/lore/character_sheets/Jory_Ravenmark.md",
+                node_type="character",
+            ),
+        },
+        edges=[
+            CombinedRelationshipEdge(
+                source="session_1",
+                target="ravenmark_family",
+                relationship_type="mentions",
+                relationship_label="",
+            ),
+            CombinedRelationshipEdge(
+                source="session_1",
+                target="atlantia",
+                relationship_type="place",
+                relationship_label="Place",
+            ),
+            CombinedRelationshipEdge(
+                source="atlantia",
+                target="source_heading__session_1__harbor",
+                relationship_type="contains",
+                relationship_label="Contains",
+            ),
+            CombinedRelationshipEdge(
+                source="source_heading__session_1__harbor",
+                target="jory_ravenmark",
+                relationship_type="mentions",
+                relationship_label="Mentions",
+            ),
+        ],
+    )
+
+    dot = combined_relationship_dot(
+        graph,
+        main_character_ids=set(graph.characters),
+        graphviz_config={"column_layout": "session_note_lore_directory"},
+    )
+
+    source_column = dot[dot.index('subgraph "cluster_column_0_source_documents_groups"') :]
+    heading_1_column = dot[dot.index('subgraph "cluster_column_1_markdown_heading_1"') :]
+    heading_2_column = dot[dot.index('subgraph "cluster_column_2_markdown_heading_2"') :]
+
+    assert source_column.index('"session_1"') < source_column.index('subgraph "cluster_column_1_markdown_heading_1"')
+    assert source_column.index('"ravenmark_family"') < source_column.index('subgraph "cluster_column_1_markdown_heading_1"')
+    assert heading_1_column.index('"atlantia"') < heading_1_column.index('subgraph "cluster_column_2_markdown_heading_2"')
+    assert heading_2_column.index('"source_heading__session_1__harbor"') < heading_2_column.index('subgraph "cluster_column_3_markdown_heading_3"')
 
 
 def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_path):

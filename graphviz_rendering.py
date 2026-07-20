@@ -41,7 +41,9 @@ class MarkdownSubheading:
 SINGLE_CHARACTER_TAB = "Single Character"
 PARTY_VIEW_TAB = "Party View"
 FILE_VIEW_TAB = "File View"
-SESSION_VIEW_TAB = "Session View"
+SESSION_VIEW_TAB = "Section View"
+DIRECTORY_FILE_VIEW_TAB = "Directory File View"
+DIRECTORY_SESSION_VIEW_TAB = "Directory Section View"
 FULL_KNOWLEDGE_GRAPH_TAB = "Full Knowledge Graph"
 
 STRUCTURED_CHARACTER_VIEW = KnowledgeGraphView(
@@ -151,6 +153,23 @@ def render_knowledge_graph_tabs(
                         combined=combined,
                         label_font_color=label_font_color,
                     )
+            elif tab_name == DIRECTORY_FILE_VIEW_TAB:
+                if active_main_tab == "Session Notes":
+                    render_session_file_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                        column_layout="session_note_lore_directory",
+                        title=DIRECTORY_FILE_VIEW_TAB,
+                        key="session_lore_directory_file_view_source_file",
+                    )
+                else:
+                    render_place_file_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                        column_layout="place_lore_directory",
+                        title=DIRECTORY_FILE_VIEW_TAB,
+                        key="place_lore_directory_file_view_source_file",
+                    )
             elif tab_name == SESSION_VIEW_TAB:
                 if active_main_tab == "Session Notes":
                     render_session_heading_view_tab(
@@ -161,6 +180,23 @@ def render_knowledge_graph_tabs(
                     render_place_heading_view_tab(
                         combined=combined,
                         label_font_color=label_font_color,
+                    )
+            elif tab_name == DIRECTORY_SESSION_VIEW_TAB:
+                if active_main_tab == "Session Notes":
+                    render_session_heading_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                        column_layout="session_note_lore_directory",
+                        title=DIRECTORY_SESSION_VIEW_TAB,
+                        key="session_lore_directory_session_view_heading",
+                    )
+                else:
+                    render_place_heading_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                        column_layout="place_lore_directory",
+                        title=DIRECTORY_SESSION_VIEW_TAB,
+                        key="place_lore_directory_session_view_heading",
                     )
             elif tab_name == FULL_KNOWLEDGE_GRAPH_TAB:
                 render_full_knowledge_graph_tab(
@@ -173,9 +209,9 @@ def render_knowledge_graph_tabs(
 
 def graph_tab_names(active_main_tab: str) -> list[str]:
     if active_main_tab == "Places":
-        return [FILE_VIEW_TAB, SESSION_VIEW_TAB]
+        return [FILE_VIEW_TAB, DIRECTORY_FILE_VIEW_TAB]
     if active_main_tab == "Session Notes":
-        return [FILE_VIEW_TAB, SESSION_VIEW_TAB]
+        return [FILE_VIEW_TAB, SESSION_VIEW_TAB, DIRECTORY_FILE_VIEW_TAB, DIRECTORY_SESSION_VIEW_TAB]
     return [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
 
 
@@ -221,13 +257,17 @@ def render_place_file_view_tab(
     *,
     combined: CombinedCharacterGraph,
     label_font_color: str,
+    column_layout: str = "place_lore",
+    title: str = FILE_VIEW_TAB,
+    key: str = "place_lore_file_view_source_file",
+    show_lore_notes: bool = False,
 ) -> None:
-    st.subheader(FILE_VIEW_TAB)
+    st.subheader(title)
     selected_source_file = render_lore_file_filter(
         combined,
         source_predicate=is_place_source_document_node,
         label="Place Lore File",
-        key="place_lore_file_view_source_file",
+        key=key,
     )
     if selected_source_file is None:
         st.info("Add Place Lore To Use File View.")
@@ -240,31 +280,45 @@ def render_place_file_view_tab(
     if not place_graph.characters:
         st.info("No Place Lore Connections Were Found For This File.")
         return
-    render_lore_graph(place_graph, label_font_color=label_font_color, column_layout="place_lore")
+    render_lore_graph(
+        place_graph,
+        label_font_color=label_font_color,
+        column_layout=column_layout,
+        show_lore_notes=show_lore_notes,
+    )
 
 
 def render_place_heading_view_tab(
     *,
     combined: CombinedCharacterGraph,
     label_font_color: str,
+    column_layout: str = "place_lore",
+    title: str = SESSION_VIEW_TAB,
+    key: str = "place_lore_session_view_heading",
+    show_lore_notes: bool = True,
 ) -> None:
-    st.subheader(SESSION_VIEW_TAB)
+    st.subheader(title)
     projected_graph = place_lore_graph(combined)
     selected_heading_id = render_lore_heading_filter(
         combined,
         source_predicate=is_place_source_document_node,
         label="Place Lore Heading",
-        key="place_lore_session_view_heading",
+        key=key,
         projected_graph=projected_graph,
     )
     if selected_heading_id is None:
-        st.info("Add Markdown Headings To Place Lore To Use Session View.")
+        st.info("Add Markdown Headings To Place Lore To Use Section View.")
         return
     place_graph = place_lore_graph(combined, heading_id=selected_heading_id)
     if not place_graph.characters:
         st.info("No Place Lore Connections Were Found For This Heading.")
         return
-    render_lore_graph(place_graph, label_font_color=label_font_color, column_layout="place_lore")
+    render_lore_graph(
+        place_graph,
+        label_font_color=label_font_color,
+        column_layout=column_layout,
+        show_lore_notes=show_lore_notes,
+    )
 
 
 def render_lore_graph(
@@ -272,35 +326,38 @@ def render_lore_graph(
     *,
     label_font_color: str,
     column_layout: str,
+    show_lore_notes: bool = False,
 ) -> None:
     graphviz_config = {
         **load_graphviz_config(LORE_GRAPH_CONFIG.key),
         "column_layout": column_layout,
     }
+    note_rows = lore_information_rows(lore_graph) if show_lore_notes else []
     render_relationship_graph(
         lore_graph,
         main_character_ids=set(lore_graph.characters),
         label_font_color=label_font_color,
         graphviz_config=graphviz_config,
         relationship_rows=place_lore_connection_rows(lore_graph),
+        lore_note_rows=note_rows,
     )
-    note_rows = lore_information_rows(lore_graph)
-    if note_rows:
-        st.subheader("Lore Notes")
-        st.table(note_rows, hide_index=True, width="stretch")
 
 
 def render_session_file_view_tab(
     *,
     combined: CombinedCharacterGraph,
     label_font_color: str,
+    column_layout: str = "session_note_lore",
+    title: str = FILE_VIEW_TAB,
+    key: str = "session_lore_file_view_source_file",
+    show_lore_notes: bool = False,
 ) -> None:
-    st.subheader(FILE_VIEW_TAB)
+    st.subheader(title)
     selected_source_file = render_lore_file_filter(
         combined,
         source_predicate=is_session_note_node,
         label="Session Note File",
-        key="session_lore_file_view_source_file",
+        key=key,
     )
     session_graph = session_note_lore_graph(
         combined,
@@ -313,31 +370,45 @@ def render_session_file_view_tab(
     if not session_graph.characters:
         st.info("No Session Note Connections Were Found For This File.")
         return
-    render_lore_graph(session_graph, label_font_color=label_font_color, column_layout="session_note_lore")
+    render_lore_graph(
+        session_graph,
+        label_font_color=label_font_color,
+        column_layout=column_layout,
+        show_lore_notes=show_lore_notes,
+    )
 
 
 def render_session_heading_view_tab(
     *,
     combined: CombinedCharacterGraph,
     label_font_color: str,
+    column_layout: str = "session_note_lore",
+    title: str = SESSION_VIEW_TAB,
+    key: str = "session_lore_session_view_heading",
+    show_lore_notes: bool = True,
 ) -> None:
-    st.subheader(SESSION_VIEW_TAB)
+    st.subheader(title)
     projected_graph = session_note_lore_graph(combined)
     selected_heading_id = render_lore_heading_filter(
         combined,
         source_predicate=is_session_note_node,
         label="Session Note Heading",
-        key="session_lore_session_view_heading",
+        key=key,
         projected_graph=projected_graph,
     )
     if selected_heading_id is None:
-        st.info("Add Markdown Headings To Session Notes To Use Session View.")
+        st.info("Add Markdown Headings To Session Notes To Use Section View.")
         return
     session_graph = session_note_lore_graph(combined, heading_id=selected_heading_id)
     if not session_graph.characters:
         st.info("No Session Note Connections Were Found For This Heading.")
         return
-    render_lore_graph(session_graph, label_font_color=label_font_color, column_layout="session_note_lore")
+    render_lore_graph(
+        session_graph,
+        label_font_color=label_font_color,
+        column_layout=column_layout,
+        show_lore_notes=show_lore_notes,
+    )
 
 
 def render_session_note_graph_tab(
@@ -476,6 +547,7 @@ def render_relationship_graph(
     label_font_color: str,
     graphviz_config: dict[str, Any],
     relationship_rows: list[dict[str, str]] | None = None,
+    lore_note_rows: list[dict[str, str]] | None = None,
 ) -> None:
     st.graphviz_chart(
         combined_relationship_dot(
@@ -487,12 +559,13 @@ def render_relationship_graph(
         ),
         width="stretch",
     )
-    st.subheader("Connections")
-    st.table(
-        relationship_rows if relationship_rows is not None else combined_relationship_rows(graph),
-        hide_index=True,
-        width="stretch",
-    )
+    if lore_note_rows:
+        st.subheader("Lore Notes")
+        st.table(lore_note_rows, hide_index=True, width="stretch")
+    rows = relationship_rows if relationship_rows is not None else combined_relationship_rows(graph)
+    if rows:
+        st.subheader("Connections")
+        st.table(rows, hide_index=True, width="stretch")
 
 
 def render_lore_file_filter(
