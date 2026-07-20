@@ -775,6 +775,7 @@ def should_skip_lore_scan_path(path: Path) -> bool:
 
 def place_lore_relationships(places) -> list[dict[str, str]]:
     relationships: list[dict[str, str]] = []
+    known_place_keys = {compact(place.name) for place in places}
     for place in places:
         text = read_text(place.path)
         source_id = lore_source_document_id(place.path)
@@ -786,6 +787,7 @@ def place_lore_relationships(places) -> list[dict[str, str]]:
             target_name = name.strip().lstrip("-").strip()
             if not target_name:
                 continue
+            target_type = "place" if compact(target_name) in known_place_keys or looks_like_place_connection(target_name) else "character"
             relationships.append(
                 {
                     "source_id": source_id,
@@ -794,7 +796,7 @@ def place_lore_relationships(places) -> list[dict[str, str]]:
                     "source_file": str(place.path),
                     "target_id": compact(target_name),
                     "target_name": target_name,
-                    "target_type": "character",
+                    "target_type": target_type,
                     "relationship": relationship.strip() or "reference",
                     "evidence": line.strip(),
                 }
@@ -814,6 +816,38 @@ def place_connections_lines(text: str) -> list[str]:
         if in_connections and stripped.startswith("-"):
             lines.append(stripped.lstrip("-").strip())
     return lines
+
+
+def looks_like_place_connection(name: str) -> bool:
+    lowered = name.strip().lower()
+    place_suffixes = {
+        "academy",
+        "bastion",
+        "cavern",
+        "city",
+        "college",
+        "coast",
+        "court",
+        "fortress",
+        "forest",
+        "guild",
+        "hall",
+        "harbor",
+        "keep",
+        "kingdom",
+        "library",
+        "mage college",
+        "monastery",
+        "school",
+        "sea",
+        "shore",
+        "temple",
+        "tower",
+        "tavern",
+        "university",
+        "village",
+    }
+    return any(lowered == suffix or lowered.endswith(f" {suffix}") for suffix in place_suffixes)
 
 
 def connection_rows_for_character(combined, character_id: str) -> list[dict[str, str]]:

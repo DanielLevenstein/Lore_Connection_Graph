@@ -13,6 +13,7 @@ from graphviz_rendering import (
     graph_tab_names,
     place_lore_connection_rows,
     place_lore_graph,
+    lore_information_rows,
     session_note_graph,
     session_note_lore_graph,
 )
@@ -31,6 +32,12 @@ def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path)
             [
                 "# Atlantia Lore",
                 "Atlantia is home to Jory Ravenmark.",
+                "## Town Overview",
+                "Atlantia grew around the harbor, the watch tower, and the roads inland.",
+                "## The Harbor",
+                "Jory Ravenmark watched the tide from the Harbor.",
+                "## The Watch Tower",
+                "Mrs Nightbloom kept watch from the Watch Tower.",
                 "## Sunstone Mage College",
                 "Orin Nightbloom studied at Sunstone Mage College.",
                 "### Faculty",
@@ -138,6 +145,20 @@ def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path)
             ),
             CombinedRelationshipEdge(
                 source="source_document__atlantia_lore",
+                target="jory_ravenmark",
+                relationship_type="home",
+                relationship_label="Home",
+                evidence=["Jory Ravenmark watched the tide from the Harbor."],
+            ),
+            CombinedRelationshipEdge(
+                source="source_document__atlantia_lore",
+                target="mrs_nightbloom",
+                relationship_type="mentions",
+                relationship_label="Mentions",
+                evidence=["Mrs Nightbloom kept watch from the Watch Tower."],
+            ),
+            CombinedRelationshipEdge(
+                source="source_document__atlantia_lore",
                 target="orin_nightbloom",
                 relationship_type="studied",
                 relationship_label="Studied",
@@ -195,17 +216,20 @@ def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path)
 
     place_graph = place_lore_graph(graph)
     atlantia_heading_id = "source_heading__sourcedocumentatlantialore__line_1__atlantialore"
-    college_heading_id = "source_heading__sourcedocumentatlantialore__line_3__sunstonemagecollege"
+    harbor_heading_id = "source_heading__sourcedocumentatlantialore__line_5__theharbor"
+    watch_tower_heading_id = "source_heading__sourcedocumentatlantialore__line_7__thewatchtower"
+    college_heading_id = "source_heading__sourcedocumentatlantialore__line_9__sunstonemagecollege"
     family_heading_id = "source_heading__familytree__line_1__familytree"
 
     assert set(place_graph.characters) == {
         "source_document__atlantia_lore",
         "family_tree",
         atlantia_heading_id,
+        harbor_heading_id,
+        watch_tower_heading_id,
         college_heading_id,
         family_heading_id,
         "atlantia",
-        "sunstone_mage_college",
         "jory_ravenmark",
         "orin_nightbloom",
         "mrs_nightbloom",
@@ -213,11 +237,16 @@ def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path)
     assert {(edge.source, edge.target) for edge in place_graph.edges} == {
         ("source_document__atlantia_lore", atlantia_heading_id),
         (atlantia_heading_id, "atlantia"),
-        (atlantia_heading_id, "jory_ravenmark"),
+        (atlantia_heading_id, harbor_heading_id),
+        (atlantia_heading_id, watch_tower_heading_id),
         (atlantia_heading_id, college_heading_id),
-        (college_heading_id, "sunstone_mage_college"),
+        ("atlantia", harbor_heading_id),
+        ("atlantia", watch_tower_heading_id),
+        ("atlantia", college_heading_id),
+        (atlantia_heading_id, "jory_ravenmark"),
+        (harbor_heading_id, "jory_ravenmark"),
+        (watch_tower_heading_id, "mrs_nightbloom"),
         (college_heading_id, "orin_nightbloom"),
-        ("sunstone_mage_college", "orin_nightbloom"),
         ("family_tree", family_heading_id),
         (family_heading_id, "atlantia"),
         (family_heading_id, "mrs_nightbloom"),
@@ -229,6 +258,9 @@ def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path)
     assert labels_by_edge[("source_document__atlantia_lore", atlantia_heading_id)] == ""
     assert labels_by_edge[(atlantia_heading_id, "atlantia")] == ""
     assert labels_by_edge[(atlantia_heading_id, "jory_ravenmark")] == "Home"
+    assert labels_by_edge[("atlantia", harbor_heading_id)] == "Contains"
+    assert labels_by_edge[("atlantia", watch_tower_heading_id)] == "Contains"
+    assert labels_by_edge[("atlantia", college_heading_id)] == "Contains"
     assert labels_by_edge[(family_heading_id, "mrs_nightbloom")] == "Mentions"
     table_rows = place_lore_connection_rows(place_graph)
     assert {row["Connection Type"] for row in table_rows} == {"Character"}
@@ -239,7 +271,19 @@ def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path)
     }
     assert {row["Relationship"] for row in table_rows} == {"Home", "Studied", "Mentions"}
     assert place_graph.characters[atlantia_heading_id].node_type == "source_heading_1"
-    assert place_graph.characters[college_heading_id].node_type == "source_heading_2"
+    assert place_graph.characters[harbor_heading_id].node_type == "source_heading_place_2"
+    assert place_graph.characters[harbor_heading_id].name == "Harbor"
+    assert place_graph.characters[watch_tower_heading_id].node_type == "source_heading_place_2"
+    assert place_graph.characters[watch_tower_heading_id].name == "Watch Tower"
+    assert place_graph.characters[college_heading_id].node_type == "source_heading_place_2"
+    note_rows = lore_information_rows(place_graph)
+    assert {
+        (row["Heading"], row["Summary"])
+        for row in note_rows
+    } == {
+        ("Town Overview", "Atlantia grew around the harbor, the watch tower, and the roads inland."),
+        ("Faculty", "Mrs Nightbloom keeps old records here."),
+    }
     assert all(node.name != "Faculty" for node in place_graph.characters.values())
     assert all(node.name != "Ignored Detail" for node in place_graph.characters.values())
     assert "justice" not in place_graph.characters
@@ -250,17 +294,16 @@ def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path)
     file_view_graph = place_lore_graph(graph, source_file=str(place_lore_path))
     assert "source_document__atlantia_lore" in file_view_graph.characters
     assert "family_tree" not in file_view_graph.characters
-    assert "mrs_nightbloom" not in file_view_graph.characters
+    assert "mrs_nightbloom" in file_view_graph.characters
 
     heading_view_graph = place_lore_graph(graph, heading_id=college_heading_id)
     assert set(heading_view_graph.characters) == {
         "source_document__atlantia_lore",
         atlantia_heading_id,
+        "atlantia",
         college_heading_id,
-        "sunstone_mage_college",
         "orin_nightbloom",
     }
-    assert all(node.name != "Atlantia" for node in heading_view_graph.characters.values())
 
 
 def test_place_lore_dot_uses_source_heading_place_character_columns():
@@ -286,9 +329,9 @@ def test_place_lore_dot_uses_source_heading_place_character_columns():
             ),
             "source_heading__atlantia__location": CombinedCharacterNode(
                 id="source_heading__atlantia__location",
-                name="Location",
+                name="Harbor",
                 source_file="world_building/lore/places/Atlantia_Lore.md",
-                node_type="source_heading_2",
+                node_type="source_heading_place_2",
             ),
             "source_heading__atlantia__districts": CombinedCharacterNode(
                 id="source_heading__atlantia__districts",
@@ -353,6 +396,7 @@ def test_place_lore_dot_uses_source_heading_place_character_columns():
     assert heading_1_column.index('"source_heading__atlantia__districts"') < heading_1_column.index('subgraph "cluster_column_2_markdown_heading_2"')
     assert heading_2_column.index('"source_heading__atlantia__location"') < heading_2_column.index('subgraph "cluster_column_3_markdown_heading_3"')
     assert heading_3_column.index('"source_heading__atlantia__faculty"') < heading_3_column.index('subgraph "cluster_column_4_character_connections"')
+    assert '"source_heading__atlantia__location" [label="Harbor", fillcolor="#dcfce7", color="#94a3b8", shape="component"' in dot
     assert (
         'subgraph "cluster_column_4_character_connections" '
         '{ rank=same; style=invis; "graph_column_4"; "jory_ravenmark"; }'

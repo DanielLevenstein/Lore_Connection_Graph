@@ -57,7 +57,7 @@ streamlit run streamlit_app.py
 
 ## Project Screenshots
 
-![Knowledge Graph](docs/screenshots/Structured_Knowledge_Graph_Party_View.png)
+![Knowledge Graph](docs/screenshots/Session_Notes_Graph_Session_View.png)
 
 ## Storage Source Of Truth
 

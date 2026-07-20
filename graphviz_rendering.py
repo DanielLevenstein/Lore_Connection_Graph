@@ -11,6 +11,7 @@ from character_graph.combined_graph import (
     CombinedCharacterGraph,
     CombinedCharacterNode,
     CombinedRelationshipEdge,
+    clean_evidence_text,
     combined_relationship_dot,
     combined_relationship_rows,
     compact,
@@ -69,6 +70,42 @@ FULL_KNOWLEDGE_VIEW = KnowledgeGraphView(
 )
 DISALLOWED_PLACE_GRAPH_CHARACTER_KEYS = {"family", "stone", "students"}
 PLACE_GRAPH_MARKDOWN_HEADING_RE = re.compile(r"^(?P<marker>#{1,3})\s+(?P<text>.*?)\s*#*\s*$")
+PLACE_HEADING_SUFFIXES = {
+    "Academy",
+    "Bastion",
+    "Cavern",
+    "City",
+    "College",
+    "Coast",
+    "Court",
+    "Fortress",
+    "Forest",
+    "Guild",
+    "Hall",
+    "Halls",
+    "Harbor",
+    "Keep",
+    "Kingdom",
+    "Library",
+    "Mage College",
+    "Monastery",
+    "School",
+    "Sea",
+    "Shore",
+    "Shores",
+    "Temple",
+    "Tower",
+    "Tavern",
+    "University",
+    "Village",
+}
+GROUP_HEADING_SUFFIXES = {
+    "Council",
+    "Cult",
+    "Family",
+    "Guild",
+    "Order",
+}
 
 
 def render_knowledge_graph_tabs(
@@ -247,6 +284,10 @@ def render_lore_graph(
         graphviz_config=graphviz_config,
         relationship_rows=place_lore_connection_rows(lore_graph),
     )
+    note_rows = lore_information_rows(lore_graph)
+    if note_rows:
+        st.subheader("Lore Notes")
+        st.table(note_rows, hide_index=True, width="stretch")
 
 
 def render_session_file_view_tab(
@@ -565,15 +606,22 @@ def place_lore_graph(
     source_headings = markdown_subheadings_by_source(graph, source_document_ids)
     projected_nodes: dict[str, CombinedCharacterNode] = {}
     projected_edges: list[CombinedRelationshipEdge] = []
+    semantic_heading_ids_by_source: dict[str, set[str]] = {}
     for source_id, headings in source_headings.items():
         source = graph.characters[source_id]
         for heading in headings:
+            semantic_type = markdown_heading_entity_type(heading.text, graph)
+            display_name = semantic_heading_display_name(heading.text) if semantic_type else heading.text
             projected_nodes[heading.id] = CombinedCharacterNode(
                 id=heading.id,
-                name=heading.text,
+                name=display_name,
                 source_file=source.source_file,
-                node_type=f"source_heading_{heading.level}",
+                node_type=markdown_heading_node_type(heading.level, semantic_type),
             )
+            if semantic_type in {"place", "group"}:
+                semantic_heading_ids_by_source.setdefault(source_id, set()).add(heading.id)
+                if semantic_type == "place":
+                    root_place_ids.add(heading.id)
             connected_ids.add(heading.id)
             append_projected_edge(
                 projected_edges,
@@ -584,6 +632,14 @@ def place_lore_graph(
                     relationship_label="",
                 ),
             )
+    append_place_heading_root_edges(
+        graph,
+        projected_nodes,
+        source_to_place_ids,
+        semantic_heading_ids_by_source,
+        connected_ids,
+        projected_edges,
+    )
     for edge in graph.edges:
         if not edge_connects(edge, place_document_ids, place_ids):
             continue
@@ -594,20 +650,31 @@ def place_lore_graph(
             place = graph.characters.get(place_id)
             heading = markdown_subheading_for_edge(source, source_headings.get(source_id, []), edge, place)
             edge_source = heading.id if heading is not None else source_id
-            connected_ids.add(place_id)
-            append_projected_edge(
-                projected_edges,
-                CombinedRelationshipEdge(
-                    source=edge_source,
-                    target=place_id,
-                    relationship_type=edge.relationship_type,
-                    relationship_label="" if heading is not None else edge.relationship_label,
-                    evidence=list(edge.evidence),
-                    bidirectional=edge.bidirectional,
-                ),
-            )
+            edge_target = semantic_heading_for_node(place, heading, projected_nodes) or place_id
+            connected_ids.add(edge_target)
+            if edge_target == place_id:
+                connected_ids.add(place_id)
+            if edge_source != edge_target:
+                append_projected_edge(
+                    projected_edges,
+                    CombinedRelationshipEdge(
+                        source=edge_source,
+                        target=edge_target,
+                        relationship_type=edge.relationship_type,
+                        relationship_label="" if heading is not None else edge.relationship_label,
+                        evidence=list(edge.evidence),
+                        bidirectional=edge.bidirectional,
+                    ),
+                )
         else:
             append_projected_edge(projected_edges, place_character_edge_from_place(edge, graph, place_ids))
+    semantic_heading_by_place_id = semantic_heading_by_entity_id(
+        graph,
+        source_to_place_ids,
+        projected_nodes,
+        semantic_heading_ids_by_source,
+    )
+    projected_edges = retarget_semantic_heading_place_edges(projected_edges, semantic_heading_by_place_id)
     for edge in graph.edges:
         if edge.source in place_ids or edge.target in place_ids:
             source = graph.characters.get(edge.source)
@@ -648,7 +715,8 @@ def place_lore_graph(
         if heading is None:
             character_source_ids = source_to_place_ids[source_id]
         else:
-            character_source_ids = {heading.id}
+            semantic_heading_id = nearest_semantic_heading_id(heading, projected_nodes, source_headings.get(source_id, []))
+            character_source_ids = {semantic_heading_id or heading.id}
         connected_ids.add(adjacent_id)
         for character_source_id in character_source_ids:
             append_projected_edge(
@@ -668,12 +736,13 @@ def place_lore_graph(
         projected_edges,
         graph.characters,
     )
+    connected_ids = connected_ids & node_ids_in_edges(projected_edges)
     projected_graph = CombinedCharacterGraph(
         characters={
             **{
                 node_id: node
                 for node_id, node in graph.characters.items()
-                if node_id in connected_ids and node.node_type in {"source_document", "place", "character"}
+                if node_id in connected_ids and node.node_type in {"source_document", "place", "group", "character"}
             },
             **projected_nodes,
         },
@@ -710,12 +779,16 @@ def session_note_lore_graph(
     for source_id, headings in source_headings.items():
         source = graph.characters[source_id]
         for heading in headings:
+            semantic_type = markdown_heading_entity_type(heading.text, graph)
+            display_name = semantic_heading_display_name(heading.text) if semantic_type else heading.text
             projected_nodes[heading.id] = CombinedCharacterNode(
                 id=heading.id,
-                name=heading.text,
+                name=display_name,
                 source_file=source.source_file,
-                node_type=f"source_heading_{heading.level}",
+                node_type=markdown_heading_node_type(heading.level, semantic_type),
             )
+            if semantic_type in {"place", "group"}:
+                root_lore_ids.add(heading.id)
             connected_ids.add(heading.id)
             append_projected_edge(
                 projected_edges,
@@ -743,10 +816,13 @@ def session_note_lore_graph(
             adjacent,
         )
         connected_ids.add(adjacent_id)
+        edge_source = heading.id if heading is not None else source_id
+        if adjacent.node_type == "character" and heading is not None:
+            edge_source = nearest_semantic_heading_id(heading, projected_nodes, source_headings.get(source_id, [])) or edge_source
         append_projected_edge(
             projected_edges,
             CombinedRelationshipEdge(
-                source=heading.id if heading is not None else source_id,
+                source=edge_source,
                 target=adjacent_id,
                 relationship_type=edge.relationship_type,
                 relationship_label=edge.relationship_label if adjacent.node_type in {"character", "place"} else "",
@@ -989,6 +1065,181 @@ def source_heading_node_id(source_id: str, line_index: int, text: str) -> str:
     return f"source_heading__{compact(source_id)}__line_{line_index + 1}__{compact(text or 'heading')}"
 
 
+def markdown_heading_node_type(level: int, semantic_type: str | None = None) -> str:
+    if semantic_type in {"place", "group"}:
+        return f"source_heading_{semantic_type}_{level}"
+    return f"source_heading_{level}"
+
+
+def markdown_heading_entity_type(text: str, graph: CombinedCharacterGraph) -> str | None:
+    display_name = semantic_heading_display_name(text)
+    display_key = compact(display_name)
+    for node in graph.characters.values():
+        if compact(node.name) == display_key and node.node_type in {"place", "group"}:
+            return node.node_type
+    if looks_like_group_heading(display_name):
+        return "group"
+    if looks_like_place_heading(display_name):
+        return "place"
+    return None
+
+
+def semantic_heading_display_name(text: str) -> str:
+    return re.sub(r"^(?:the|a|an)\s+", "", text.strip(), flags=re.IGNORECASE).strip()
+
+
+def looks_like_place_heading(text: str) -> bool:
+    words = text.split()
+    if not words:
+        return False
+    lowered = text.lower()
+    return any(
+        lowered == suffix.lower() or lowered.endswith(f" {suffix.lower()}")
+        for suffix in PLACE_HEADING_SUFFIXES
+    )
+
+
+def looks_like_group_heading(text: str) -> bool:
+    lowered = text.lower()
+    return any(
+        lowered == suffix.lower() or lowered.endswith(f" {suffix.lower()}")
+        for suffix in GROUP_HEADING_SUFFIXES
+    )
+
+
+def semantic_heading_for_node(
+    node: CombinedCharacterNode | None,
+    heading: MarkdownSubheading | None,
+    projected_nodes: dict[str, CombinedCharacterNode],
+) -> str | None:
+    if node is None or heading is None:
+        return None
+    heading_node = projected_nodes.get(heading.id)
+    if heading_node is None:
+        return None
+    if semantic_heading_entity_type(heading_node) != node.node_type:
+        return None
+    if compact(heading_node.name) != compact(node.name):
+        return None
+    return heading_node.id
+
+
+def nearest_semantic_heading_id(
+    heading: MarkdownSubheading,
+    projected_nodes: dict[str, CombinedCharacterNode],
+    headings: list[MarkdownSubheading],
+) -> str | None:
+    heading_by_id = {item.id: item for item in headings}
+    current_id = heading.id
+    while current_id:
+        node = projected_nodes.get(current_id)
+        if semantic_heading_entity_type(node) in {"place", "group"}:
+            return current_id
+        current_heading = heading_by_id.get(current_id)
+        current_id = current_heading.parent_id if current_heading is not None else ""
+    return None
+
+
+def semantic_heading_entity_type(node: CombinedCharacterNode | None) -> str | None:
+    if node is None:
+        return None
+    match = re.fullmatch(r"source_heading_(?P<entity>place|group)_\d+", node.node_type)
+    return match.group("entity") if match else None
+
+
+def append_place_heading_root_edges(
+    graph: CombinedCharacterGraph,
+    projected_nodes: dict[str, CombinedCharacterNode],
+    source_to_place_ids: dict[str, set[str]],
+    semantic_heading_ids_by_source: dict[str, set[str]],
+    connected_ids: set[str],
+    projected_edges: list[CombinedRelationshipEdge],
+) -> None:
+    for source_id, heading_ids in semantic_heading_ids_by_source.items():
+        root_place_ids = {
+            place_id
+            for place_id in source_to_place_ids.get(source_id, set())
+            if graph.characters.get(place_id) is not None
+            and is_source_root_place(graph.characters[place_id], graph.characters.get(source_id))
+        }
+        for root_place_id in root_place_ids:
+            root_place = graph.characters[root_place_id]
+            for heading_id in heading_ids:
+                heading_node = projected_nodes.get(heading_id)
+                if heading_node is None or semantic_heading_entity_type(heading_node) != "place":
+                    continue
+                if compact(root_place.name) == compact(heading_node.name):
+                    continue
+                connected_ids.update({root_place_id, heading_id})
+                append_projected_edge(
+                    projected_edges,
+                    CombinedRelationshipEdge(
+                        source=root_place_id,
+                        target=heading_id,
+                        relationship_type="contains",
+                        relationship_label="Contains",
+                    ),
+                )
+
+
+def semantic_heading_by_entity_id(
+    graph: CombinedCharacterGraph,
+    source_to_entity_ids: dict[str, set[str]],
+    projected_nodes: dict[str, CombinedCharacterNode],
+    semantic_heading_ids_by_source: dict[str, set[str]],
+) -> dict[str, str]:
+    mapped: dict[str, str] = {}
+    for source_id, entity_ids in source_to_entity_ids.items():
+        for entity_id in entity_ids:
+            entity = graph.characters.get(entity_id)
+            if entity is None:
+                continue
+            for heading_id in semantic_heading_ids_by_source.get(source_id, set()):
+                heading = projected_nodes.get(heading_id)
+                if heading is None:
+                    continue
+                if semantic_heading_entity_type(heading) == entity.node_type and compact(heading.name) == compact(entity.name):
+                    mapped[entity_id] = heading_id
+    return mapped
+
+
+def retarget_semantic_heading_place_edges(
+    edges: list[CombinedRelationshipEdge],
+    semantic_heading_by_place_id: dict[str, str],
+) -> list[CombinedRelationshipEdge]:
+    retargeted: list[CombinedRelationshipEdge] = []
+    for edge in edges:
+        source = semantic_heading_by_place_id.get(edge.source, edge.source)
+        target = semantic_heading_by_place_id.get(edge.target, edge.target)
+        if source == target:
+            continue
+        append_projected_edge(
+            retargeted,
+            CombinedRelationshipEdge(
+                source=source,
+                target=target,
+                relationship_type=edge.relationship_type,
+                relationship_label=edge.relationship_label,
+                evidence=list(edge.evidence),
+                bidirectional=edge.bidirectional,
+            ),
+        )
+    return retargeted
+
+
+def is_source_root_place(place: CombinedCharacterNode, source: CombinedCharacterNode | None) -> bool:
+    if source is None:
+        return False
+    source_stem = compact(Path(source.source_file).stem)
+    source_name = compact(source.name)
+    place_name = compact(place.name)
+    return bool(place_name and (place_name in source_stem or place_name in source_name))
+
+
+def node_ids_in_edges(edges: list[CombinedRelationshipEdge]) -> set[str]:
+    return {edge.source for edge in edges} | {edge.target for edge in edges}
+
+
 def place_lore_connection_rows(graph: CombinedCharacterGraph) -> list[dict[str, str]]:
     character_connection_graph = CombinedCharacterGraph(
         characters=graph.characters,
@@ -999,6 +1250,65 @@ def place_lore_connection_rows(graph: CombinedCharacterGraph) -> list[dict[str, 
         ],
     )
     return combined_relationship_rows(character_connection_graph)
+
+
+def lore_information_rows(graph: CombinedCharacterGraph) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    source_nodes = [
+        node
+        for node in graph.characters.values()
+        if node.node_type == "source_document"
+    ]
+    for source in sorted(source_nodes, key=lambda node: node.name.lower()):
+        for heading, description in descriptive_heading_summaries(source, graph):
+            rows.append(
+                {
+                    "Source": Path(source.source_file).name or source.name,
+                    "Heading": heading,
+                    "Summary": description,
+                }
+            )
+    return rows
+
+
+def descriptive_heading_summaries(
+    source: CombinedCharacterNode,
+    graph: CombinedCharacterGraph,
+) -> list[tuple[str, str]]:
+    source_path = Path(source.source_file)
+    if not source_path.exists():
+        return []
+    try:
+        lines = source_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    headings = markdown_subheadings_for_source(source)
+    rows: list[tuple[str, str]] = []
+    for index, heading in enumerate(headings):
+        if heading.level <= 1:
+            continue
+        if markdown_heading_entity_type(heading.text, graph) is not None:
+            continue
+        next_line_index = headings[index + 1].line_index if index + 1 < len(headings) else len(lines)
+        description = first_human_sentence(lines[heading.line_index + 1 : next_line_index])
+        if description:
+            rows.append((heading.text, description))
+    return rows
+
+
+def first_human_sentence(lines: list[str]) -> str:
+    text = " ".join(
+        line.strip()
+        for line in lines
+        if line.strip()
+        and not line.lstrip().startswith("|")
+        and not re.fullmatch(r":?-{2,}:?(?:\s+\|+\s*:?-{2,}:?)*", line.strip())
+    )
+    if not text:
+        return ""
+    match = re.search(r"(.+?[.!?])(?:\s|$)", text)
+    sentence = match.group(1) if match else text
+    return clean_evidence_text(sentence)
 
 
 def edge_has_character_connection(edge: CombinedRelationshipEdge, graph: CombinedCharacterGraph) -> bool:

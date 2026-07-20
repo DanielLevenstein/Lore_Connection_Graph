@@ -66,3 +66,6 @@
 
 ### Session Note Evidence Cleanup
 - Normalized session-note evidence table text into grammatical source-backed sentences, with an optional language-model polishing hook that rejects rewrites that drop required names or facts.
+
+### Place Heading Semantics And Lore Notes
+- Kept place and group Markdown headings in their authored heading-level columns while styling them with semantic place/group icons, fanned out derived place headings to character connections, and added non-graph lore summaries for descriptive headings such as `Town Overview`.

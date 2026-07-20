@@ -1168,23 +1168,34 @@ def graphviz_node_attributes(
 
 def source_heading_node_attributes(node_type: str) -> dict[str, Any]:
     level = source_heading_level(node_type) or 1
+    entity_type = source_heading_entity_type(node_type)
     sizes = {
         1: {"width": 1.45, "height": 0.58, "fontsize": 11, "margin": "0.10,0.05"},
         2: {"width": 1.25, "height": 0.5, "fontsize": 10, "margin": "0.08,0.04"},
         3: {"width": 1.05, "height": 0.42, "fontsize": 9, "margin": "0.06,0.03"},
     }
-    return {
+    attributes = {
         "shape": "folder",
         "fillcolor": "#fef9c3",
         **sizes.get(level, sizes[3]),
     }
+    if entity_type == "place":
+        attributes.update({"shape": "component", "fillcolor": "#dcfce7"})
+    elif entity_type == "group":
+        attributes.update({"shape": "trapezium", "fillcolor": "#e9d5ff"})
+    return attributes
 
 
 def source_heading_level(node_type: str) -> int | None:
-    match = re.fullmatch(r"source_heading(?:_(?P<level>[1-6]))?", node_type)
+    match = re.fullmatch(r"source_heading(?:_(?:place|group))?(?:_(?P<level>[1-6]))?", node_type)
     if match is None:
         return None
     return int(match.group("level") or 1)
+
+
+def source_heading_entity_type(node_type: str) -> str | None:
+    match = re.fullmatch(r"source_heading_(?P<entity>place|group)(?:_[1-6])?", node_type)
+    return match.group("entity") if match else None
 
 
 def dot_attributes(attributes: dict[str, Any]) -> str:
@@ -1321,6 +1332,10 @@ def markdown_lore_column_group(node: CombinedCharacterNode, column_layout: str) 
         return markdown_lore_column_0_name(column_layout)
     if column_layout == "place_lore" and node.node_type == "place":
         return "column_0_source_documents_places"
+    if column_layout == "place_lore" and node.node_type == "group":
+        return "column_0_source_documents_places"
+    if column_layout == "session_note_lore" and node.node_type == "place":
+        return "column_0_source_documents_groups"
     if column_layout == "session_note_lore" and node.node_type == "group":
         return "column_0_source_documents_groups"
     heading_level = source_heading_level(node.node_type)
@@ -1334,12 +1349,13 @@ def markdown_lore_column_group(node: CombinedCharacterNode, column_layout: str) 
 
 def graph_column_node_type_rank(group_name: str, node_type: str) -> int:
     if group_name in {"column_0_family_names", "column_0_source_documents_places", "column_0_source_documents_groups"}:
+        entity_type = source_heading_entity_type(node_type)
         return {
             "source_document": 0,
             "place": 1,
             "group": 1,
             "family": 2,
-        }.get(node_type, 3)
+        }.get(entity_type or node_type, 3)
     if group_name in {
         "column_1_main_characters",
         "column_1_markdown_heading_1",
@@ -1380,6 +1396,9 @@ def edge_constraint_attribute(
             "column_0_source_documents_places",
             "column_0_source_documents_groups",
         } and target_column in {
+            "column_1_markdown_heading_1",
+            "column_2_markdown_heading_2",
+            "column_3_markdown_heading_3",
             "column_2_secondary_characters",
             "column_3_places",
             "column_4_character_connections",
@@ -1390,6 +1409,9 @@ def edge_constraint_attribute(
             "column_0_source_documents_places",
             "column_0_source_documents_groups",
         } and source_column in {
+            "column_1_markdown_heading_1",
+            "column_2_markdown_heading_2",
+            "column_3_markdown_heading_3",
             "column_2_secondary_characters",
             "column_3_places",
             "column_4_character_connections",
