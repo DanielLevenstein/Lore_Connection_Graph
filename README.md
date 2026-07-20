@@ -55,7 +55,13 @@ pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
 
-## Project Screenshots
+## Knowledge Graph Views
+Main Tab [Characters, Places, Session Notes]
+- Characters: [Single Character, Party View]
+- Places: [Location View, Heading View]
+- Session Notes: [Location View, Directory File View]
+
+### Project Screenshots
 
 ![Knowledge Graph](docs/screenshots/Session_Notes_Graph_Session_View.png)
 
@@ -138,7 +144,7 @@ LOCAL_CHATBOT_WORLD_BUILDING_DIR=/tmp/lore_graph_sandbox ./run_streamlit.sh
 
 ## Specs
 
-- [Knowledge Graph Design](docs/specs/KNOWLEDGE_GRAPH_DESIGN.md): Tabular Knowledge Extraction 
+- [Knowledge Graph Design](docs/specs/KNOWLEDGE_GRAPH_DESIGN.md): Tabular Knowledge Extraction
 - [Combined Knowledge Graph](docs/specs/KNOWLEDGE_GRAPH_DESIGN2.md): Multi Source Knowledge Graph
 - [Graphviz UI Issues](docs/specs/KNOWLEDGE_GRAPH_DESIGN3.md): Knowledge Graph Rendering with Graphviz
 - [Knowledge Graph Views](docs/specs/KNOWLEDGE_GRAPH_DESIGN4.md): Multi View Knowledge Graphs
