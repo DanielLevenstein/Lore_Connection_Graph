@@ -4,8 +4,8 @@
 
 Specs Update
 1) When the top level tab is Characters only display the ["Single Character", "Party View"]
-2) When the top level tab is "Places" display ["Place Lore", "Party View"]
-3) When the top level tab is "Session Notes" display ["Place Lore", "Party View"]
+2) When the top level tab is "Places" display ["File View", "Session View"]
+3) When the top level tab is "Session Notes" display ["File View", "Session View"]
 
 Also remove all non-place or character nodes from the place graph, If no character connections exist, just don't show any. 
 
@@ -16,7 +16,10 @@ Column 1: Main Characters
 Column 2: Secondary Characters & places
 
 ## Places Graph
-Views [Place Lore, Party View]
+Views [File View, Session View]
+- File View allows the user to view lore items from a single source file
+- Session View allows users to view lore items from a single Markdown heading
+  - For session views hide headings which have no root nodes associated with them. 
 
 Column 0: Source Documents & Place Names
 Column 1: Markdown Heading 1
@@ -29,7 +32,10 @@ Display all graph connections as a straight line and enforce that columns are ma
 Table of connections should only show edges with character connections
 
 ## Session Notes Graph
-Views [Session Notes, Party View]
+Views [File View, Session View]
+- File View allows the user to view lore items from a single source file
+- Session View allows users to view lore items from a single Markdown heading
+  - For session views hide headings which have no root nodes associated with them. 
 
 Column 0: Source Documents & Group Names
 Column 1: Markdown Heading 1
@@ -44,4 +50,4 @@ Table of connections should only show edges with character connections
 Views [Character Deduplication, Place Deduplication, Node Removal]
 Freeform graph with all headings and source documents hidden.
 
-UI Design isn't completed yet
+See [NODE_DEDUPLICATION_DESIGN.md](NODE_DEDUPLICATION_DESIGN.md) for the review workflow, table layout, matching signals, review rules, and test plan.

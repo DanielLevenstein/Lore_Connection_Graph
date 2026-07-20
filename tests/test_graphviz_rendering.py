@@ -4,12 +4,10 @@ from character_graph.combined_graph import (
     CombinedRelationshipEdge,
     combined_relationship_dot,
 )
-import json
-from pathlib import Path
 from graphviz_rendering import (
+    FILE_VIEW_TAB,
     PARTY_VIEW_TAB,
-    PLACE_LORE_TAB,
-    PLACES_GRAPH_TAB,
+    SESSION_VIEW_TAB,
     SINGLE_CHARACTER_TAB,
     graph_without_lore_source_knots,
     graph_tab_names,
@@ -20,32 +18,10 @@ from graphviz_rendering import (
 )
 
 
-GRAPH_VIEW_FIXTURES_DIR = Path(__file__).parent / "fixtures" / "graph_views"
-
-
-def test_graph_view_fixtures_cover_current_information_views():
-    fixtures = [
-        json.loads(path.read_text(encoding="utf-8"))
-        for path in sorted(GRAPH_VIEW_FIXTURES_DIR.glob("*.json"))
-    ]
-
-    assert {
-        (fixture["graph_family"], fixture["view"], fixture["top_level_tab"], fixture["screenshot"])
-        for fixture in fixtures
-    } == {
-        ("Characters Graph", "Single Character", "Characters", "Characters_Graph_Single_Character.png"),
-        ("Characters Graph", "Party View", "Characters", "Characters_Graph_Party_View.png"),
-        ("Places Graph", "Place Lore", "Places", "Places_Graph_Place_Lore.png"),
-        ("Places Graph", "Party View", "Places", "Places_Graph_Party_View.png"),
-        ("Session Notes Graph", "Place Lore", "Session Notes", "Session_Notes_Graph_Place_Lore.png"),
-        ("Session Notes Graph", "Party View", "Session Notes", "Session_Notes_Graph_Party_View.png"),
-    }
-
-
 def test_graph_tabs_follow_active_main_tab():
     assert graph_tab_names("Characters") == [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
-    assert graph_tab_names("Places") == [PLACES_GRAPH_TAB, PARTY_VIEW_TAB]
-    assert graph_tab_names("Session Notes") == [PLACE_LORE_TAB, PARTY_VIEW_TAB]
+    assert graph_tab_names("Places") == [FILE_VIEW_TAB, SESSION_VIEW_TAB]
+    assert graph_tab_names("Session Notes") == [FILE_VIEW_TAB, SESSION_VIEW_TAB]
 
 
 def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path):
@@ -271,6 +247,21 @@ def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path)
     assert "stone" not in place_graph.characters
     assert "students" not in place_graph.characters
 
+    file_view_graph = place_lore_graph(graph, source_file=str(place_lore_path))
+    assert "source_document__atlantia_lore" in file_view_graph.characters
+    assert "family_tree" not in file_view_graph.characters
+    assert "mrs_nightbloom" not in file_view_graph.characters
+
+    heading_view_graph = place_lore_graph(graph, heading_id=college_heading_id)
+    assert set(heading_view_graph.characters) == {
+        "source_document__atlantia_lore",
+        atlantia_heading_id,
+        college_heading_id,
+        "sunstone_mage_college",
+        "orin_nightbloom",
+    }
+    assert all(node.name != "Atlantia" for node in heading_view_graph.characters.values())
+
 
 def test_place_lore_dot_uses_source_heading_place_character_columns():
     graph = CombinedCharacterGraph(
@@ -373,6 +364,7 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
     session_dir = tmp_path / "session_notes"
     session_dir.mkdir()
     session_path = session_dir / "Family_Tree.md"
+    side_session_path = session_dir / "Side_Notes.md"
     session_path.write_text(
         "\n".join(
             [
@@ -386,6 +378,7 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
         ),
         encoding="utf-8",
     )
+    side_session_path.write_text("# Side Notes\n\nJory Ravenmark visits Atlantia.", encoding="utf-8")
     graph = CombinedCharacterGraph(
         characters={
             "family_tree": CombinedCharacterNode(
@@ -406,11 +399,23 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
                 source_file="world_building/lore/character_sheets/Jory_Ravenmark.md",
                 node_type="character",
             ),
+            "mary_ravenmark": CombinedCharacterNode(
+                id="mary_ravenmark",
+                name="Mary Ravenmark",
+                source_file="world_building/lore/character_sheets/Mary_Ravenmark.md",
+                node_type="character",
+            ),
             "atlantia": CombinedCharacterNode(
                 id="atlantia",
                 name="Atlantia",
                 source_file="world_building/lore/places/Atlantia_Lore.md",
                 node_type="place",
+            ),
+            "side_notes": CombinedCharacterNode(
+                id="side_notes",
+                name="Side Notes",
+                source_file=str(side_session_path),
+                node_type="source_document",
             ),
         },
         edges=[
@@ -435,6 +440,20 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
                 relationship_label="Place",
                 evidence=["Jory Ravenmark found trouble in Atlantia."],
             ),
+            CombinedRelationshipEdge(
+                source="side_notes",
+                target="jory_ravenmark",
+                relationship_type="mentions",
+                relationship_label="Mentions",
+                evidence=["Jory Ravenmark visits Atlantia."],
+            ),
+            CombinedRelationshipEdge(
+                source="ravenmark_family",
+                target="mary_ravenmark",
+                relationship_type="family",
+                relationship_label="Family",
+                evidence=["Mary Ravenmark is linked to the Ravenmark Family."],
+            ),
         ],
     )
 
@@ -444,11 +463,13 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
 
     assert set(lore_graph.characters) == {
         "family_tree",
+        "side_notes",
         "ravenmark_family",
         "jory_ravenmark",
         "atlantia",
         family_heading_id,
         trouble_heading_id,
+        "source_heading__sidenotes__line_1__sidenotes",
     }
     assert {(edge.source, edge.target) for edge in lore_graph.edges} == {
         ("family_tree", family_heading_id),
@@ -456,6 +477,8 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
         (family_heading_id, trouble_heading_id),
         (trouble_heading_id, "jory_ravenmark"),
         (trouble_heading_id, "atlantia"),
+        ("side_notes", "source_heading__sidenotes__line_1__sidenotes"),
+        ("source_heading__sidenotes__line_1__sidenotes", "jory_ravenmark"),
     }
     assert all(node.name != "Empty Aside" for node in lore_graph.characters.values())
 
@@ -469,6 +492,30 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
     assert dot.index('"family_tree"') < dot.index('"ravenmark_family"')
     assert '"jory_ravenmark"' in dot
     assert '"atlantia"' in dot
+    assert "mary_ravenmark" not in lore_graph.characters
+
+    file_view_graph = session_note_lore_graph(
+        graph,
+        source_file=str(session_path),
+        fanout_linked_characters=True,
+    )
+    assert "family_tree" in file_view_graph.characters
+    assert "side_notes" not in file_view_graph.characters
+    assert "mary_ravenmark" in file_view_graph.characters
+    assert ("ravenmark_family", "mary_ravenmark") in {
+        (edge.source, edge.target)
+        for edge in file_view_graph.edges
+    }
+
+    heading_view_graph = session_note_lore_graph(graph, heading_id=trouble_heading_id)
+    assert set(heading_view_graph.characters) == {
+        "family_tree",
+        family_heading_id,
+        trouble_heading_id,
+        "jory_ravenmark",
+        "atlantia",
+    }
+    assert "ravenmark_family" not in heading_view_graph.characters
 
 
 def test_session_note_graph_keeps_only_session_note_connections():

@@ -39,8 +39,8 @@ class MarkdownSubheading:
 
 SINGLE_CHARACTER_TAB = "Single Character"
 PARTY_VIEW_TAB = "Party View"
-PLACES_GRAPH_TAB = "Place Lore"
-PLACE_LORE_TAB = PLACES_GRAPH_TAB
+FILE_VIEW_TAB = "File View"
+SESSION_VIEW_TAB = "Session View"
 FULL_KNOWLEDGE_GRAPH_TAB = "Full Knowledge Graph"
 
 STRUCTURED_CHARACTER_VIEW = KnowledgeGraphView(
@@ -51,9 +51,9 @@ CHARACTER_DATA_ONLY_VIEW = KnowledgeGraphView(
     key="party_view_fixture",
     label="Character Data Only",
 )
-PLACE_LORE_VIEW = KnowledgeGraphView(
+LORE_GRAPH_CONFIG = KnowledgeGraphView(
     key="full_structured_graph",
-    label="Place Lore",
+    label="Lore Graph",
 )
 SESSION_MONTH_VIEW = KnowledgeGraphView(
     key="full_structured_graph",
@@ -103,14 +103,25 @@ def render_knowledge_graph_tabs(
                     main_character_ids,
                     label_font_color,
                 )
-            elif tab_name == PLACES_GRAPH_TAB:
+            elif tab_name == FILE_VIEW_TAB:
                 if active_main_tab == "Session Notes":
-                    render_session_note_place_lore_tab(
+                    render_session_file_view_tab(
                         combined=combined,
                         label_font_color=label_font_color,
                     )
                 else:
-                    render_place_graph_tab(
+                    render_place_file_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                    )
+            elif tab_name == SESSION_VIEW_TAB:
+                if active_main_tab == "Session Notes":
+                    render_session_heading_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                    )
+                else:
+                    render_place_heading_view_tab(
                         combined=combined,
                         label_font_color=label_font_color,
                     )
@@ -125,9 +136,9 @@ def render_knowledge_graph_tabs(
 
 def graph_tab_names(active_main_tab: str) -> list[str]:
     if active_main_tab == "Places":
-        return [PLACES_GRAPH_TAB, PARTY_VIEW_TAB]
+        return [FILE_VIEW_TAB, SESSION_VIEW_TAB]
     if active_main_tab == "Session Notes":
-        return [PLACE_LORE_TAB, PARTY_VIEW_TAB]
+        return [FILE_VIEW_TAB, SESSION_VIEW_TAB]
     return [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
 
 
@@ -169,50 +180,123 @@ def render_party_view_tab(
     )
 
 
-def render_place_graph_tab(
+def render_place_file_view_tab(
     *,
     combined: CombinedCharacterGraph,
     label_font_color: str,
 ) -> None:
-    st.subheader(PLACE_LORE_VIEW.label)
-    place_graph = place_lore_graph(combined)
+    st.subheader(FILE_VIEW_TAB)
+    selected_source_file = render_lore_file_filter(
+        combined,
+        source_predicate=is_place_source_document_node,
+        label="Place Lore File",
+        key="place_lore_file_view_source_file",
+    )
+    if selected_source_file is None:
+        st.info("Add Place Lore To Use File View.")
+        return
+    place_graph = place_lore_graph(
+        combined,
+        source_file=selected_source_file,
+        fanout_linked_characters=True,
+    )
     if not place_graph.characters:
-        st.info("Add Place Lore To See The Place Lore Graph.")
+        st.info("No Place Lore Connections Were Found For This File.")
         return
-    graphviz_config = {
-        **load_graphviz_config(PLACE_LORE_VIEW.key),
-        "column_layout": "place_lore",
-    }
-    render_relationship_graph(
-        place_graph,
-        main_character_ids=set(place_graph.characters),
-        label_font_color=label_font_color,
-        graphviz_config=graphviz_config,
-        relationship_rows=place_lore_connection_rows(place_graph),
-    )
+    render_lore_graph(place_graph, label_font_color=label_font_color, column_layout="place_lore")
 
 
-def render_session_note_place_lore_tab(
+def render_place_heading_view_tab(
     *,
     combined: CombinedCharacterGraph,
     label_font_color: str,
 ) -> None:
-    st.subheader(PLACE_LORE_VIEW.label)
-    session_graph = session_note_lore_graph(combined)
-    if not session_graph.characters:
-        st.info("Add Session Notes To See The Session Notes Graph.")
+    st.subheader(SESSION_VIEW_TAB)
+    projected_graph = place_lore_graph(combined)
+    selected_heading_id = render_lore_heading_filter(
+        combined,
+        source_predicate=is_place_source_document_node,
+        label="Place Lore Heading",
+        key="place_lore_session_view_heading",
+        projected_graph=projected_graph,
+    )
+    if selected_heading_id is None:
+        st.info("Add Markdown Headings To Place Lore To Use Session View.")
         return
+    place_graph = place_lore_graph(combined, heading_id=selected_heading_id)
+    if not place_graph.characters:
+        st.info("No Place Lore Connections Were Found For This Heading.")
+        return
+    render_lore_graph(place_graph, label_font_color=label_font_color, column_layout="place_lore")
+
+
+def render_lore_graph(
+    lore_graph: CombinedCharacterGraph,
+    *,
+    label_font_color: str,
+    column_layout: str,
+) -> None:
     graphviz_config = {
-        **load_graphviz_config(PLACE_LORE_VIEW.key),
-        "column_layout": "session_note_lore",
+        **load_graphviz_config(LORE_GRAPH_CONFIG.key),
+        "column_layout": column_layout,
     }
     render_relationship_graph(
-        session_graph,
-        main_character_ids=set(session_graph.characters),
+        lore_graph,
+        main_character_ids=set(lore_graph.characters),
         label_font_color=label_font_color,
         graphviz_config=graphviz_config,
-        relationship_rows=place_lore_connection_rows(session_graph),
+        relationship_rows=place_lore_connection_rows(lore_graph),
     )
+
+
+def render_session_file_view_tab(
+    *,
+    combined: CombinedCharacterGraph,
+    label_font_color: str,
+) -> None:
+    st.subheader(FILE_VIEW_TAB)
+    selected_source_file = render_lore_file_filter(
+        combined,
+        source_predicate=is_session_note_node,
+        label="Session Note File",
+        key="session_lore_file_view_source_file",
+    )
+    session_graph = session_note_lore_graph(
+        combined,
+        source_file=selected_source_file,
+        fanout_linked_characters=True,
+    )
+    if selected_source_file is None:
+        st.info("Add Session Notes To Use File View.")
+        return
+    if not session_graph.characters:
+        st.info("No Session Note Connections Were Found For This File.")
+        return
+    render_lore_graph(session_graph, label_font_color=label_font_color, column_layout="session_note_lore")
+
+
+def render_session_heading_view_tab(
+    *,
+    combined: CombinedCharacterGraph,
+    label_font_color: str,
+) -> None:
+    st.subheader(SESSION_VIEW_TAB)
+    projected_graph = session_note_lore_graph(combined)
+    selected_heading_id = render_lore_heading_filter(
+        combined,
+        source_predicate=is_session_note_node,
+        label="Session Note Heading",
+        key="session_lore_session_view_heading",
+        projected_graph=projected_graph,
+    )
+    if selected_heading_id is None:
+        st.info("Add Markdown Headings To Session Notes To Use Session View.")
+        return
+    session_graph = session_note_lore_graph(combined, heading_id=selected_heading_id)
+    if not session_graph.characters:
+        st.info("No Session Note Connections Were Found For This Heading.")
+        return
+    render_lore_graph(session_graph, label_font_color=label_font_color, column_layout="session_note_lore")
 
 
 def render_session_note_graph_tab(
@@ -370,8 +454,85 @@ def render_relationship_graph(
     )
 
 
+def render_lore_file_filter(
+    graph: CombinedCharacterGraph,
+    *,
+    source_predicate: Callable[[CombinedCharacterNode], bool],
+    label: str,
+    key: str,
+) -> str | None:
+    options = lore_source_file_options(graph, source_predicate)
+    if not options:
+        return None
+    labels = [option[0] for option in options]
+    selected_label = st.selectbox(label, labels, key=key)
+    return dict(options)[selected_label]
+
+
+def render_lore_heading_filter(
+    graph: CombinedCharacterGraph,
+    *,
+    source_predicate: Callable[[CombinedCharacterNode], bool],
+    label: str,
+    key: str,
+    projected_graph: CombinedCharacterGraph | None = None,
+) -> str | None:
+    options = lore_heading_options(graph, source_predicate, projected_graph=projected_graph)
+    if not options:
+        return None
+    selected_label = st.selectbox(label, [option[0] for option in options], key=key)
+    return dict(options)[selected_label]
+
+
+def lore_source_file_options(
+    graph: CombinedCharacterGraph,
+    source_predicate: Callable[[CombinedCharacterNode], bool],
+) -> list[tuple[str, str]]:
+    options = []
+    for node in graph.characters.values():
+        if node.node_type != "source_document" or not source_predicate(node) or not node.source_file:
+            continue
+        source_path = Path(node.source_file)
+        label = source_path.name or node.name
+        options.append((label, node.source_file))
+    return sorted(set(options), key=lambda item: item[0].lower())
+
+
+def lore_heading_options(
+    graph: CombinedCharacterGraph,
+    source_predicate: Callable[[CombinedCharacterNode], bool],
+    *,
+    projected_graph: CombinedCharacterGraph | None = None,
+) -> list[tuple[str, str]]:
+    options = []
+    allowed_heading_ids = None
+    if projected_graph is not None:
+        allowed_heading_ids = {
+            node_id
+            for node_id, node in projected_graph.characters.items()
+            if is_markdown_heading_node(node)
+        }
+    source_ids = {
+        node_id
+        for node_id, node in graph.characters.items()
+        if node.node_type == "source_document" and source_predicate(node)
+    }
+    for source_id, headings in markdown_subheadings_by_source(graph, source_ids).items():
+        source = graph.characters[source_id]
+        source_label = Path(source.source_file).name or source.name
+        for heading in headings:
+            if allowed_heading_ids is not None and heading.id not in allowed_heading_ids:
+                continue
+            options.append((f"{source_label} / H{heading.level}: {heading.text}", heading.id))
+    return sorted(options, key=lambda item: item[0].lower())
+
+
 def place_lore_graph(
     graph: CombinedCharacterGraph,
+    *,
+    source_file: str | None = None,
+    heading_id: str | None = None,
+    fanout_linked_characters: bool = False,
 ) -> CombinedCharacterGraph:
     place_ids = {
         node_id
@@ -391,7 +552,15 @@ def place_lore_graph(
         for node_id, node in graph.characters.items()
         if node_id in place_document_ids and node.node_type == "source_document"
     }
+    if source_file is not None:
+        source_document_ids = filter_source_document_ids_by_file(graph, source_document_ids, source_file)
+        place_document_ids = place_document_ids & source_document_ids
     source_to_place_ids = place_ids_by_source_document(graph, source_document_ids, place_ids)
+    root_place_ids = {
+        place_id
+        for source_place_ids in source_to_place_ids.values()
+        for place_id in source_place_ids
+    }
     connected_ids = set(source_document_ids)
     source_headings = markdown_subheadings_by_source(graph, source_document_ids)
     projected_nodes: dict[str, CombinedCharacterNode] = {}
@@ -425,6 +594,7 @@ def place_lore_graph(
             place = graph.characters.get(place_id)
             heading = markdown_subheading_for_edge(source, source_headings.get(source_id, []), edge, place)
             edge_source = heading.id if heading is not None else source_id
+            connected_ids.add(place_id)
             append_projected_edge(
                 projected_edges,
                 CombinedRelationshipEdge(
@@ -440,7 +610,23 @@ def place_lore_graph(
             append_projected_edge(projected_edges, place_character_edge_from_place(edge, graph, place_ids))
     for edge in graph.edges:
         if edge.source in place_ids or edge.target in place_ids:
+            source = graph.characters.get(edge.source)
+            target = graph.characters.get(edge.target)
+            if source is not None and source.node_type == "source_document":
+                continue
+            if target is not None and target.node_type == "source_document":
+                continue
+            place_id = edge.source if edge.source in place_ids else edge.target
+            if source_file is not None and place_id not in root_place_ids:
+                continue
             connected_ids.update({edge.source, edge.target})
+    if fanout_linked_characters:
+        append_linked_character_fanout(
+            graph,
+            root_ids=root_place_ids,
+            connected_ids=connected_ids,
+            projected_edges=projected_edges,
+        )
     for edge in graph.edges:
         if edge.source not in source_document_ids and edge.target not in source_document_ids:
             continue
@@ -482,7 +668,7 @@ def place_lore_graph(
         projected_edges,
         graph.characters,
     )
-    return CombinedCharacterGraph(
+    projected_graph = CombinedCharacterGraph(
         characters={
             **{
                 node_id: node
@@ -497,20 +683,30 @@ def place_lore_graph(
             if edge.source in connected_ids and edge.target in connected_ids
         ],
     )
+    return filter_lore_graph_by_heading(projected_graph, heading_id) if heading_id is not None else projected_graph
 
 
-def session_note_lore_graph(graph: CombinedCharacterGraph) -> CombinedCharacterGraph:
+def session_note_lore_graph(
+    graph: CombinedCharacterGraph,
+    *,
+    source_file: str | None = None,
+    heading_id: str | None = None,
+    fanout_linked_characters: bool = False,
+) -> CombinedCharacterGraph:
     source_document_ids = {
         node_id
         for node_id, node in graph.characters.items()
         if node.node_type == "source_document" and is_session_note_node(node)
     }
+    if source_file is not None:
+        source_document_ids = filter_source_document_ids_by_file(graph, source_document_ids, source_file)
     if not source_document_ids:
         return CombinedCharacterGraph()
     connected_ids = set(source_document_ids)
     source_headings = markdown_subheadings_by_source(graph, source_document_ids)
     projected_nodes: dict[str, CombinedCharacterNode] = {}
     projected_edges: list[CombinedRelationshipEdge] = []
+    root_lore_ids: set[str] = set()
     for source_id, headings in source_headings.items():
         source = graph.characters[source_id]
         for heading in headings:
@@ -538,6 +734,8 @@ def session_note_lore_graph(graph: CombinedCharacterGraph) -> CombinedCharacterG
         adjacent = graph.characters.get(adjacent_id)
         if adjacent is None or adjacent.node_type not in {"character", "place", "group"}:
             continue
+        if adjacent.node_type in {"place", "group"}:
+            root_lore_ids.add(adjacent_id)
         heading = markdown_subheading_for_edge(
             graph.characters[source_id],
             source_headings.get(source_id, []),
@@ -556,13 +754,20 @@ def session_note_lore_graph(graph: CombinedCharacterGraph) -> CombinedCharacterG
                 bidirectional=edge.bidirectional,
             ),
         )
+    if fanout_linked_characters:
+        append_linked_character_fanout(
+            graph,
+            root_ids=root_lore_ids,
+            connected_ids=connected_ids,
+            projected_edges=projected_edges,
+        )
     projected_edges = prune_unassociated_markdown_headings(
         connected_ids,
         projected_nodes,
         projected_edges,
         graph.characters,
     )
-    return CombinedCharacterGraph(
+    projected_graph = CombinedCharacterGraph(
         characters={
             **{
                 node_id: node
@@ -577,6 +782,100 @@ def session_note_lore_graph(graph: CombinedCharacterGraph) -> CombinedCharacterG
             if edge.source in connected_ids and edge.target in connected_ids
         ],
     )
+    return filter_lore_graph_by_heading(projected_graph, heading_id) if heading_id is not None else projected_graph
+
+
+def append_linked_character_fanout(
+    graph: CombinedCharacterGraph,
+    *,
+    root_ids: set[str],
+    connected_ids: set[str],
+    projected_edges: list[CombinedRelationshipEdge],
+) -> None:
+    if not root_ids:
+        return
+    for edge in graph.edges:
+        if edge.source not in root_ids and edge.target not in root_ids:
+            continue
+        root_id = edge.source if edge.source in root_ids else edge.target
+        adjacent_id = edge.target if edge.source in root_ids else edge.source
+        adjacent = graph.characters.get(adjacent_id)
+        if adjacent is None or adjacent.node_type != "character":
+            continue
+        connected_ids.update({root_id, adjacent_id})
+        append_projected_edge(
+            projected_edges,
+            CombinedRelationshipEdge(
+                source=root_id,
+                target=adjacent_id,
+                relationship_type=edge.relationship_type,
+                relationship_label=edge.relationship_label,
+                evidence=list(edge.evidence),
+                bidirectional=edge.bidirectional,
+            ),
+        )
+
+
+def filter_lore_graph_by_heading(graph: CombinedCharacterGraph, heading_id: str) -> CombinedCharacterGraph:
+    if heading_id not in graph.characters:
+        return CombinedCharacterGraph()
+    heading_ids = {
+        node_id
+        for node_id, node in graph.characters.items()
+        if is_markdown_heading_node(node)
+    }
+    content_heading_ids = {heading_id}
+    changed = True
+    while changed:
+        changed = False
+        for edge in graph.edges:
+            if edge.relationship_type == "heading" and edge.source in content_heading_ids and edge.target in heading_ids:
+                if edge.target not in content_heading_ids:
+                    content_heading_ids.add(edge.target)
+                    changed = True
+    kept_ids = set(content_heading_ids)
+    changed = True
+    while changed:
+        changed = False
+        for edge in graph.edges:
+            if edge.relationship_type == "heading" and edge.target in kept_ids:
+                if edge.source not in kept_ids:
+                    kept_ids.add(edge.source)
+                    changed = True
+    for edge in graph.edges:
+        if edge.source in content_heading_ids and edge.target not in heading_ids:
+            kept_ids.add(edge.target)
+        if edge.target in content_heading_ids and edge.source not in heading_ids:
+            kept_ids.add(edge.source)
+    return CombinedCharacterGraph(
+        characters={
+            node_id: node
+            for node_id, node in graph.characters.items()
+            if node_id in kept_ids
+        },
+        edges=[
+            edge
+            for edge in graph.edges
+            if edge.source in kept_ids and edge.target in kept_ids
+        ],
+    )
+
+
+def filter_source_document_ids_by_file(
+    graph: CombinedCharacterGraph,
+    source_document_ids: set[str],
+    source_file: str,
+) -> set[str]:
+    normalized_source_file = normalized_lore_source_file(source_file)
+    return {
+        source_id
+        for source_id in source_document_ids
+        if normalized_lore_source_file(graph.characters[source_id].source_file) == normalized_source_file
+    }
+
+
+def normalized_lore_source_file(source_file: str) -> str:
+    return source_file.replace("\\", "/")
 
 
 def markdown_subheadings_by_source(

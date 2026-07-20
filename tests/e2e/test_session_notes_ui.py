@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -204,27 +205,7 @@ def test_ui_imports_uploaded_session_notes_as_one_markdown_file(isolated_session
     app_url, docs_lore_dir = isolated_session_notes_app
     notes_dir = docs_lore_dir / "session_notes"
     import_file = docs_lore_dir / "discord_import.md"
-    import_file.write_text(
-        """John [OOZE], Server Tag: OOZEOOZE — 7/10/26, 11:36 PMFriday, July 10, 2026 at 11:36 PM
-Session 12:
-
-## Scene Notes
-
-- Found a **silver key**
-- Met `Jory`
-
-| Clue | Status |
-| ---- | ------ |
-| Door | Open |
-
-Session 13:
-
-## Second Scene
-
-- Preserved in the same note
-""",
-        encoding="utf-8",
-    )
+    shutil.copy2(ROOT_DIR / "tests" / "fixtures" / "session_notes" / "Session_Notes_Fixture.md", import_file)
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -335,7 +316,7 @@ The Ignis cult later attacked the carnival.
         graph_expander = page.locator("[data-testid=stExpander]").filter(has_text="Combined Knowledge Graph")
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph").click()
-        graph_expander.get_by_role("tab", name="Place Lore", exact=True).click()
+        graph_expander.get_by_role("tab", name="File View", exact=True).click()
         expect(graph_expander.get_by_text("Ignis Cult", exact=True).first).to_be_visible(timeout=10000)
         browser.close()
 

@@ -54,3 +54,15 @@
 
 ### Lore Connection Tables
 - Limited lore-view connection tables to rows with character connections, so non-character heading and document edges stay out of the table.
+
+### Screenshot Fixture Cleanup And Deduplication Design
+- Changed graph-view screenshot capture to use full-page screenshots at a larger viewport so e2e artifacts are not clipped.
+- Removed committed `tests/fixtures/graph_views` JSON files so graph screenshot coverage is driven by the ingestion workflow and test-local view specs.
+- Added a synthetic multi-session Discord-style session-note import fixture that starts at Session 1, and updated the e2e import test to use it instead of inline session data.
+- Added `File View` and `Session View` to Place and Session Note lore graphs so users can filter by source file or Markdown heading, with File View fanning out root places/groups to linked characters.
+- Removed unlisted `Place Lore` and `Session Lore` tabs from the visible Places and Session Notes graph views.
+- Deprecated obsolete Place/Session graph screenshots that no longer map to active UI views.
+- Added the node deduplication design for Character Deduplication, Place Deduplication, and Node Removal views.
+
+### Session Note Evidence Cleanup
+- Normalized session-note evidence table text into grammatical source-backed sentences, with an optional language-model polishing hook that rejects rewrites that drop required names or facts.

@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass, field, replace
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .schema import CharacterGraph
 
@@ -27,6 +27,7 @@ CANONICAL_SESSION_NAME_VARIANTS = {
     "typhon": {"Typheb", "Typhen", "Typhin"},
 }
 MAX_FOCUSED_GRAPH_CONNECTIONS = 6
+EvidenceRewriteClient = Callable[[list[dict[str, str]]], str]
 
 
 @dataclass(frozen=True)
@@ -423,7 +424,10 @@ def one_word_relationship(value: str) -> str:
     return words[0] if words else "reference"
 
 
-def combined_relationship_rows(graph: CombinedCharacterGraph) -> list[dict[str, str]]:
+def combined_relationship_rows(
+    graph: CombinedCharacterGraph,
+    evidence_rewrite_client: EvidenceRewriteClient | None = None,
+) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for edge in graph.edges:
         source = graph.characters.get(edge.source)
@@ -435,7 +439,7 @@ def combined_relationship_rows(graph: CombinedCharacterGraph) -> list[dict[str, 
                     "Relationship": edge.relationship_label,
                     "Connection": target.name if target else edge.target,
                     "Connection Type": target.node_type.title() if target else "",
-                    "Evidence": compact_evidence([evidence]),
+                    "Evidence": compact_evidence([evidence], evidence_rewrite_client=evidence_rewrite_client),
                 }
             )
     return rows
@@ -1540,12 +1544,126 @@ def display_name(value: str) -> str:
     return value.replace("_", " ")
 
 
-def compact_evidence(values: list[str]) -> str:
-    return " ".join(clean_evidence_text(value) for value in values if value.strip())
+def compact_evidence(
+    values: list[str],
+    evidence_rewrite_client: EvidenceRewriteClient | None = None,
+) -> str:
+    return " ".join(
+        polished_evidence_text(value, evidence_rewrite_client=evidence_rewrite_client)
+        for value in values
+        if value.strip()
+    ).strip()
 
 
 def clean_evidence_text(value: str) -> str:
-    return re.sub(r"^\s*(?:#{1,6}|[-*+]|[0-9]+[.)])\s+", "", " ".join(value.split()))
+    return deterministic_evidence_sentence(value)
+
+
+def polished_evidence_text(
+    value: str,
+    evidence_rewrite_client: EvidenceRewriteClient | None = None,
+) -> str:
+    cleaned = deterministic_evidence_sentence(value)
+    if not cleaned or evidence_rewrite_client is None:
+        return cleaned
+    response = evidence_rewrite_client(evidence_rewrite_messages(cleaned))
+    candidate = deterministic_evidence_sentence(response)
+    if not candidate or not evidence_rewrite_preserves_required_terms(cleaned, candidate):
+        return cleaned
+    return candidate
+
+
+def evidence_rewrite_messages(evidence: str) -> list[dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "Polish roleplaying session-note evidence into one grammatical sentence. "
+                "Use only the supplied evidence. Preserve names, places, groups, dates, and concrete facts."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Evidence: {evidence}\n\nReturn one sentence only.",
+        },
+    ]
+
+
+def evidence_rewrite_preserves_required_terms(source: str, candidate: str) -> bool:
+    source_terms = set(re.findall(r"\b[A-Z][A-Za-z0-9]*(?:\s+[A-Z][A-Za-z0-9]*)*\b", source))
+    candidate_lower = candidate.lower()
+    return all(term.lower() in candidate_lower for term in source_terms)
+
+
+def deterministic_evidence_sentence(value: str) -> str:
+    text = " ".join(value.strip().split())
+    if not text:
+        return ""
+    text = strip_markdown_prefix(text)
+    text = strip_inline_markdown(text)
+    text = humanize_markdown_table_row(text)
+    if not text:
+        return ""
+    text = humanize_colon_fragment(text)
+    text = text.replace("_", " ")
+    text = " ".join(text.split())
+    text = capitalize_sentence_start(text)
+    if text and not re.search(r'[.!?][)"\']?$', text):
+        text += "."
+    return text
+
+
+def strip_markdown_prefix(text: str) -> str:
+    previous = ""
+    while text != previous:
+        previous = text
+        text = re.sub(r"^\s*(?:#{1,6}|[-*+]|[0-9]+[.)])\s+", "", text).strip()
+    return text.rstrip(":").strip() if re.fullmatch(r"Session\s+\d+:?", text, re.IGNORECASE) else text
+
+
+def strip_inline_markdown(text: str) -> str:
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = re.sub(r"__([^_]+)__", r"\1", text)
+    text = re.sub(r"\*([^*]+)\*", r"\1", text)
+    return text
+
+
+def humanize_markdown_table_row(text: str) -> str:
+    if re.fullmatch(r"\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)+\|?", text):
+        return ""
+    if not (text.startswith("|") and text.endswith("|")):
+        return text
+    cells = [cell.strip() for cell in text.strip("|").split("|") if cell.strip()]
+    if not cells:
+        return ""
+    if len(cells) == 1:
+        return cells[0]
+    if len(cells) == 2:
+        return f"{cells[0]} is {cells[1].lower()}"
+    return ", ".join(cells[:-1]) + f", and {cells[-1].lower()}"
+
+
+def humanize_colon_fragment(text: str) -> str:
+    if re.fullmatch(r"Session\s+\d+", text, re.IGNORECASE):
+        return f"{text} is referenced in the source notes"
+    match = re.fullmatch(r"([^:]{2,80}):\s*([^:]{2,120})", text)
+    if not match:
+        return text
+    subject = match.group(1).strip()
+    phrase = match.group(2).strip()
+    if not subject or not phrase:
+        return text
+    if phrase.istitle():
+        phrase = phrase.lower()
+    return f"{subject} {phrase[:1].lower()}{phrase[1:]}"
+
+
+def capitalize_sentence_start(text: str) -> str:
+    for index, char in enumerate(text):
+        if char.isalpha():
+            return text[:index] + char.upper() + text[index + 1 :]
+    return text
 
 
 def escape_dot(value: str) -> str:

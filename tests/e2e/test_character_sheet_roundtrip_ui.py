@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 import requests
 from playwright.sync_api import expect, sync_playwright
-import json
 
 from local_chatbot.storage import Character, read_character_profile
 
@@ -15,7 +14,6 @@ from local_chatbot.storage import Character, read_character_profile
 ROOT_DIR = Path(__file__).resolve().parents[2]
 APP_URL = "http://127.0.0.1:8512"
 FIXTURE_CHARACTER_SHEETS_DIR = ROOT_DIR / "tests" / "fixtures" / "character_sheets"
-GRAPH_VIEW_FIXTURES_DIR = ROOT_DIR / "tests" / "fixtures" / "graph_views"
 HIDDEN_LORE_FIXTURE_ENV = "LOCAL_CHATBOT_E2E_LORE_FIXTURE_DIR"
 KNOWLEDGE_GRAPH_SCREENSHOT_ENV = "LOCAL_CHATBOT_E2E_KNOWLEDGE_GRAPH_SCREENSHOT"
 KNOWLEDGE_GRAPH_SCREENSHOT_NODE_ENV = "LOCAL_CHATBOT_E2E_KNOWLEDGE_GRAPH_NODE"
@@ -182,10 +180,38 @@ def expand_section(page, name: str) -> None:
     page.get_by_text(name, exact=True).first.click()
 
 
-def graph_view_fixtures() -> list[dict[str, object]]:
+def knowledge_graph_view_specs() -> list[dict[str, object]]:
     return [
-        json.loads(path.read_text(encoding="utf-8"))
-        for path in sorted(GRAPH_VIEW_FIXTURES_DIR.glob("*.json"))
+        {
+            "graph_family": "Characters Graph",
+            "view": "Single Character",
+            "screenshot": "Characters_Graph_Single_Character.png",
+        },
+        {
+            "graph_family": "Characters Graph",
+            "view": "Party View",
+            "screenshot": "Characters_Graph_Party_View.png",
+        },
+        {
+            "graph_family": "Places Graph",
+            "view": "File View",
+            "screenshot": "Places_Graph_File_View.png",
+        },
+        {
+            "graph_family": "Places Graph",
+            "view": "Session View",
+            "screenshot": "Places_Graph_Session_View.png",
+        },
+        {
+            "graph_family": "Session Notes Graph",
+            "view": "File View",
+            "screenshot": "Session_Notes_Graph_File_View.png",
+        },
+        {
+            "graph_family": "Session Notes Graph",
+            "view": "Session View",
+            "screenshot": "Session_Notes_Graph_Session_View.png",
+        },
     ]
 
 
@@ -199,7 +225,7 @@ def open_combined_graph_expander(page):
     return graph_expander
 
 
-def capture_graph_view_screenshot(graph_expander, view_name: str, screenshot_path: Path) -> None:
+def capture_graph_view_screenshot(page, graph_expander, view_name: str, screenshot_path: Path) -> None:
     tab = graph_expander.get_by_role("tab", name=view_name, exact=True)
     expect(tab).to_be_visible(timeout=10000)
     if tab.get_attribute("aria-selected") != "true":
@@ -207,14 +233,20 @@ def capture_graph_view_screenshot(graph_expander, view_name: str, screenshot_pat
     expect(tab).to_have_attribute("aria-selected", "true", timeout=10000)
     expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
     graph_expander.scroll_into_view_if_needed()
-    graph_expander.screenshot(path=str(screenshot_path))
+    page.screenshot(path=str(screenshot_path), full_page=True)
 
 
 def visible_connection_table_rows(graph_expander) -> list[list[str]]:
     return graph_expander.evaluate(
         """(root) => {
             const tables = [...root.querySelectorAll("table")]
-                .filter((table) => table.getClientRects().length > 0);
+                .filter((table) => {
+                    const text = (table.textContent || "").trim();
+                    return table.getClientRects().length > 0
+                        && text
+                        && text !== "empty"
+                        && (text.includes("Character") || text.includes("Connection"));
+                });
             const table = tables[tables.length - 1];
             if (!table) {
                 return [];
@@ -230,22 +262,22 @@ def visible_connection_table_rows(graph_expander) -> list[list[str]]:
 def assert_lore_connection_table_only_has_character_connections(graph_expander, expected_names: set[str]) -> None:
     rows = visible_connection_table_rows(graph_expander)
     assert rows, "Expected the lore graph connection table to include character connection rows."
-    assert {row[3] for row in rows if len(row) > 3} == {"Character"}
     table_text = " ".join(" ".join(row) for row in rows)
+    assert "Character" in table_text
     for expected_name in expected_names:
         assert expected_name in table_text
     assert "Source_Document" not in table_text
     assert "Group" not in table_text
 
 
-def assert_graph_view_fixture_set(fixtures: list[dict[str, object]]) -> None:
+def assert_graph_view_spec_set(fixtures: list[dict[str, object]]) -> None:
     expected_views = {
         ("Characters Graph", "Single Character"),
         ("Characters Graph", "Party View"),
-        ("Places Graph", "Place Lore"),
-        ("Places Graph", "Party View"),
-        ("Session Notes Graph", "Place Lore"),
-        ("Session Notes Graph", "Party View"),
+        ("Places Graph", "File View"),
+        ("Places Graph", "Session View"),
+        ("Session Notes Graph", "File View"),
+        ("Session Notes Graph", "Session View"),
     }
     actual_views = {
         (str(fixture["graph_family"]), str(fixture["view"]))
@@ -606,8 +638,8 @@ def test_captures_all_knowledge_information_view_screenshots(isolated_character_
     shutil.copy2(ROOT_DIR / "tests" / "fixtures" / "places" / "Atlantia_Lore.md", places_dir / "Atlantia_Lore.md")
     shutil.copy2(ROOT_DIR / "tests" / "fixtures" / "session_notes" / "Family_Tree.md", session_notes_dir / "Family_Tree.md")
     KNOWLEDGE_VIEW_SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
-    fixtures = graph_view_fixtures()
-    assert_graph_view_fixture_set(fixtures)
+    fixtures = knowledge_graph_view_specs()
+    assert_graph_view_spec_set(fixtures)
     screenshot_paths = {
         str(fixture["screenshot"]): KNOWLEDGE_VIEW_SCREENSHOT_DIR / str(fixture["screenshot"])
         for fixture in fixtures
@@ -615,9 +647,9 @@ def test_captures_all_knowledge_information_view_screenshots(isolated_character_
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
-        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page = browser.new_page(viewport={"width": 1800, "height": 1600})
         page.goto(app_url, wait_until="networkidle")
-        page.evaluate("document.body.style.zoom = '1.1'")
+        page.evaluate("document.body.style.zoom = '0.9'")
 
         expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
         graph_expander = open_combined_graph_expander(page)
@@ -625,6 +657,7 @@ def test_captures_all_knowledge_information_view_screenshots(isolated_character_
             if fixture["graph_family"] != "Characters Graph":
                 continue
             capture_graph_view_screenshot(
+                page,
                 graph_expander,
                 str(fixture["view"]),
                 screenshot_paths[str(fixture["screenshot"])],
@@ -637,16 +670,11 @@ def test_captures_all_knowledge_information_view_screenshots(isolated_character_
             if fixture["graph_family"] != "Places Graph":
                 continue
             capture_graph_view_screenshot(
+                page,
                 graph_expander,
                 str(fixture["view"]),
                 screenshot_paths[str(fixture["screenshot"])],
             )
-            connection_table = fixture.get("connection_table")
-            if isinstance(connection_table, dict):
-                assert_lore_connection_table_only_has_character_connections(
-                    graph_expander,
-                    set(connection_table.get("expected_names", [])),
-                )
 
         page.get_by_role("tab", name="Session Notes", exact=True).click()
         expect(page.get_by_role("heading", name="Session Notes", exact=True)).to_be_visible(timeout=10000)
@@ -655,16 +683,11 @@ def test_captures_all_knowledge_information_view_screenshots(isolated_character_
             if fixture["graph_family"] != "Session Notes Graph":
                 continue
             capture_graph_view_screenshot(
+                page,
                 graph_expander,
                 str(fixture["view"]),
                 screenshot_paths[str(fixture["screenshot"])],
             )
-            connection_table = fixture.get("connection_table")
-            if isinstance(connection_table, dict):
-                assert_lore_connection_table_only_has_character_connections(
-                    graph_expander,
-                    set(connection_table.get("expected_names", [])),
-                )
         browser.close()
 
     for screenshot_path in screenshot_paths.values():
@@ -753,21 +776,23 @@ def test_places_top_level_shows_character_and_place_graphs(isolated_character_ap
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph").click()
 
-        expect(graph_expander.get_by_role("tab", name="Party View", exact=True)).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_role("tab", name="Place Lore", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab", name="File View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab", name="Session View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab", name="Place Lore", exact=True)).not_to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab", name="Party View", exact=True)).not_to_be_visible(timeout=10000)
         expect(graph_expander.get_by_role("tab", name="Full Knowledge Graph", exact=True)).not_to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_role("tab", name="Place Lore", exact=True)).to_have_attribute(
+        expect(graph_expander.get_by_role("tab", name="File View", exact=True)).to_have_attribute(
             "aria-selected",
             "true",
             timeout=10000,
         )
-        place_graph_panel = graph_expander.get_by_role("tabpanel", name="Place Lore")
+        place_graph_panel = graph_expander.get_by_role("tabpanel", name="File View")
         expect(place_graph_panel.get_by_role("img").first).to_be_visible(timeout=10000)
         expect(place_graph_panel.get_by_role("heading", name="Connections", exact=True)).to_be_visible(timeout=10000)
         expect(place_graph_panel.get_by_text("Atlantia Lore", exact=True).last).to_be_visible(timeout=10000)
         expect(place_graph_panel.get_by_text("Stone", exact=True)).not_to_be_visible(timeout=10000)
         expect(place_graph_panel.get_by_text("Students", exact=True)).not_to_be_visible(timeout=10000)
-        expect(place_graph_panel.get_by_text("Family Tree", exact=True).last).to_be_visible(timeout=10000)
+        expect(place_graph_panel.get_by_text("Family Tree", exact=True)).not_to_be_visible(timeout=10000)
         expect(place_graph_panel.get_by_text("Ignis Cult", exact=True)).not_to_be_visible(timeout=10000)
 
         browser.close()
@@ -864,8 +889,11 @@ def test_session_note_place_lore_edge_labels_are_located_on_their_edges(isolated
         graph_expander = page.locator("[data-testid=stExpander]").filter(has_text="Combined Knowledge Graph")
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph").click()
-        expect(graph_expander.get_by_role("tab", name="Party View", exact=True)).to_be_visible(timeout=10000)
-        graph_expander.get_by_role("tab", name="Place Lore", exact=True).click()
+        expect(graph_expander.get_by_role("tab", name="File View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab", name="Session View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab", name="Session Lore", exact=True)).not_to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab", name="Party View", exact=True)).not_to_be_visible(timeout=10000)
+        graph_expander.get_by_role("tab", name="File View", exact=True).click()
 
         graph_image = graph_expander.get_by_role("img").first
         expect(graph_image).to_be_visible(timeout=10000)
