@@ -15,6 +15,7 @@ from character_graph.combined_graph import (
     other_connections_graph,
     party_connections_graph,
 )
+from character_graph.graphviz_config import load_graphviz_config
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
 from character_graph.schema import AttributeNode, CharacterGraph, CharacterNode, PlaceNode, PrimaryCharacterRef, RelationshipEdge
@@ -265,7 +266,10 @@ def test_party_view_fixture_uses_character_column_layout_without_hidden_sources(
     assert "Session Notes" not in dot
     visible_edges = [line for line in dot.splitlines() if "->" in line and "label=" in line]
     assert visible_edges
-    assert '"jory_ravenmark" -> "neal_lovington" [label="Client", dir="both", constraint="false"]' in dot
+    assert (
+        '"jory_ravenmark" -> "neal_lovington" '
+        '[label="Client", dir="both", arrowhead="normal", arrowtail="normal", constraint="false"]'
+    ) in dot
     assert '"neal_lovington" -> "jory_ravenmark" [label="Client"' not in dot
     cross_column_edges = [
         line
@@ -375,6 +379,100 @@ def test_party_column_layout_orders_connections_by_mention_count():
     place_cluster_line = next(line for line in dot.splitlines() if 'cluster_column_3_places' in line)
     assert '"ashton"' not in place_cluster_line
     assert '"lantern_house"' not in place_cluster_line
+
+
+def test_full_structured_graph_groups_places_groups_and_families_in_column_zero():
+    relationships = [
+        {
+            "source_id": "jory_ravenmark",
+            "source_name": "Jory Ravenmark",
+            "source_type": "character",
+            "source_file": "tests/fixtures/character_sheets/Jory_Ravenmark.md",
+            "target_id": "royal_tittles",
+            "target_name": "Royal Tittles",
+            "target_type": "place",
+            "relationship": "Visited",
+            "evidence": "Jory visited Royal Tittles.",
+        },
+        {
+            "source_id": "jory_ravenmark",
+            "source_name": "Jory Ravenmark",
+            "source_type": "character",
+            "source_file": "tests/fixtures/character_sheets/Jory_Ravenmark.md",
+            "target_id": "lantern_house",
+            "target_name": "Lantern House",
+            "target_type": "place",
+            "relationship": "Visited",
+            "evidence": "Jory visited Lantern House.",
+        },
+        {
+            "source_id": "jory_ravenmark",
+            "source_name": "Jory Ravenmark",
+            "source_type": "character",
+            "source_file": "tests/fixtures/character_sheets/Jory_Ravenmark.md",
+            "target_id": "ignis_cult",
+            "target_name": "Ignis Cult",
+            "target_type": "group",
+            "relationship": "Enemy",
+            "evidence": "Jory opposed the Ignis Cult.",
+        },
+        {
+            "source_id": "jory_ravenmark",
+            "source_name": "Jory Ravenmark",
+            "source_type": "character",
+            "source_file": "tests/fixtures/character_sheets/Jory_Ravenmark.md",
+            "target_id": "family_ravenmark",
+            "target_name": "Ravenmark Family",
+            "target_type": "family",
+            "relationship": "Family",
+            "evidence": "Jory belongs to the Ravenmark family.",
+        },
+        {
+            "source_id": "jory_ravenmark",
+            "source_name": "Jory Ravenmark",
+            "source_type": "character",
+            "source_file": "tests/fixtures/character_sheets/Jory_Ravenmark.md",
+            "target_id": "orin_nightbloom",
+            "target_name": "Orin Nightbloom",
+            "target_type": "character",
+            "relationship": "Ally",
+            "evidence": "Jory helped Orin.",
+        },
+    ]
+    combined = build_combined_character_graph(
+        [],
+        place_sources=[("royal_tittles", "Royal Tittles", "world_building/lore/places/Royal_Tittles.md")],
+        lore_relationships=relationships,
+    )
+
+    dot = combined_relationship_dot(
+        combined,
+        main_character_ids={"jory_ravenmark"},
+        main_place_ids={"royal_tittles"},
+        graphviz_config=load_graphviz_config("full_structured_graph"),
+    )
+
+    column_order = [
+        dot.index("cluster_column_0_context_entities"),
+        dot.index("cluster_column_1_main_characters"),
+        dot.index("cluster_column_2_secondary_characters"),
+    ]
+    context_column = dot[
+        dot.index('subgraph "cluster_column_0_context_entities"') :
+        dot.index('subgraph "cluster_column_1_main_characters"')
+    ]
+    secondary_column = dot[dot.index('subgraph "cluster_column_2_secondary_characters"') :]
+
+    assert 'splines="line"' in dot
+    assert column_order == sorted(column_order)
+    assert '"royal_tittles"' in context_column
+    assert '"lantern_house"' in context_column
+    assert '"ignis_cult"' in context_column
+    assert '"family_ravenmark"' in context_column
+    assert '"jory_ravenmark"' not in context_column
+    assert '"orin_nightbloom"' in secondary_column
+    assert '"family_ravenmark" [label="Ravenmark Family", fillcolor="#fef3c7"' in dot
+    assert 'shape="trapezium", width=1.9, height=0.8, margin="0.14,0.06"' in dot
 
 
 def test_other_connection_rows_split_repeated_evidence_into_separate_rows():
@@ -743,11 +841,11 @@ Neal Lovington came from a town far away.
     }
 
     expected_evidence = {
-        "jory_ravenmark": "The Ravenmark Family",
-        "neal_lovington": "The Lovington Family",
-        "orin_nightbloom": "The Nighbloom Family",
+        "jory_ravenmark": "Ravenmark Family",
+        "neal_lovington": "Lovington Family",
+        "orin_nightbloom": "Nightbloom Family",
     }
-    for node_id, evidence in expected_evidence.items():
+    for node_id, family_connection in expected_evidence.items():
         focused_graph = other_connections_graph(combined, node_id)
         rows = other_connection_rows(combined, node_id)
 
@@ -757,11 +855,12 @@ Neal Lovington came from a town far away.
             "Family",
             "family_tree",
         ) in [(edge.source, edge.relationship_label, edge.target) for edge in focused_graph.edges]
-        assert {
-            "Connection": "Family Tree",
-            "Type": "Source_Document",
-            "Evidence": evidence,
-        } in rows
+        assert any(
+            row["Connection"] == family_connection
+            and row["Type"] == "Family"
+            and "inferred as the family name" in row["Evidence"]
+            for row in rows
+        )
 
 
 def test_session_note_entity_extraction_prioritizes_known_character_names():
@@ -1085,7 +1184,10 @@ def test_combined_relationship_dot_collapses_reciprocal_edges_to_double_arrow():
     visible_edges = [line for line in dot.splitlines() if "->" in line and "label=" in line]
 
     assert len(visible_edges) == 1
-    assert '"neal_lovington" -> "jory_ravenmark" [label="Ally / Client", dir="both"]' in dot
+    assert (
+        '"neal_lovington" -> "jory_ravenmark" '
+        '[label="Ally / Client", dir="both", arrowhead="normal", arrowtail="normal"]'
+    ) in dot
 
 
 def test_combined_relationship_dot_displays_rivals_label():

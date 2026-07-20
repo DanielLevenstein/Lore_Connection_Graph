@@ -4,8 +4,8 @@
 
 Specs Update
 1) When the top level tab is Characters only display the ["Single Character", "Party View"]
-2) When the top level tab is "Places" display ["File View", "Directory File View"]
-3) When the top level tab is "Session Notes" display ["File View", "Section View", "Directory File View", "Directory Section View"]
+2) When the top level tab is "Places" display ["Location View", "Heading View"]
+3) When the top level tab is "Session Notes" display ["Location View", "Directory File View"]
 
 Also remove all non-place or character nodes from the place graph, If no character connections exist, just don't show any. 
 Markdown headings that are recognized as places or groups keep their Markdown heading column, but use the semantic place or group visual icon instead of the generic folder icon.
@@ -18,7 +18,7 @@ Column 1: Main Characters
 Column 2: Secondary Characters & places
 
 ## Places Graph
-Views [File View, Directory File View]
+Views [Location View, Heading View]
 - File View allows the user to view lore items from a single source file
 - Section View allows users to view lore items from a single Markdown heading
   - For session views hide headings which have no root nodes associated with them. 
@@ -29,19 +29,12 @@ Column 2: Markdown Heading 2 & Sub Places
 Column 3: Markdown Heading 3 & Sub Places
 Column 4: Character Connections
 
-### Places Directory Views
-Column 0: Source Documents
-Column 1: Markdown Heading 1 & Main Place Names
-Column 2: Markdown Heading 2 & Sub Places
-Column 3: Markdown Heading 3 & Sub Places
-Column 4: Character Connections
-
 Sort all connections within each column by the number of connections with the edges with the most connections displayed first.
 Display all graph connections as a straight line and enforce that columns are maintained.
 Table of connections should only show edges with character connections
 
 ## Session Notes Graph
-Views [File View, Section View, Directory File View, Directory Section View]
+Views [Location View, Directory File View]
 - File View allows the user to view lore items from a single source file
 - Section View allows users to view lore items from a single Markdown heading
   - For session views hide headings which have no root nodes associated with them. 
@@ -52,17 +45,21 @@ Column 2: Markdown Heading 2 & Sub Places
 Column 3: Markdown Heading 3
 Column 4: Character Connections
 
-### Session Notes Directory Views
-Column 0: Source Documents & Group Names
-Column 1: Markdown Heading 1 & Place Name
-Column 2: Markdown Heading 2 & Sub Places
-Column 3: Markdown Heading 3
-Column 4: Character Connections
 Sort all connections within each column by the number of connections with the edges with the most connections displayed first.
 Display all graph connections as a straight line and enforce that columns are maintained.
 Table of connections should only show edges with character connections
 
-# Node Deduplication
+## Full Structured Graph
+Views [Places, Session Notes]
+- Column 0: Places, groups, and family names
+- Column 1: Main characters
+- Column 2: Secondary characters, secondary places, families, and groups
+
+Full Structured Graph uses `full_structured_graph`, hides lore source-document knots, and renders relationship lines with straight routing so edge labels remain visually attached to their owning edges.
+Family-name nodes use the trapezoid shape in Full Structured Graph while keeping the family color.
+
+# Coming Soon 
+## Node Deduplication
 Views [Character Deduplication, Place Deduplication, Node Removal]
 Freeform graph with all headings and source documents hidden.
 
