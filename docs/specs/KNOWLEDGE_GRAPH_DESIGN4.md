@@ -4,8 +4,8 @@
 
 Specs Update
 1) When the top level tab is Characters only display the ["Single Character", "Party View"]
-2) When the top level tab is "Places" display ["File View", "Directory File View"]
-3) When the top level tab is "Session Notes" display ["File View", "Section View", "Directory File View", "Directory Section View"]
+2) When the top level tab is "Places" display ["Location View", "Heading View"]
+3) When the top level tab is "Session Notes" display ["Location View", "Directory File View"]
 
 Also remove all non-place or character nodes from the place graph, If no character connections exist, just don't show any. 
 Markdown headings that are recognized as places or groups keep their Markdown heading column, but use the semantic place or group visual icon instead of the generic folder icon.
@@ -51,11 +51,12 @@ Table of connections should only show edges with character connections
 
 ## Full Structured Graph
 Views [Places, Session Notes]
-Column 0: Places
-Column 1: Main Characters
-Column 2: Secondary Characters & places
+- Column 0: Places, groups, and family names
+- Column 1: Main characters
+- Column 2: Secondary characters, secondary places, families, and groups
 
-Render all lines as curved lines using curvy_graph_view for config.
+Full Structured Graph uses `full_structured_graph`, hides lore source-document knots, and renders relationship lines with straight routing so edge labels remain visually attached to their owning edges.
+Family-name nodes use the trapezoid shape in Full Structured Graph while keeping the family color.
 
 # Coming Soon 
 ## Node Deduplication

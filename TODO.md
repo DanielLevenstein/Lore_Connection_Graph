@@ -1,19 +1,13 @@
 # Testing
-- Get unit tests passing prior to implementing new changes.
-## Instructions
- - Create a new graph type curvy_graph_view
- - Update full_structured_graph so it shows place names first 
- - Re-enable the full structured graph in the UI
- - Convert existing views to curvy_graph_view to see how they render
+- Get unit tests passing before implementing new changes.
 
-Enable Full-Structured Graph with the following rules. 
+## UI Cleanup
 
-## Full Structured Graph
-Views [Places, Session Notes]
-Column 0: Places
-Column 1: Main Characters
-Column 2: Secondary Characters & places
 
-Render all lines as curved lines using curvy_graph_view for config.
-## Update Changelog 
-Update Changelog and KNOWLEDGE_GRAPH_DESIGN4.md with the new design
+## Improvements
+- Hide source document roots from the heading view the same way it's hidden in the Location View
+
+## Completed - Full Structured Graph Restore - 2026-07-20 - feature/knowledge_graph2
+- Removed root level nodes on from places view in the knowledge graph
+- Removed all references to the full knowledge graph from code as the title had become misleading
+- Removed Location view from session notes tab

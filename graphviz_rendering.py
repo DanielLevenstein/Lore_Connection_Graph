@@ -38,7 +38,7 @@ class MarkdownSubheading:
     parent_id: str
 
 
-SINGLE_CHARACTER_TAB = "Single Character"
+SINGLE_CHARACTER_TAB = "Character View"
 PARTY_VIEW_TAB = "Party View"
 FILE_VIEW_TAB = "File View"
 SESSION_VIEW_TAB = "Section View"
@@ -49,11 +49,10 @@ SESSION_HEADING_VIEW_TAB = "Heading View"
 SESSION_FILE_VIEW_TAB = "Location View"
 
 DIRECTORY_SESSION_VIEW_TAB = "Directory Section View"
-FULL_KNOWLEDGE_GRAPH_TAB = "Full Knowledge Graph"
 
 STRUCTURED_CHARACTER_VIEW = KnowledgeGraphView(
     key="character_view",
-    label="Single Character",
+    label="Character View",
 )
 CHARACTER_DATA_ONLY_VIEW = KnowledgeGraphView(
     key="party_view_fixture",
@@ -71,10 +70,15 @@ STRUCTURED_KNOWLEDGE_VIEW = KnowledgeGraphView(
     key="full_structured_graph",
     label="Structured Knowledge View",
 )
-FULL_KNOWLEDGE_VIEW = KnowledgeGraphView(
-    key="full_structured_graph",
-    label="Full Knowledge Graph",
-)
+
+def graph_tab_names(active_main_tab: str) -> list[str]:
+    if active_main_tab == "Places":
+        return [PARTY_VIEW_TAB, PLACES_FILE_VIEW_TAB, PLACES_HEADING_VIEW_TAB, DIRECTORY_FILE_VIEW_TAB]
+    if active_main_tab == "Session Notes":
+        return [PARTY_VIEW_TAB, SESSION_FILE_VIEW_TAB, DIRECTORY_FILE_VIEW_TAB]
+    return [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
+
+
 DISALLOWED_PLACE_GRAPH_CHARACTER_KEYS = {"family", "stone", "students"}
 PLACE_GRAPH_MARKDOWN_HEADING_RE = re.compile(r"^(?P<marker>#{1,3})\s+(?P<text>.*?)\s*#*\s*$")
 PLACE_HEADING_SUFFIXES = {
@@ -159,6 +163,14 @@ def render_knowledge_graph_tabs(
                         label_font_color=label_font_color,
                     )
             elif tab_name == PLACES_FILE_VIEW_TAB:
+                if active_main_tab == "Session Notes":
+                    render_session_file_view_tab(
+                        combined=combined,
+                        label_font_color=label_font_color,
+                        title=SESSION_FILE_VIEW_TAB,
+                        key="session_lore_file_view_source_file",
+                    )
+                else:
                     render_place_file_view_tab(
                         combined=combined,
                         label_font_color=label_font_color,
@@ -171,6 +183,7 @@ def render_knowledge_graph_tabs(
                         column_layout="session_note_lore_directory",
                         title=DIRECTORY_FILE_VIEW_TAB,
                         key="session_lore_directory_file_view_source_file",
+                        hide_source_document_roots=True,
                     )
                 else:
                     render_place_file_view_tab(
@@ -179,6 +192,7 @@ def render_knowledge_graph_tabs(
                         column_layout="place_lore_directory",
                         title=DIRECTORY_FILE_VIEW_TAB,
                         key="place_lore_directory_file_view_source_file",
+                        hide_source_document_roots=True,
                     )
 
             elif tab_name == SESSION_FILE_VIEW_TAB:
@@ -216,6 +230,7 @@ def render_knowledge_graph_tabs(
                         column_layout="place_lore_directory",
                         title=SESSION_HEADING_VIEW_TAB,
                         key="places_directory_file_view_source_file",
+                        hide_source_document_roots=True,
                     )
             elif tab_name == SESSION_VIEW_TAB:
                 if active_main_tab == "Session Notes":
@@ -245,22 +260,6 @@ def render_knowledge_graph_tabs(
                         title=DIRECTORY_SESSION_VIEW_TAB,
                         key="place_lore_directory_session_view_heading",
                     )
-            elif tab_name == FULL_KNOWLEDGE_GRAPH_TAB:
-                render_full_knowledge_graph_tab(
-                    combined=combined,
-                    main_character_ids=main_character_ids,
-                    main_place_ids=main_place_ids,
-                    label_font_color=label_font_color,
-                )
-
-
-def graph_tab_names(active_main_tab: str) -> list[str]:
-    if active_main_tab == "Places":
-        return [PLACES_FILE_VIEW_TAB, PLACES_HEADING_VIEW_TAB, FULL_KNOWLEDGE_GRAPH_TAB]
-    if active_main_tab == "Session Notes":
-        return [SESSION_FILE_VIEW_TAB, DIRECTORY_FILE_VIEW_TAB, FULL_KNOWLEDGE_GRAPH_TAB]
-    return [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
-
 
 def render_single_character_tab(
     *,
@@ -308,6 +307,7 @@ def render_place_file_view_tab(
     title: str = PLACES_FILE_VIEW_TAB,
     key: str = "place_lore_file_view_source_file",
     show_lore_notes: bool = False,
+    hide_source_document_roots: bool = False,
 ) -> None:
     st.subheader(title)
     selected_source_file = render_lore_file_filter(
@@ -323,6 +323,7 @@ def render_place_file_view_tab(
         combined,
         source_file=selected_source_file,
         fanout_linked_characters=True,
+        hide_source_document_roots=hide_source_document_roots,
     )
     if not place_graph.characters:
         st.info("No Place Lore Connections Were Found For This File.")
@@ -343,6 +344,7 @@ def render_place_heading_view_tab(
     title: str = SESSION_VIEW_TAB,
     key: str = "place_lore_session_view_heading",
     show_lore_notes: bool = True,
+    hide_source_document_roots=True,
 ) -> None:
     st.subheader(title)
     projected_graph = place_lore_graph(combined)
@@ -365,6 +367,7 @@ def render_place_heading_view_tab(
         label_font_color=label_font_color,
         column_layout=column_layout,
         show_lore_notes=show_lore_notes,
+        hide_source_document_roots=hide_source_document_roots
     )
 
 
@@ -374,6 +377,7 @@ def render_lore_graph(
     label_font_color: str,
     column_layout: str,
     show_lore_notes: bool = False,
+    hide_source_document_roots: bool = False,
 ) -> None:
     graphviz_config = {
         **load_graphviz_config(LORE_GRAPH_CONFIG.key),
@@ -398,6 +402,7 @@ def render_session_file_view_tab(
     title: str = FILE_VIEW_TAB,
     key: str = "session_lore_file_view_source_file",
     show_lore_notes: bool = False,
+    hide_source_document_roots: bool = False,
 ) -> None:
     st.subheader(title)
     selected_source_file = render_lore_file_filter(
@@ -410,6 +415,7 @@ def render_session_file_view_tab(
         combined,
         source_file=selected_source_file,
         fanout_linked_characters=True,
+        hide_source_document_roots=hide_source_document_roots,
     )
     if selected_source_file is None:
         st.info("Add Session Notes To Use File View.")
@@ -488,22 +494,6 @@ def render_session_note_graph_tab(
         main_character_ids=main_character_ids | session_source_ids,
         label_font_color=label_font_color,
         graphviz_config=graphviz_config,
-    )
-
-
-def render_full_knowledge_graph_tab(
-    *,
-    combined: CombinedCharacterGraph,
-    main_character_ids: set[str],
-    main_place_ids: set[str],
-    label_font_color: str,
-) -> None:
-    render_relationship_graph(
-        combined,
-        main_character_ids=main_character_ids,
-        main_place_ids=main_place_ids,
-        label_font_color=label_font_color,
-        graphviz_config=load_graphviz_config(FULL_KNOWLEDGE_VIEW.key),
     )
 
 
@@ -614,7 +604,6 @@ def render_relationship_graph(
         st.subheader("Connections")
         st.table(rows, hide_index=True, width="stretch")
 
-
 def render_lore_file_filter(
     graph: CombinedCharacterGraph,
     *,
@@ -694,6 +683,7 @@ def place_lore_graph(
     source_file: str | None = None,
     heading_id: str | None = None,
     fanout_linked_characters: bool = False,
+    hide_source_document_roots: bool = False,
 ) -> CombinedCharacterGraph:
     place_ids = {
         node_id
@@ -872,6 +862,8 @@ def place_lore_graph(
             if edge.source in connected_ids and edge.target in connected_ids
         ],
     )
+    if hide_source_document_roots:
+        projected_graph = graph_without_source_document_roots(projected_graph)
     return filter_lore_graph_by_heading(projected_graph, heading_id) if heading_id is not None else projected_graph
 
 
@@ -881,6 +873,7 @@ def session_note_lore_graph(
     source_file: str | None = None,
     heading_id: str | None = None,
     fanout_linked_characters: bool = False,
+    hide_source_document_roots: bool = False,
 ) -> CombinedCharacterGraph:
     source_document_ids = {
         node_id
@@ -978,7 +971,25 @@ def session_note_lore_graph(
             if edge.source in connected_ids and edge.target in connected_ids
         ],
     )
+    if hide_source_document_roots:
+        projected_graph = graph_without_source_document_roots(projected_graph)
     return filter_lore_graph_by_heading(projected_graph, heading_id) if heading_id is not None else projected_graph
+
+
+def graph_without_source_document_roots(graph: CombinedCharacterGraph) -> CombinedCharacterGraph:
+    visible_characters = {
+        node_id: node
+        for node_id, node in graph.characters.items()
+        if node.node_type != "source_document"
+    }
+    return CombinedCharacterGraph(
+        characters=visible_characters,
+        edges=[
+            edge
+            for edge in graph.edges
+            if edge.source in visible_characters and edge.target in visible_characters
+        ],
+    )
 
 
 def append_linked_character_fanout(

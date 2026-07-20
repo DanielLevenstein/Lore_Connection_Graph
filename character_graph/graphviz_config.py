@@ -15,7 +15,24 @@ def load_graphviz_config(view_key: str, config_dir: Path = GRAPHVIZ_CONFIG_DIR) 
     view_config_path = config_dir / f"{view_key}.json"
     if not view_config_path.exists():
         return global_config
-    return deep_merge(global_config, read_graphviz_config(view_config_path))
+    view_config = read_graphviz_config(view_config_path)
+    inherited_config = inherited_graphviz_config(view_config, config_dir) or global_config
+    return deep_merge(inherited_config, view_config)
+
+
+def inherited_graphviz_config(view_config: dict[str, Any], config_dir: Path) -> dict[str, Any] | None:
+    inherited_path = view_config.get("inherits")
+    if not isinstance(inherited_path, str) or not inherited_path:
+        return None
+    path = Path(inherited_path)
+    candidates = [
+        path if path.is_absolute() else config_dir / path.name,
+        path if path.is_absolute() else PROJECT_ROOT / path,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return read_graphviz_config(candidate)
+    return None
 
 
 def read_graphviz_config(path: Path) -> dict[str, Any]:

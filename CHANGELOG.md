@@ -76,3 +76,10 @@
 
 ### Graph Tab And Table Cleanup
 - Select favorite views from test views and tag as v1.1.0
+# tag/v1.1.1
+## 2026-07-20
+### Full Structured Graph Restore 
+- Enabled Knowledge Graph in UI without an env variable 
+- Removed root level nodes on from places view in the knowledge graph
+- Removed all references to the full knowledge graph from code as the title had become misleading
+

@@ -6,10 +6,9 @@ from character_graph.combined_graph import (
 )
 from graphviz_rendering import (
     DIRECTORY_FILE_VIEW_TAB,
-    DIRECTORY_SESSION_VIEW_TAB,
-    FILE_VIEW_TAB,
     PARTY_VIEW_TAB,
-    SESSION_VIEW_TAB,
+    PLACES_HEADING_VIEW_TAB,
+    SESSION_FILE_VIEW_TAB,
     SINGLE_CHARACTER_TAB,
     PLACES_FILE_VIEW_TAB,
     graph_without_lore_source_knots,
@@ -26,13 +25,11 @@ def test_graph_tabs_follow_active_main_tab():
     assert graph_tab_names("Characters") == [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
     assert graph_tab_names("Places") == [
         PLACES_FILE_VIEW_TAB,
-        DIRECTORY_FILE_VIEW_TAB,
+        PLACES_HEADING_VIEW_TAB,
     ]
     assert graph_tab_names("Session Notes") == [
-        FILE_VIEW_TAB,
-        SESSION_VIEW_TAB,
+        SESSION_FILE_VIEW_TAB,
         DIRECTORY_FILE_VIEW_TAB,
-        DIRECTORY_SESSION_VIEW_TAB,
     ]
 
 
@@ -306,6 +303,13 @@ def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path)
     assert "source_document__atlantia_lore" in file_view_graph.characters
     assert "family_tree" not in file_view_graph.characters
     assert "mrs_nightbloom" in file_view_graph.characters
+    directory_file_view_graph = place_lore_graph(
+        graph,
+        source_file=str(place_lore_path),
+        hide_source_document_roots=True,
+    )
+    assert "source_document__atlantia_lore" not in directory_file_view_graph.characters
+    assert "mrs_nightbloom" in directory_file_view_graph.characters
 
     heading_view_graph = place_lore_graph(graph, heading_id=college_heading_id)
     assert set(heading_view_graph.characters) == {
@@ -719,6 +723,19 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
         (edge.source, edge.target)
         for edge in file_view_graph.edges
     }
+    directory_file_view_graph = session_note_lore_graph(
+        graph,
+        source_file=str(session_path),
+        fanout_linked_characters=True,
+        hide_source_document_roots=True,
+    )
+    assert "family_tree" not in directory_file_view_graph.characters
+    assert "side_notes" not in directory_file_view_graph.characters
+    assert "mary_ravenmark" in directory_file_view_graph.characters
+    assert all(
+        edge.source != "family_tree" and edge.target != "family_tree"
+        for edge in directory_file_view_graph.edges
+    )
 
     heading_view_graph = session_note_lore_graph(graph, heading_id=trouble_heading_id)
     assert set(heading_view_graph.characters) == {
