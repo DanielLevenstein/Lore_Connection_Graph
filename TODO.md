@@ -62,3 +62,10 @@ Commit to `feature/knowledge_graph` prior to implementing changes
 - Added `docs/reports/knowledge_graph_migration_path.md` for moving from fixture parity to the current full structured graph.
 - Reconnected secondary character/place curation controls under the character-focused graph view.
 - Deferred compatibility with the newer party/full split until the restored path is verified.
+
+## Completed - Broad Knowledge Graph Source Filtering - 2026-07-19
+
+- Treated place-lore roots as source documents in the broad knowledge graph assembly path.
+- Hid source-document knots from `Party View` and `Full Knowledge Graph`.
+- Pruned nodes left without visible connections after source-document filtering.
+- Kept extracted places distinct from their source markdown files so real places can still appear as entity nodes.

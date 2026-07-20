@@ -585,6 +585,37 @@ def test_graph_view_roots_do_not_fallback_to_session_notes():
     assert graph_view_root_nodes(combined, [], []) == []
 
 
+def test_graph_view_roots_do_not_promote_source_documents_as_places():
+    combined = build_combined_character_graph(
+        [],
+        place_sources=[
+            (
+                "source_document__atlantia_lore",
+                "Atlantia Lore",
+                "world_building/lore/places/Atlantia_Lore.md",
+                "source_document",
+            )
+        ],
+        lore_relationships=[
+            {
+                "source_id": "source_document__atlantia_lore",
+                "source_name": "Atlantia Lore",
+                "source_type": "source_document",
+                "source_file": "world_building/lore/places/Atlantia_Lore.md",
+                "target_id": "atlantia",
+                "target_name": "Atlantia",
+                "target_type": "place",
+                "relationship": "Location",
+                "evidence": "Atlantia is a small coastal town.",
+            }
+        ],
+    )
+
+    roots = graph_view_root_nodes(combined, [], ["Atlantia Lore", "Atlantia"])
+
+    assert [(node.name, node.node_type) for node in roots] == [("Atlantia", "place")]
+
+
 def test_full_character_connection_graph_excludes_session_notes_node():
     relationships = [
         {
@@ -1549,6 +1580,70 @@ Neal Lovington performs at Royal Tittles.
     )
 
     assert combined.characters["royal_tittles"].node_type == "place"
+
+
+def test_combined_graph_can_keep_place_source_separate_from_extracted_place():
+    combined = build_combined_character_graph(
+        [],
+        place_sources=[
+            (
+                "source_document__atlantia",
+                "Atlantia",
+                "world_building/lore/places/Atlantia.md",
+                "source_document",
+            )
+        ],
+        lore_relationships=[
+            {
+                "source_id": "source_document__atlantia",
+                "source_name": "Atlantia",
+                "source_type": "source_document",
+                "source_file": "world_building/lore/places/Atlantia.md",
+                "target_id": "atlantia",
+                "target_name": "Atlantia",
+                "target_type": "place",
+                "relationship": "Location",
+                "evidence": "Atlantia remains a real extracted place.",
+            }
+        ],
+    )
+
+    assert combined.characters["source_document__atlantia"].node_type == "source_document"
+    assert combined.characters["atlantia"].node_type == "place"
+
+
+def test_place_lore_source_keeps_atlantia_as_place_and_family_extraction():
+    place_path = FIXTURES_DIR / "places" / "Atlantia_Lore.md"
+    graph = extract_character_graph(load_backstory(place_path, character_id=place_path.stem))
+    combined = build_combined_character_graph(
+        [graph],
+        place_sources=[
+            (
+                "source_document__atlantia_lore",
+                "Atlantia Lore",
+                str(place_path),
+                "source_document",
+            )
+        ],
+        lore_relationships=[
+            {
+                "source_id": "source_document__atlantia_lore",
+                "source_name": "Atlantia Lore",
+                "source_type": "source_document",
+                "source_file": str(place_path),
+                "target_id": "atlantia",
+                "target_name": "Atlantia",
+                "target_type": "place",
+                "relationship": "Location",
+                "evidence": "Atlantia is a small coastal town.",
+            }
+        ],
+    )
+
+    assert any(node.name == "Atlantia Lore" and node.node_type == "source_document" for node in combined.characters.values())
+    assert combined.characters["atlantia"].node_type == "place"
+    assert not any(node.name == "Atlantia" and node.node_type == "character" for node in combined.characters.values())
+    assert any(node.node_type == "family" for node in combined.characters.values())
 
 
 def test_combined_graph_includes_lore_relationships_without_character_sheets():

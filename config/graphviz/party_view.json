@@ -9,8 +9,28 @@
     "config/graphviz/global_graph_view.json",
     "config/graphviz/party_view.json"
   ],
-  "graph": {
-    "rankdir": "LR"
+   "graph": {
+    "rankdir": "LR",
+    "vertical_rankdir": "TB"
+  },
+  "spacing": {
+    "small_graph": {
+      "max_nodes": 8,
+      "ranksep": 1.15,
+      "nodesep": 0.4
+    },
+    "column_layout": {
+      "ranksep": 0.65,
+      "nodesep": 0.35
+    },
+    "vertical_layout": {
+      "ranksep": 0.6,
+      "nodesep": 0.35
+    },
+    "default": {
+      "ranksep": 0.65,
+      "nodesep": 0.35
+    }
   },
   "columns": [
     "family_names",
@@ -19,7 +39,9 @@
     "places"
   ],
   "editing_notes": [
+    "This is the target renderer for docs/screenshots/Structured_Knowledge_Graph_Full.png.",
+    "Use character-sheet data only; exclude place and session-note lore even when those files exist in the active lore directory.",
     "Override only values that should differ from config/graphviz/global_graph_view.json.",
-    "Use this config for the UI path backed by party_connections_graph."
+    "After changing spacing or routing, regenerate docs/screenshots/Structured_Knowledge_Graph_Full.png and run the simplified graph label-position UI regression."
   ]
 }

@@ -64,7 +64,7 @@ class GraphClarityMetric:
 
 def build_combined_character_graph(
     graphs: list[CharacterGraph],
-    place_sources: list[tuple[str, str, str]] | None = None,
+    place_sources: list[tuple[str, str, str] | tuple[str, str, str, str]] | None = None,
     lore_relationships: list[dict[str, str]] | None = None,
 ) -> CombinedCharacterGraph:
     combined = CombinedCharacterGraph()
@@ -113,12 +113,14 @@ def build_combined_character_graph(
                         node_type="family",
                     ),
                 )
-    for place_id, place_name, source_file in place_sources or []:
+    for place_source in place_sources or []:
+        place_id, place_name, source_file = place_source[:3]
+        node_type = place_source[3] if len(place_source) > 3 else "place"
         combined.characters[place_id] = CombinedCharacterNode(
             id=place_id,
             name=display_name(place_name),
             source_file=source_file,
-            node_type="place",
+            node_type=node_type,
         )
     for relationship in lore_relationships or []:
         source_id = relationship.get("source_id", "")
@@ -261,10 +263,14 @@ def combined_primary_display_name(graph: CharacterGraph, session_note_graph: boo
 def combined_primary_node_type(graph: CharacterGraph, session_note_graph: bool) -> str:
     if session_note_graph and is_named_session_source(graph.primary_character.name, graph.primary_character.source_file):
         return "source_document"
+    if is_named_place_source(graph.primary_character.name, graph.primary_character.source_file):
+        return "source_document"
     return "character"
 
 
 def combined_lore_node_type(name: str, source_file: str, fallback_type: str) -> str:
+    if fallback_type == "source_document":
+        return "source_document"
     if is_named_session_source(name, source_file):
         return "source_document"
     return fallback_type
@@ -282,6 +288,14 @@ def is_named_session_source(name: str, source_file: str) -> bool:
         return False
     source_key = compact(source_name)
     return source_key not in {"sessionnote", "sessionnotes"} and compact(name) == source_key
+
+
+def is_named_place_source(name: str, source_file: str) -> bool:
+    normalized_source = source_file.replace("\\", "/").lower()
+    if "/places/" not in normalized_source:
+        return False
+    source_name = normalized_source.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    return compact(name) == compact(source_name)
 
 
 def merge_duplicate_nodes(graph: CombinedCharacterGraph) -> None:
@@ -417,7 +431,6 @@ def combined_relationship_rows(graph: CombinedCharacterGraph) -> list[dict[str, 
             rows.append(
                 {
                     "Character": source.name if source else edge.source,
-                    "Character Type": source.node_type.title() if source else "",
                     "Relationship": edge.relationship_label,
                     "Connection": target.name if target else edge.target,
                     "Connection Type": target.node_type.title() if target else "",
@@ -518,7 +531,7 @@ def graph_view_root_nodes(
 ) -> list[CombinedCharacterNode]:
     main_character_ids = {compact(name) for name in main_character_names or []}
     main_place_ids = {compact(name) for name in main_place_names or []}
-    nodes = [node for node in graph.characters.values() if node.node_type in {"character", "place", "source_document"}]
+    nodes = [node for node in graph.characters.values() if node.node_type in {"character", "place"}]
     main_nodes = [
         node
         for node in nodes
@@ -529,7 +542,7 @@ def graph_view_root_nodes(
                 and (compact(node.name) in main_character_ids or node.id in main_character_ids)
             )
             or (
-                node.node_type in {"place", "source_document"}
+                node.node_type == "place"
                 and (compact(node.name) in main_place_ids or node.id in main_place_ids)
             )
         )

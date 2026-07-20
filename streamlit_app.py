@@ -2,6 +2,7 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
 import os
+import re
 
 import streamlit as st
 
@@ -9,10 +10,13 @@ from character_graph.combined_graph import (
     build_combined_character_graph,
     combined_attribute_rows,
     combined_node_detail_rows,
+    combined_relationship_rows,
     combined_relationship_dot,
+    CombinedCharacterGraph,
     clean_evidence_text,
     full_character_connection_graph,
     graph_view_root_nodes,
+    is_lore_source_node,
     other_connection_rows,
     other_connections_graph,
     party_connections_graph,
@@ -124,10 +128,11 @@ TEST_FIXTURE_GRAPH_VIEW = KnowledgeGraphView(
     key="test_fixture",
     label="Character Data Only",
 )
-PARTY_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
-    key="party_view",
-    label="Party View",
-)
+
+# PARTY_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
+#     key="party_view",
+#     label="Party View",
+# )
 FULL_STRUCTURED_GRAPH_VIEW = KnowledgeGraphView(
     key="full_structured_graph",
     label="Full Knowledge Graph",
@@ -136,9 +141,10 @@ FULL_STRUCTURED_GRAPH_VIEW = KnowledgeGraphView(
 KNOWLEDGE_GRAPH_VIEWS = (
     STRUCTURED_KNOWLEDGE_VIEW,
     TEST_FIXTURE_GRAPH_VIEW,
-    PARTY_KNOWLEDGE_GRAPH_VIEW,
-    FULL_STRUCTURED_GRAPH_VIEW,
+    # PARTY_KNOWLEDGE_GRAPH_VIEW,
+    # FULL_STRUCTURED_GRAPH_VIEW,
 )
+
 DEFAULT_KNOWLEDGE_GRAPH_VIEW = TEST_FIXTURE_GRAPH_VIEW
 
 
@@ -614,9 +620,12 @@ def render_combined_character_graph() -> None:
     places = list_places()
     graphs = load_lore_graphs()
 
-    place_sources = [(compact(display_place_name(place)), display_place_name(place), str(place.path)) for place in places]
+    place_sources = [
+        (lore_source_document_id(place.path), display_place_name(place), str(place.path), "source_document")
+        for place in places
+    ]
     source_label = os.environ.get("LOCAL_CHATBOT_KNOWLEDGE_GRAPH_SOURCE_LABEL", "Local Lore")
-    with (st.expander(f"Combined Knowledge Graph - {source_label}", expanded=False)):
+    with (st.expander(f"Combined Knowledge Graph", expanded=False)):
         render_pending_lore_drafts()
         if st.button("Regenerate All Lore Graphs", icon=":material/sync:", key="regen_all_lore_graphs"):
             failures = []
@@ -642,9 +651,6 @@ def render_combined_character_graph() -> None:
         )
         detail_rows = combined_attribute_rows(graphs)
         character_nodes = combined_main_tab_nodes(combined, characters, places)
-        if not character_nodes:
-            st.info("Add Main Character Or Place Lore To See Graph Roots.")
-            return
         graph_revision = st.session_state.get("combined_graph_revision", 0)
         main_character_ids = {node.id for node in character_nodes if node.node_type == "character"}
         main_place_ids = {node.id for node in character_nodes if node.node_type == "place"}
@@ -659,15 +665,6 @@ def render_combined_character_graph() -> None:
                 main_character_ids,
                 graphviz_config,
             )
-        elif selected_view.key == PARTY_KNOWLEDGE_GRAPH_VIEW.key:
-            render_party_knowledge_graph_view(
-                combined,
-                detail_rows,
-                [node.id for node in character_nodes],
-                main_character_ids,
-                main_place_ids,
-                graphviz_config,
-            )
         elif selected_view.key == FULL_STRUCTURED_GRAPH_VIEW.key:
             render_full_knowledge_graph_view(
                 combined,
@@ -676,18 +673,24 @@ def render_combined_character_graph() -> None:
                 main_place_ids,
                 graphviz_config,
             )
+        # elif selected_view.key == PARTY_KNOWLEDGE_GRAPH_VIEW.key:
+        #     if not character_nodes:
+        #         st.info("Add Main Character Or Place Lore To See Party View.")
+        #         return
+        #     render_party_knowledge_graph_view(
+        #         combined,
+        #         detail_rows,
+        #         [node.id for node in character_nodes],
+        #         main_character_ids,
+        #         main_place_ids,
+        #         graphviz_config,
+        #     )
         else:
-            render_structured_knowledge_view(
-                combined,
-                detail_rows,
-                characters,
-                places,
-                character_nodes,
-                graph_revision,
-                main_character_ids,
-                main_place_ids,
-                graphviz_config,
-            )
+            if not character_nodes:
+                st.info("Add Main Character Or Place Lore To See Graph Roots.")
+                return
+            render_structured_knowledge_view(combined, character_nodes, graph_revision, main_character_ids,
+                                             main_place_ids, graphviz_config)
 
 
 def selected_knowledge_graph_view(graph_revision: int) -> KnowledgeGraphView:
@@ -703,20 +706,9 @@ def selected_knowledge_graph_view(graph_revision: int) -> KnowledgeGraphView:
     return label_to_view.get(selected_label or DEFAULT_KNOWLEDGE_GRAPH_VIEW.label, DEFAULT_KNOWLEDGE_GRAPH_VIEW)
 
 
-def render_structured_knowledge_view(
-    combined,
-    detail_rows,
-    characters,
-    places,
-    character_nodes,
-    graph_revision: int,
-    main_character_ids: set[str],
-    main_place_ids: set[str],
-    graphviz_config,
-) -> None:
+def render_structured_knowledge_view(combined, character_nodes, graph_revision: int, main_character_ids: set[str],
+                                     main_place_ids: set[str], graphviz_config) -> None:
     character_tabs = st.tabs([node.name for node in character_nodes])
-    primary_ids = {compact(character.name) for character in characters}
-    characters_by_id = {compact(character.name): character for character in characters}
     for tab, node in zip(character_tabs, character_nodes):
         with tab:
             character_id = node.id
@@ -736,7 +728,6 @@ def render_structured_knowledge_view(
             selected_node_id = node_options[selected_node_label]
             focused_graph = other_connections_graph(combined, selected_node_id)
             associated_rows = other_connection_rows(combined, selected_node_id)
-            node_detail_rows = combined_node_detail_rows(combined, selected_node_id)[:1]
             st.graphviz_chart(
                 combined_relationship_dot(
                     focused_graph,
@@ -749,37 +740,10 @@ def render_structured_knowledge_view(
                 width="stretch",
             )
             if associated_rows:
-                st.subheader("Other Connections")
+                st.subheader("Connections")
                 st.table(associated_rows, hide_index=True, width="stretch")
             else:
                 st.info("No Other Connections Were Found For This Node Yet.")
-            scoped_detail_rows = [
-                row
-                for row in detail_rows
-                if compact(row["Character"]) == character_id
-            ]
-            with st.expander("Extended Notes"):
-                st.table(
-                    node_detail_rows,
-                    hide_index=True,
-                    width="stretch",
-                )
-                if scoped_detail_rows:
-                    st.subheader("Character Graph Details")
-                    st.table(scoped_detail_rows, hide_index=True, width="stretch")
-            if st.button(
-                "Add Character Connections",
-                icon=":material/account_tree:",
-                key=f"append_connections_{character_id}",
-                disabled=character_id not in characters_by_id,
-            ):
-                append_character_connections(characters_by_id[character_id], connection_rows_for_character(combined, character_id))
-                mark_combined_graph_dirty()
-                st.success("Character Connections Added.")
-                st.rerun()
-
-    render_secondary_entity_creation_actions(combined, characters, places)
-
 
 def render_character_data_only_graph_view(
     combined,
@@ -796,9 +760,8 @@ def render_character_data_only_graph_view(
         ),
         width="stretch",
     )
-    if detail_rows:
-        with st.expander("Character Data Details"):
-            st.table(detail_rows, hide_index=True, width="stretch")
+    st.subheader("Connections")
+    st.table(detail_rows, hide_index=True, width="stretch")
 
 
 def render_party_knowledge_graph_view(
@@ -809,9 +772,12 @@ def render_party_knowledge_graph_view(
     main_place_ids: set[str],
     graphviz_config,
 ) -> None:
+    visible_graph = graph_without_lore_source_knots(
+        party_connections_graph(combined, root_node_ids)
+    )
     st.graphviz_chart(
         combined_relationship_dot(
-            party_connections_graph(combined, root_node_ids),
+            visible_graph,
             main_character_ids=main_character_ids,
             main_place_ids=main_place_ids,
             label_font_color=graph_edge_label_font_color(),
@@ -819,9 +785,8 @@ def render_party_knowledge_graph_view(
         ),
         width="stretch",
     )
-    if detail_rows:
-        with st.expander("Party Graph Details"):
-            st.table(detail_rows, hide_index=True, width="stretch")
+    st.subheader("Connections")
+    st.table(combined_relationship_rows(visible_graph), hide_index=True, width="stretch")
 
 
 def render_full_knowledge_graph_view(
@@ -831,9 +796,10 @@ def render_full_knowledge_graph_view(
     main_place_ids: set[str],
     graphviz_config,
 ) -> None:
+    visible_graph = graph_without_lore_source_knots(combined)
     st.graphviz_chart(
         combined_relationship_dot(
-            combined,
+            visible_graph,
             main_character_ids=main_character_ids,
             main_place_ids=main_place_ids,
             label_font_color=graph_edge_label_font_color(),
@@ -841,9 +807,41 @@ def render_full_knowledge_graph_view(
         ),
         width="stretch",
     )
-    if detail_rows:
-        with st.expander("Full Knowledge Graph Details"):
-            st.table(detail_rows, hide_index=True, width="stretch")
+    st.subheader("Connections")
+    st.table(combined_relationship_rows(visible_graph), hide_index=True, width="stretch")
+
+
+def graph_without_lore_source_knots(graph: CombinedCharacterGraph) -> CombinedCharacterGraph:
+    visible_characters = {
+        node_id: node
+        for node_id, node in graph.characters.items()
+        if not is_hidden_full_knowledge_source_node(node)
+    }
+    visible_edges = [
+        edge
+        for edge in graph.edges
+        if edge.source in visible_characters and edge.target in visible_characters
+    ]
+    connected_ids = {edge.source for edge in visible_edges} | {edge.target for edge in visible_edges}
+    return CombinedCharacterGraph(
+        characters={
+            node_id: node
+            for node_id, node in visible_characters.items()
+            if node_id in connected_ids
+        },
+        edges=visible_edges,
+    )
+
+
+def is_hidden_full_knowledge_source_node(node) -> bool:
+    if is_lore_source_node(node):
+        return True
+    if node is None or node.node_type != "place":
+        return False
+    source_file = node.source_file.replace("\\", "/")
+    if not is_place_lore_path(Path(source_file)):
+        return False
+    return compact(node.name) == compact(Path(source_file).stem)
 
 
 def render_secondary_entity_creation_actions(combined, characters, places) -> None:
@@ -916,15 +914,15 @@ def derived_lore_relationships(characters, places, graphs) -> list[dict[str, str
         for graph in graphs
     }
     known_character_names = [display_character_name(character) for character in characters]
-    known_place_names = [display_place_name(place) for place in places]
+    known_place_names = known_knowledge_graph_place_names(places)
     relationships: list[dict[str, str]] = []
     for path in lore_markdown_files():
         if is_character_lore_path(path):
             continue
         graph = graph_sources.get(path.resolve())
-        source_id = graph.primary_character.id if graph else compact(path.stem)
+        source_id = graph.primary_character.id if graph and not is_place_lore_path(path) else lore_source_document_id(path)
         source_name = combined_lore_source_name(path, graph)
-        source_type = "place" if is_place_lore_path(path) else "character"
+        source_type = "source_document" if is_place_lore_path(path) else "character"
         try:
             text = read_text(path)
         except OSError:
@@ -949,6 +947,36 @@ def combined_lore_source_name(path: Path, graph) -> str:
     if graph is not None:
         return graph.primary_character.name
     return path.stem.replace("_", " ")
+
+
+def known_knowledge_graph_place_names(places) -> list[str]:
+    names: list[str] = []
+    for place in places:
+        for name in place_name_aliases(place):
+            if name and name not in names:
+                names.append(name)
+    return names
+
+
+def place_name_aliases(place) -> list[str]:
+    display_name = display_place_name(place)
+    aliases = [display_name, place.path.stem.replace("_", " ")]
+    title = markdown_document_title(read_text(place.path))
+    if title:
+        aliases.append(title)
+    for name in list(aliases):
+        stripped = source_title_without_lore_suffix(name)
+        if stripped and stripped not in aliases:
+            aliases.append(stripped)
+    return aliases
+
+
+def source_title_without_lore_suffix(name: str) -> str:
+    return re.sub(r"\s+Lore$", "", name.strip(), flags=re.IGNORECASE)
+
+
+def lore_source_document_id(path: Path) -> str:
+    return f"source_document__{compact(path.stem)}"
 
 
 def is_character_lore_path(path: Path) -> bool:
@@ -1006,7 +1034,7 @@ def place_lore_relationships(places) -> list[dict[str, str]]:
     relationships: list[dict[str, str]] = []
     for place in places:
         text = read_text(place.path)
-        source_id = compact(place.name)
+        source_id = lore_source_document_id(place.path)
         for line in place_connections_lines(text):
             if ":" in line:
                 name, relationship = line.split(":", 1)
@@ -1019,7 +1047,7 @@ def place_lore_relationships(places) -> list[dict[str, str]]:
                 {
                     "source_id": source_id,
                     "source_name": place.name,
-                    "source_type": "place",
+                    "source_type": "source_document",
                     "source_file": str(place.path),
                     "target_id": compact(target_name),
                     "target_name": target_name,

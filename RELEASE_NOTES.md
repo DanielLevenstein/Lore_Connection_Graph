@@ -176,3 +176,10 @@ This first release packages the local roleplaying character creator as a Streaml
 - Added Playwright coverage for newly created characters appearing in the Combined Knowledge Graph.
 - Fixed repeated character undo so restored snapshots are not overwritten by stale Streamlit editor widget state.
 - Updated `docs/reports/ui_issue_report.md` and the bottom changelog in `RELEASE_NOTES.md`.
+
+### Completed - Broad Knowledge Graph Source Filtering - 2026-07-19 - feature/knowledge_graph2
+
+- Treated place-lore roots as `source_document` provenance nodes in the broad knowledge graph path.
+- Hid source-document knots and pruned disconnected leftovers from `Party View` and `Full Knowledge Graph`.
+- Preserved extracted places as separate entity nodes, even when their display name matches the source markdown file.
+- Verified with focused Playwright graph regressions plus graph config and combined graph unit tests.

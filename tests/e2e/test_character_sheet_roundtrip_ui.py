@@ -539,17 +539,17 @@ def test_combined_graph_structured_graph_views_are_separate(isolated_character_a
 
         graph_expander.get_by_text("Character Data Only", exact=True).click()
         expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Character Data Details", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True)).not_to_be_visible(timeout=10000)
 
         graph_expander.get_by_text("Party View", exact=True).click()
         expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Party Graph Details", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True)).not_to_be_visible(timeout=10000)
 
         graph_expander.get_by_text("Full Knowledge Graph", exact=True).click()
         expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Full Knowledge Graph Details", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True)).not_to_be_visible(timeout=10000)
         browser.close()
 
@@ -565,6 +565,34 @@ def graph_node_titles(graph_expander) -> list[str]:
             return [...svg.querySelectorAll("g.node title, g.node text")]
                 .map((element) => element.textContent.trim())
                 .filter(Boolean);
+        }"""
+    )
+
+
+def graph_disconnected_node_ids(graph_expander) -> list[str]:
+    return graph_expander.evaluate(
+        """(root) => {
+            const svgs = [...root.querySelectorAll("svg")];
+            const svg = svgs[svgs.length - 1];
+            if (!svg) {
+                throw new Error("Graphviz SVG was not rendered.");
+            }
+            const nodeIds = new Set(
+                [...svg.querySelectorAll("g.node title")]
+                    .map((element) => element.textContent.trim())
+                    .filter(Boolean)
+            );
+            const connectedIds = new Set();
+            for (const edgeTitle of svg.querySelectorAll("g.edge title")) {
+                const [source, target] = edgeTitle.textContent.split("->").map((value) => value.trim());
+                if (source) {
+                    connectedIds.add(source);
+                }
+                if (target) {
+                    connectedIds.add(target);
+                }
+            }
+            return [...nodeIds].filter((nodeId) => !connectedIds.has(nodeId));
         }"""
     )
 
@@ -585,16 +613,30 @@ def test_test_fixture_view_uses_only_character_sheet_data(isolated_character_app
 
         graph_expander.get_by_text("Character Data Only", exact=True).click()
         expect(graph_expander.locator("svg").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Character Data Details", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
         full_character_titles = graph_node_titles(graph_expander)
         assert "Family Tree" not in full_character_titles
         assert "Atlantia Lore" not in full_character_titles
 
+        graph_expander.get_by_text("Party View", exact=True).click()
+        expect(graph_expander.locator("svg").first).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
+        party_titles = graph_node_titles(graph_expander)
+        assert "Family Tree" not in party_titles
+        assert "Atlantia Lore" not in party_titles
+        assert "Students" not in party_titles
+        assert "Stone" not in party_titles
+        assert graph_disconnected_node_ids(graph_expander) == []
+
         graph_expander.get_by_text("Full Knowledge Graph", exact=True).click()
         expect(graph_expander.locator("svg").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Full Knowledge Graph Details", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
         full_structured_titles = graph_node_titles(graph_expander)
-        assert "Family Tree" in full_structured_titles
+        assert "Family Tree" not in full_structured_titles
+        assert "Atlantia Lore" not in full_structured_titles
+        assert "Students" not in full_structured_titles
+        assert "Stone" not in full_structured_titles
+        assert graph_disconnected_node_ids(graph_expander) == []
         browser.close()
 
 
@@ -1090,7 +1132,7 @@ def test_ui_creates_character_from_combined_graph_and_loads_it(isolated_characte
         page.get_by_text("Combined Knowledge Graph").last.click()
         page.get_by_text("Single Character", exact=True).click()
         expect(page.get_by_label("Graph Node For Orin Nightbloom", exact=True)).to_be_visible(timeout=10000)
-        expect(page.get_by_text("Other Connections", exact=True).first).to_be_visible(timeout=10000)
+        expect(page.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
         page.get_by_role("button", name="Create Character File").click()
         expect(page.get_by_text("Draft Character")).to_be_visible(timeout=10000)
         page.get_by_role("textbox", name="Race", exact=True).first.fill("Human")
