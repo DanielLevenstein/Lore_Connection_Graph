@@ -35,6 +35,7 @@
 ### Broad Knowledge Graph Source Filtering
 - Treated place-lore roots as source-document provenance, hid source-document knots from broad graph views, and preserved matching extracted places as entity nodes.
 
+# tag/v1.1.0
 ## 2026-07-20
 
 ### Graph Rendering Refactor
@@ -74,4 +75,4 @@
 - Added parallel Directory File and Directory Session views for Places and Session Notes so the original graph views remain available while the directory-structured column layout can be compared in screenshots.
 
 ### Graph Tab And Table Cleanup
-- Renamed section-selection graph tabs from Session View to Section View, kept Places to File View and Directory File View, moved Lore Notes above connection tables only for section-selecting views, hid empty connection tables, and filtered TABLEKEEPER server-tag evidence from session-note rows.
+- Select favorite views from test views and tag as v1.1.0

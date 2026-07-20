@@ -256,9 +256,9 @@ def render_knowledge_graph_tabs(
 
 def graph_tab_names(active_main_tab: str) -> list[str]:
     if active_main_tab == "Places":
-        return [PLACES_FILE_VIEW_TAB, PLACES_HEADING_VIEW_TAB]
+        return [PLACES_FILE_VIEW_TAB, PLACES_HEADING_VIEW_TAB, FULL_KNOWLEDGE_GRAPH_TAB]
     if active_main_tab == "Session Notes":
-        return [SESSION_FILE_VIEW_TAB, DIRECTORY_FILE_VIEW_TAB]
+        return [SESSION_FILE_VIEW_TAB, DIRECTORY_FILE_VIEW_TAB, FULL_KNOWLEDGE_GRAPH_TAB]
     return [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
 
 

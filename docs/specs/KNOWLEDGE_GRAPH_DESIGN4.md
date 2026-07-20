@@ -49,6 +49,14 @@ Sort all connections within each column by the number of connections with the ed
 Display all graph connections as a straight line and enforce that columns are maintained.
 Table of connections should only show edges with character connections
 
+## Full Structured Graph
+Views [Places, Session Notes]
+Column 0: Places
+Column 1: Main Characters
+Column 2: Secondary Characters & places
+
+Render all lines as curved lines using curvy_graph_view for config.
+
 # Coming Soon 
 ## Node Deduplication
 Views [Character Deduplication, Place Deduplication, Node Removal]

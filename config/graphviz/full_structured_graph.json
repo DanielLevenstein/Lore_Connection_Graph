@@ -4,9 +4,9 @@
   "view_key": "full_structured_graph",
   "label": "Full Knowledge Graph",
   "description": "Whole visible knowledge graph across character, family, source, secondary, and place nodes.",
-  "inherits": "config/graphviz/global_graph_view.json",
+  "inherits": "config/graphviz/curvy_graph_view.json",
   "merge_order": [
-    "config/graphviz/global_graph_view.json",
+    "config/graphviz/curvy_graph_view.json",
     "config/graphviz/full_structured_graph.json"
   ],
   "graph": {
@@ -33,10 +33,9 @@
     }
   },
   "columns": [
-    "family_names",
+    "places",
     "main_characters",
-    "secondary_characters",
-    "places"
+    "secondary_characters"
   ],
   "editing_notes": [
     "Override only values that should differ from config/graphviz/global_graph_view.json.",

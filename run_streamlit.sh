@@ -30,7 +30,6 @@ if [[ "$USE_STRUCTURED_GRAPH_FIXTURE" == "1" ]]; then
   mkdir -p "$FIXTURE_LORE_DIR/character_sheets" "$FIXTURE_LORE_DIR/places" "$FIXTURE_LORE_DIR/session_notes"
   cp "$SCRIPT_DIR"/tests/fixtures/character_sheets/*.md "$FIXTURE_LORE_DIR/character_sheets/"
 
-  export LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH=1
   export LOCAL_CHATBOT_WORLD_BUILDING_DIR="$FIXTURE_WORLD_BUILDING_DIR"
   export LOCAL_CHATBOT_LORE_DIR="$FIXTURE_LORE_DIR"
   export LOCAL_CHATBOT_CHARACTERS_DIR="$FIXTURE_LORE_DIR/character_sheets"

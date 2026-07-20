@@ -1,25 +1,19 @@
-# Instructions
-## Global Changes
-- Rename SESSION_VIEW_TAB to "Section View" in all tabs
-- Only show the "Lore Notes" section in tabs which allows the user to select what sub-heading they are looking at, and move it above connections
- - Move "Lore Notes" above connections
-  - Remove the connection table if blank. 
-## Places View
-- Keep "File View", and "Directory File View"
-## Session Notes
-- Remove all evidence rows with "Server Tag: TABLEKEEPER - TIMESTAMP"
+# Testing
+- Get unit tests passing prior to implementing new changes.
+## Instructions
+ - Create a new graph type curvy_graph_view
+ - Update full_structured_graph so it shows place names first 
+ - Re-enable the full structured graph in the UI
+ - Convert existing views to curvy_graph_view to see how they render
 
+Enable Full-Structured Graph with the following rules. 
 
-## Completed - Screenshot Fixture Cleanup And Deduplication Design - 2026-07-20 - feature/knowledge_graph2
-- Fixed graph-view screenshot capture so e2e screenshots are less likely to be cut off.
-- Removed committed graph-view JSON fixtures so screenshot coverage depends on the ingestion workflow.
-- Added a synthetic multi-session Discord-style session-note fixture for import tests, starting at Session 1.
-- Added Place and Session Note `File View` and `Session View` filters for source files and Markdown headings, including linked-character fan-out from file roots.
-- Removed unlisted `Place Lore` and `Session Lore` tabs from the visible Places and Session Notes graph views.
-- Deprecated obsolete Place/Session graph screenshots that no longer map to active UI views.
-- Added the node deduplication design doc.
-- Updated the changelog summary.
-- Cleaned session-note evidence table text so Markdown fragments, table rows, underscored names, and model-polished evidence render as grammatical human-readable sentences.
-- Kept semantic place/group headings in their Markdown heading columns with place/group icon styling, fanned place headings out to character connections, and added non-graph lore summary rows for descriptive headings.
-- Added Directory File and Directory Session variants for Places and Session Notes so both the existing views and the directory-structured layouts can be screenshot-tested.
-- Renamed section-selection graph tabs to `Section View`, kept Places to `File View` and `Directory File View`, moved section-only Lore Notes above Connections, hid blank connection tables, and removed TABLEKEEPER server-tag evidence rows.
+## Full Structured Graph
+Views [Places, Session Notes]
+Column 0: Places
+Column 1: Main Characters
+Column 2: Secondary Characters & places
+
+Render all lines as curved lines using curvy_graph_view for config.
+## Update Changelog 
+Update Changelog and KNOWLEDGE_GRAPH_DESIGN4.md with the new design
