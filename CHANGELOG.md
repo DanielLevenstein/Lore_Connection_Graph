@@ -72,3 +72,6 @@
 
 ### Directory Graph View Variants
 - Added parallel Directory File and Directory Session views for Places and Session Notes so the original graph views remain available while the directory-structured column layout can be compared in screenshots.
+
+### Graph Tab And Table Cleanup
+- Renamed section-selection graph tabs from Session View to Section View, kept Places to File View and Directory File View, moved Lore Notes above connection tables only for section-selecting views, hid empty connection tables, and filtered TABLEKEEPER server-tag evidence from session-note rows.

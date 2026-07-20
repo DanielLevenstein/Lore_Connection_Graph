@@ -4,8 +4,8 @@
 
 Specs Update
 1) When the top level tab is Characters only display the ["Single Character", "Party View"]
-2) When the top level tab is "Places" display ["File View", "Session View", "Directory File View", "Directory Session View"]
-3) When the top level tab is "Session Notes" display ["File View", "Session View", "Directory File View", "Directory Session View"]
+2) When the top level tab is "Places" display ["File View", "Directory File View"]
+3) When the top level tab is "Session Notes" display ["File View", "Section View", "Directory File View", "Directory Section View"]
 
 Also remove all non-place or character nodes from the place graph, If no character connections exist, just don't show any. 
 Markdown headings that are recognized as places or groups keep their Markdown heading column, but use the semantic place or group visual icon instead of the generic folder icon.
@@ -18,9 +18,9 @@ Column 1: Main Characters
 Column 2: Secondary Characters & places
 
 ## Places Graph
-Views [File View, Session View, Directory File View, Directory Session View]
+Views [File View, Directory File View]
 - File View allows the user to view lore items from a single source file
-- Session View allows users to view lore items from a single Markdown heading
+- Section View allows users to view lore items from a single Markdown heading
   - For session views hide headings which have no root nodes associated with them. 
 
 Column 0: Source Documents 
@@ -41,9 +41,9 @@ Display all graph connections as a straight line and enforce that columns are ma
 Table of connections should only show edges with character connections
 
 ## Session Notes Graph
-Views [File View, Session View, Directory File View, Directory Session View]
+Views [File View, Section View, Directory File View, Directory Section View]
 - File View allows the user to view lore items from a single source file
-- Session View allows users to view lore items from a single Markdown heading
+- Section View allows users to view lore items from a single Markdown heading
   - For session views hide headings which have no root nodes associated with them. 
 
 Column 0: Source Documents & Group Names

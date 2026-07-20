@@ -199,18 +199,8 @@ def knowledge_graph_view_specs() -> list[dict[str, object]]:
         },
         {
             "graph_family": "Places Graph",
-            "view": "Session View",
-            "screenshot": "Places_Graph_Session_View.png",
-        },
-        {
-            "graph_family": "Places Graph",
             "view": "Directory File View",
             "screenshot": "Places_Graph_Directory_File_View.png",
-        },
-        {
-            "graph_family": "Places Graph",
-            "view": "Directory Session View",
-            "screenshot": "Places_Graph_Directory_Session_View.png",
         },
         {
             "graph_family": "Session Notes Graph",
@@ -219,8 +209,8 @@ def knowledge_graph_view_specs() -> list[dict[str, object]]:
         },
         {
             "graph_family": "Session Notes Graph",
-            "view": "Session View",
-            "screenshot": "Session_Notes_Graph_Session_View.png",
+            "view": "Section View",
+            "screenshot": "Session_Notes_Graph_Section_View.png",
         },
         {
             "graph_family": "Session Notes Graph",
@@ -229,8 +219,8 @@ def knowledge_graph_view_specs() -> list[dict[str, object]]:
         },
         {
             "graph_family": "Session Notes Graph",
-            "view": "Directory Session View",
-            "screenshot": "Session_Notes_Graph_Directory_Session_View.png",
+            "view": "Directory Section View",
+            "screenshot": "Session_Notes_Graph_Directory_Section_View.png",
         },
     ]
 
@@ -295,13 +285,11 @@ def assert_graph_view_spec_set(fixtures: list[dict[str, object]]) -> None:
         ("Characters Graph", "Single Character"),
         ("Characters Graph", "Party View"),
         ("Places Graph", "File View"),
-        ("Places Graph", "Session View"),
         ("Places Graph", "Directory File View"),
-        ("Places Graph", "Directory Session View"),
         ("Session Notes Graph", "File View"),
-        ("Session Notes Graph", "Session View"),
+        ("Session Notes Graph", "Section View"),
         ("Session Notes Graph", "Directory File View"),
-        ("Session Notes Graph", "Directory Session View"),
+        ("Session Notes Graph", "Directory Section View"),
     }
     actual_views = {
         (str(fixture["graph_family"]), str(fixture["view"]))
@@ -309,7 +297,7 @@ def assert_graph_view_spec_set(fixtures: list[dict[str, object]]) -> None:
     }
     assert actual_views == expected_views
     screenshots = [fixture["screenshot"] for fixture in fixtures]
-    assert len(screenshots) == len(set(screenshots)) == 10
+    assert len(screenshots) == len(set(screenshots)) == 8
 
 
 def ensure_character_editor_open(page) -> None:
@@ -801,9 +789,9 @@ def test_places_top_level_shows_character_and_place_graphs(isolated_character_ap
         graph_expander.get_by_text("Combined Knowledge Graph").click()
 
         expect(graph_expander.get_by_role("tab", name="File View", exact=True)).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_role("tab", name="Session View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab", name="Section View", exact=True)).not_to_be_visible(timeout=10000)
         expect(graph_expander.get_by_role("tab", name="Directory File View", exact=True)).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_role("tab", name="Directory Session View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab", name="Directory Section View", exact=True)).not_to_be_visible(timeout=10000)
         expect(graph_expander.get_by_role("tab", name="Place Lore", exact=True)).not_to_be_visible(timeout=10000)
         expect(graph_expander.get_by_role("tab", name="Party View", exact=True)).not_to_be_visible(timeout=10000)
         expect(graph_expander.get_by_role("tab", name="Full Knowledge Graph", exact=True)).not_to_be_visible(timeout=10000)
@@ -916,9 +904,9 @@ def test_session_note_place_lore_edge_labels_are_located_on_their_edges(isolated
         expect(graph_expander).to_be_visible(timeout=10000)
         graph_expander.get_by_text("Combined Knowledge Graph").click()
         expect(graph_expander.get_by_role("tab", name="File View", exact=True)).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_role("tab", name="Session View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab", name="Section View", exact=True)).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_role("tab", name="Directory File View", exact=True)).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_role("tab", name="Directory Session View", exact=True)).to_be_visible(timeout=10000)
+        expect(graph_expander.get_by_role("tab", name="Directory Section View", exact=True)).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_role("tab", name="Session Lore", exact=True)).not_to_be_visible(timeout=10000)
         expect(graph_expander.get_by_role("tab", name="Party View", exact=True)).not_to_be_visible(timeout=10000)
         graph_expander.get_by_role("tab", name="File View", exact=True).click()

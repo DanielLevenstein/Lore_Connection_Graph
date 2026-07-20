@@ -1927,6 +1927,38 @@ def test_combined_relationship_rows_rejects_evidence_rewrites_that_drop_names():
     assert rows[0]["Evidence"] == "Jory Ravenmark near Atlantia."
 
 
+def test_combined_relationship_rows_drop_tablekeeper_server_tag_evidence():
+    combined = build_combined_character_graph(
+        [],
+        lore_relationships=[
+            {
+                "source_id": "session_1",
+                "source_name": "Session 1",
+                "source_type": "source_document",
+                "target_id": "jory_ravenmark",
+                "target_name": "Jory Ravenmark",
+                "target_type": "character",
+                "relationship": "Mentioned",
+                "evidence": "Archivist [TABLE], Server Tag: TABLEKEEPER - 7/10/26, 11:36 PMFriday, July 10, 2026 at 11:36 PM",
+            },
+            {
+                "source_id": "session_1",
+                "source_name": "Session 1",
+                "source_type": "source_document",
+                "target_id": "jory_ravenmark",
+                "target_name": "Jory Ravenmark",
+                "target_type": "character",
+                "relationship": "Mentioned",
+                "evidence": "Jory Ravenmark entered the archive.",
+            },
+        ],
+    )
+
+    rows = combined_relationship_rows(combined)
+
+    assert [row["Evidence"] for row in rows] == ["Jory Ravenmark entered the archive."]
+
+
 def test_combined_graph_forbids_self_referencing_lore_edges():
     combined = build_combined_character_graph(
         [],

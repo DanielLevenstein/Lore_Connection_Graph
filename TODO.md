@@ -1,4 +1,4 @@
-# TODO
+# Instructions
 ## Global Changes
 - Rename SESSION_VIEW_TAB to "Section View" in all tabs
 - Only show the "Lore Notes" section in tabs which allows the user to select what sub-heading they are looking at, and move it above connections
@@ -22,3 +22,4 @@
 - Cleaned session-note evidence table text so Markdown fragments, table rows, underscored names, and model-polished evidence render as grammatical human-readable sentences.
 - Kept semantic place/group headings in their Markdown heading columns with place/group icon styling, fanned place headings out to character connections, and added non-graph lore summary rows for descriptive headings.
 - Added Directory File and Directory Session variants for Places and Session Notes so both the existing views and the directory-structured layouts can be screenshot-tested.
+- Renamed section-selection graph tabs to `Section View`, kept Places to `File View` and `Directory File View`, moved section-only Lore Notes above Connections, hid blank connection tables, and removed TABLEKEEPER server-tag evidence rows.

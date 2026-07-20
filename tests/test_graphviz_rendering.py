@@ -25,9 +25,7 @@ def test_graph_tabs_follow_active_main_tab():
     assert graph_tab_names("Characters") == [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
     assert graph_tab_names("Places") == [
         FILE_VIEW_TAB,
-        SESSION_VIEW_TAB,
         DIRECTORY_FILE_VIEW_TAB,
-        DIRECTORY_SESSION_VIEW_TAB,
     ]
     assert graph_tab_names("Session Notes") == [
         FILE_VIEW_TAB,
