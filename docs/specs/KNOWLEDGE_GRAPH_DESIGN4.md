@@ -29,7 +29,7 @@ Display all graph connections as a straight line and enforce that columns are ma
 Table of connections should only show edges with character connections
 
 ## Session Notes Graph
-Views [Place Lore, Party View]
+Views [Session Notes, Party View]
 
 Column 0: Source Documents & Group Names
 Column 1: Markdown Heading 1
