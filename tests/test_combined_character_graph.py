@@ -265,8 +265,8 @@ def test_fixture_graph_uses_party_column_layout_without_hidden_fixtures():
     assert "Session Notes" not in dot
     visible_edges = [line for line in dot.splitlines() if "->" in line and "label=" in line]
     assert visible_edges
-    assert '"jory_ravenmark" -> "neal_lovington" [label="Client", constraint="false"]' in dot
-    assert '"neal_lovington" -> "jory_ravenmark" [label="Client", constraint="false"]' in dot
+    assert '"jory_ravenmark" -> "neal_lovington" [label="Client", dir="both", constraint="false"]' in dot
+    assert '"neal_lovington" -> "jory_ravenmark" [label="Client"' not in dot
     cross_column_edges = [
         line
         for line in visible_edges
@@ -274,7 +274,6 @@ def test_fixture_graph_uses_party_column_layout_without_hidden_fixtures():
             same_column_edge in line
             for same_column_edge in [
                 '"jory_ravenmark" -> "neal_lovington"',
-                '"neal_lovington" -> "jory_ravenmark"',
             ]
         )
     ]
@@ -1053,6 +1052,40 @@ def test_combined_relationship_dot_shows_most_prominent_connection_label():
     assert dot.count('"neal_lovington" -> "jory_ravenmark"') == 1
     assert '[label="Enemy"' in dot
     assert '[label="Mentioned"' not in dot
+
+
+def test_combined_relationship_dot_collapses_reciprocal_edges_to_double_arrow():
+    combined = build_combined_character_graph(
+        [],
+        lore_relationships=[
+            {
+                "source_id": "neal_lovington",
+                "source_name": "Neal Lovington",
+                "source_type": "character",
+                "target_id": "jory_ravenmark",
+                "target_name": "Jory Ravenmark",
+                "target_type": "character",
+                "relationship": "Ally",
+                "evidence": "Neal trusts Jory.",
+            },
+            {
+                "source_id": "jory_ravenmark",
+                "source_name": "Jory Ravenmark",
+                "source_type": "character",
+                "target_id": "neal_lovington",
+                "target_name": "Neal Lovington",
+                "target_type": "character",
+                "relationship": "Client",
+                "evidence": "Jory hires Neal.",
+            },
+        ],
+    )
+
+    dot = combined_relationship_dot(combined)
+    visible_edges = [line for line in dot.splitlines() if "->" in line and "label=" in line]
+
+    assert len(visible_edges) == 1
+    assert '"neal_lovington" -> "jory_ravenmark" [label="Ally / Client", dir="both"]' in dot
 
 
 def test_combined_relationship_dot_displays_rivals_label():

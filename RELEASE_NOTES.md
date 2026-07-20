@@ -65,6 +65,7 @@ This first release packages the local roleplaying character creator as a Streaml
 - Added end-to-end Streamlit coverage for creating, loading, undoing, and deleting characters, places, and session notes.
 - Added end-to-end coverage for failed-create validation preserving entered fields.
 - Added coverage for creating a character from the gated combined knowledge graph workflow.
+
 # Changelog
 ### Knowledge Graph UI Review And Detail Panel - 2026-07-18
 
@@ -183,3 +184,4 @@ This first release packages the local roleplaying character creator as a Streaml
 - Hid source-document knots and pruned disconnected leftovers from `Party View` and `Full Knowledge Graph`.
 - Preserved extracted places as separate entity nodes, even when their display name matches the source markdown file.
 - Verified with focused Playwright graph regressions plus graph config and combined graph unit tests.
+

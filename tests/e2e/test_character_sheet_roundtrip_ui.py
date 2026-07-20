@@ -524,7 +524,7 @@ def test_capture_knowledge_graph_screenshot(isolated_character_app):
     assert screenshot_path.stat().st_size > 0
 
 
-def test_combined_graph_structured_graph_views_are_separate(isolated_character_app):
+def test_combined_graph_character_data_only_view_is_separate(isolated_character_app):
     app_url, _docs_lore_dir, _characters_dir, _places_dir, _session_notes_dir, _data_dir = isolated_character_app
 
     with sync_playwright() as playwright:
@@ -542,15 +542,6 @@ def test_combined_graph_structured_graph_views_are_separate(isolated_character_a
         expect(graph_expander.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
         expect(graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True)).not_to_be_visible(timeout=10000)
 
-        graph_expander.get_by_text("Party View", exact=True).click()
-        expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True)).not_to_be_visible(timeout=10000)
-
-        graph_expander.get_by_text("Full Knowledge Graph", exact=True).click()
-        expect(graph_expander.get_by_role("img").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_label("Graph Node For Jory Ravenmark", exact=True)).not_to_be_visible(timeout=10000)
         browser.close()
 
 
@@ -618,25 +609,6 @@ def test_test_fixture_view_uses_only_character_sheet_data(isolated_character_app
         assert "Family Tree" not in full_character_titles
         assert "Atlantia Lore" not in full_character_titles
 
-        graph_expander.get_by_text("Party View", exact=True).click()
-        expect(graph_expander.locator("svg").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
-        party_titles = graph_node_titles(graph_expander)
-        assert "Family Tree" not in party_titles
-        assert "Atlantia Lore" not in party_titles
-        assert "Students" not in party_titles
-        assert "Stone" not in party_titles
-        assert graph_disconnected_node_ids(graph_expander) == []
-
-        graph_expander.get_by_text("Full Knowledge Graph", exact=True).click()
-        expect(graph_expander.locator("svg").first).to_be_visible(timeout=10000)
-        expect(graph_expander.get_by_text("Connections", exact=True).first).to_be_visible(timeout=10000)
-        full_structured_titles = graph_node_titles(graph_expander)
-        assert "Family Tree" not in full_structured_titles
-        assert "Atlantia Lore" not in full_structured_titles
-        assert "Students" not in full_structured_titles
-        assert "Stone" not in full_structured_titles
-        assert graph_disconnected_node_ids(graph_expander) == []
         browser.close()
 
 

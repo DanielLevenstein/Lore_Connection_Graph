@@ -44,6 +44,7 @@ class CombinedRelationshipEdge:
     relationship_type: str
     relationship_label: str
     evidence: list[str] = field(default_factory=list)
+    bidirectional: bool = False
 
 
 @dataclass
@@ -1201,9 +1202,10 @@ def edge_dot_statement(
     nodes: dict[str, CombinedCharacterNode],
     constraint: str,
 ) -> str:
+    direction = ', dir="both"' if edge.bidirectional else ""
     return (
         f'  "{escape_dot(edge.source)}" -> "{escape_dot(edge.target)}" '
-        f'[{edge_label_attributes(edge.relationship_label)}{constraint}];'
+        f'[{edge_label_attributes(edge.relationship_label)}{direction}{constraint}];'
     )
 
 
@@ -1309,9 +1311,54 @@ def prominent_relationship_edges(edges: list[CombinedRelationshipEdge]) -> list[
                 relationship_type=prominent.relationship_type,
                 relationship_label=prominent.relationship_label,
                 evidence=evidence,
+                bidirectional=prominent.bidirectional,
             )
         )
-    return sorted(collapsed, key=lambda edge: first_seen[(edge.source, edge.target)])
+    return reciprocal_relationship_edges(collapsed, first_seen)
+
+
+def reciprocal_relationship_edges(
+    edges: list[CombinedRelationshipEdge],
+    first_seen: dict[tuple[str, str], int],
+) -> list[CombinedRelationshipEdge]:
+    grouped: dict[frozenset[str], list[CombinedRelationshipEdge]] = {}
+    for edge in edges:
+        grouped.setdefault(frozenset({edge.source, edge.target}), []).append(edge)
+    collapsed: list[CombinedRelationshipEdge] = []
+    reciprocal_first_seen: dict[tuple[str, str], int] = {}
+    for edge_group in grouped.values():
+        if len(edge_group) == 1:
+            edge = edge_group[0]
+            collapsed.append(edge)
+            reciprocal_first_seen[(edge.source, edge.target)] = first_seen[(edge.source, edge.target)]
+            continue
+        ordered = sorted(edge_group, key=lambda edge: first_seen[(edge.source, edge.target)])
+        evidence: list[str] = []
+        labels: list[str] = []
+        relationship_types: list[str] = []
+        for edge in ordered:
+            if edge.relationship_label not in labels:
+                labels.append(edge.relationship_label)
+            if edge.relationship_type not in relationship_types:
+                relationship_types.append(edge.relationship_type)
+            for item in edge.evidence:
+                if item and item not in evidence:
+                    evidence.append(item)
+        source_edge = ordered[0]
+        collapsed.append(
+            CombinedRelationshipEdge(
+                source=source_edge.source,
+                target=source_edge.target,
+                relationship_type=" / ".join(relationship_types),
+                relationship_label=" / ".join(labels),
+                evidence=evidence,
+                bidirectional=True,
+            )
+        )
+        reciprocal_first_seen[(source_edge.source, source_edge.target)] = first_seen[
+            (source_edge.source, source_edge.target)
+        ]
+    return sorted(collapsed, key=lambda edge: reciprocal_first_seen[(edge.source, edge.target)])
 
 
 def node_mention_weights(edges: list[CombinedRelationshipEdge]) -> dict[str, int]:
