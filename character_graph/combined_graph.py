@@ -1035,7 +1035,13 @@ def combined_relationship_dot(
         f"  node [{dot_attributes(graphviz_config.get('node', {}))}];",
         f"  edge [{dot_attributes(edge_graphviz_attributes(graphviz_config, label_font_color))}];",
     ]
-    column_groups = graph_column_groups(display_characters, display_edges, main_character_keys, main_place_keys)
+    column_groups = graph_column_groups(
+        display_characters,
+        display_edges,
+        main_character_keys,
+        main_place_keys,
+        graphviz_config.get("column_layout", "character"),
+    )
     column_by_node = graph_column_by_node(column_groups)
     for character_id, character in display_characters.items():
         node_attributes = graphviz_node_attributes(
@@ -1146,6 +1152,8 @@ def graphviz_node_attributes(
         "color": default_node.get("color", "#94a3b8"),
     }
     overrides = graphviz_config.get("node_type_overrides", {}).get(node_type, {})
+    if source_heading_level(node_type) is not None:
+        overrides = {**source_heading_node_attributes(node_type), **overrides}
     attributes.update(overrides)
     if focused:
         attributes.update(graphviz_config.get("focus_node", {}))
@@ -1154,11 +1162,32 @@ def graphviz_node_attributes(
     return attributes
 
 
+def source_heading_node_attributes(node_type: str) -> dict[str, Any]:
+    level = source_heading_level(node_type) or 1
+    sizes = {
+        1: {"width": 1.45, "height": 0.58, "fontsize": 11, "margin": "0.10,0.05"},
+        2: {"width": 1.25, "height": 0.5, "fontsize": 10, "margin": "0.08,0.04"},
+        3: {"width": 1.05, "height": 0.42, "fontsize": 9, "margin": "0.06,0.03"},
+    }
+    return {
+        "shape": "folder",
+        "fillcolor": "#fef9c3",
+        **sizes.get(level, sizes[3]),
+    }
+
+
+def source_heading_level(node_type: str) -> int | None:
+    match = re.fullmatch(r"source_heading(?:_(?P<level>[1-6]))?", node_type)
+    if match is None:
+        return None
+    return int(match.group("level") or 1)
+
+
 def dot_attributes(attributes: dict[str, Any]) -> str:
     return ", ".join(
         f'{escape_dot(str(key))}={dot_attribute_value(str(key), value)}'
         for key, value in attributes.items()
-        if value is not None and key not in {"vertical_rankdir"}
+        if value is not None and key not in {"vertical_rankdir", "column_layout"}
     )
 
 
@@ -1214,15 +1243,16 @@ def graph_column_groups(
     edges: list[CombinedRelationshipEdge],
     main_character_keys: set[str],
     main_place_keys: set[str],
+    column_layout: str = "character",
 ) -> dict[str, list[str]]:
-    groups = {
-        "column_0_family_names": [],
-        "column_1_main_characters": [],
-        "column_2_secondary_characters": [],
-        "column_3_places": [],
-    }
+    groups = graph_column_group_template(column_layout)
     weights = node_mention_weights(edges)
+    connection_counts = node_connection_counts(edges)
     for node_id, node in nodes.items():
+        if column_layout in {"place_lore", "session_note_lore"}:
+            group_name = markdown_lore_column_group(node, column_layout)
+            groups[group_name].append(node_id)
+            continue
         key = compact(node.name)
         if node.node_type == "family":
             groups["column_0_family_names"].append(node_id)
@@ -1239,24 +1269,82 @@ def graph_column_groups(
         else:
             groups["column_2_secondary_characters"].append(node_id)
     for group_name, group_ids in groups.items():
-        group_ids.sort(
-            key=lambda current_id: (
-                graph_column_node_type_rank(group_name, nodes[current_id].node_type),
-                0 if compact(nodes[current_id].name) in main_place_keys or compact(current_id) in main_place_keys else 1,
-                -weights.get(current_id, 0),
-                nodes[current_id].name.lower(),
+        if column_layout in {"place_lore", "session_note_lore"}:
+            group_ids.sort(
+                key=lambda current_id: (
+                    -connection_counts.get(current_id, 0),
+                    graph_column_node_type_rank(group_name, nodes[current_id].node_type),
+                    nodes[current_id].name.lower(),
+                )
             )
-        )
+        else:
+            group_ids.sort(
+                key=lambda current_id: (
+                    graph_column_node_type_rank(group_name, nodes[current_id].node_type),
+                    0 if compact(nodes[current_id].name) in main_place_keys or compact(current_id) in main_place_keys else 1,
+                    -weights.get(current_id, 0),
+                    nodes[current_id].name.lower(),
+                )
+            )
     return groups
 
 
+def graph_column_group_template(column_layout: str) -> dict[str, list[str]]:
+    if column_layout in {"place_lore", "session_note_lore"}:
+        return {
+            markdown_lore_column_0_name(column_layout): [],
+            "column_1_markdown_heading_1": [],
+            "column_2_markdown_heading_2": [],
+            "column_3_markdown_heading_3": [],
+            "column_4_character_connections": [],
+        }
+    return {
+        "column_0_family_names": [],
+        "column_1_main_characters": [],
+        "column_2_secondary_characters": [],
+        "column_3_places": [],
+    }
+
+
+def markdown_lore_column_0_name(column_layout: str) -> str:
+    if column_layout == "session_note_lore":
+        return "column_0_source_documents_groups"
+    return "column_0_source_documents_places"
+
+
+def markdown_lore_column_group(node: CombinedCharacterNode, column_layout: str) -> str:
+    if node.node_type == "source_document":
+        return markdown_lore_column_0_name(column_layout)
+    if column_layout == "place_lore" and node.node_type == "place":
+        return "column_0_source_documents_places"
+    if column_layout == "session_note_lore" and node.node_type == "group":
+        return "column_0_source_documents_groups"
+    heading_level = source_heading_level(node.node_type)
+    if heading_level is not None:
+        heading_level = min(3, heading_level)
+        return f"column_{heading_level}_markdown_heading_{heading_level}"
+    if node.node_type in {"character", "place"}:
+        return "column_4_character_connections"
+    return "column_4_character_connections"
+
+
 def graph_column_node_type_rank(group_name: str, node_type: str) -> int:
-    if group_name == "column_0_family_names":
+    if group_name in {"column_0_family_names", "column_0_source_documents_places", "column_0_source_documents_groups"}:
         return {
             "source_document": 0,
-            "family": 1,
-            "group": 2,
+            "place": 1,
+            "group": 1,
+            "family": 2,
         }.get(node_type, 3)
+    if group_name in {
+        "column_1_main_characters",
+        "column_1_markdown_heading_1",
+        "column_2_markdown_heading_2",
+        "column_3_markdown_heading_3",
+    }:
+        level = source_heading_level(node_type)
+        if level is not None:
+            return level
     return 0
 
 
@@ -1275,11 +1363,37 @@ def edge_constraint_attribute(
     vertical_layout: bool,
     broad_source: str,
 ) -> str:
+    attributes = []
     if vertical_layout and edge.source == broad_source:
-        return ', constraint="false"'
+        attributes.append('constraint="false"')
     if column_layout_requested and column_by_node.get(edge.source) == column_by_node.get(edge.target):
-        return ', constraint="false"'
-    return ""
+        attributes.append('constraint="false"')
+    if column_layout_requested:
+        source_column = column_by_node.get(edge.source)
+        target_column = column_by_node.get(edge.target)
+        if source_column in {
+            "column_0_family_names",
+            "column_0_source_documents_places",
+            "column_0_source_documents_groups",
+        } and target_column in {
+            "column_2_secondary_characters",
+            "column_3_places",
+            "column_4_character_connections",
+        }:
+            attributes.extend(["tailport=e", "headport=w"])
+        elif target_column in {
+            "column_0_family_names",
+            "column_0_source_documents_places",
+            "column_0_source_documents_groups",
+        } and source_column in {
+            "column_2_secondary_characters",
+            "column_3_places",
+            "column_4_character_connections",
+        }:
+            attributes.extend(["tailport=w", "headport=e"])
+    if not attributes:
+        return ""
+    return ", " + ", ".join(dict.fromkeys(attributes))
 
 
 def prominent_relationship_edges(edges: list[CombinedRelationshipEdge]) -> list[CombinedRelationshipEdge]:
@@ -1368,6 +1482,14 @@ def node_mention_weights(edges: list[CombinedRelationshipEdge]) -> dict[str, int
         weights[edge.source] = weights.get(edge.source, 0) + weight
         weights[edge.target] = weights.get(edge.target, 0) + weight
     return weights
+
+
+def node_connection_counts(edges: list[CombinedRelationshipEdge]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for edge in edges:
+        counts[edge.source] = counts.get(edge.source, 0) + 1
+        counts[edge.target] = counts.get(edge.target, 0) + 1
+    return counts
 
 
 def graph_column_rank_lines(column_groups: dict[str, list[str]]) -> list[str]:

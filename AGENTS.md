@@ -1,7 +1,18 @@
 # Commit Working Changes
 - Between each section in a TODO list commit working changes to create a stable checkpoint. 
 - Do not commit changes until testing for each section is complete.
-- Changelogs have been moved to the bottom of RELEASE_NOTES.md and should include a date stamp and the branch you are working on.
+- If tests depend on deprecated or removed code, move the deprecated code to tests/e2e/deprecated_features.py
+
+##  Change log
+The changelog has been moved to the bottom of RELEASE_NOTES.md
+Create a changelog for RELEASE_NOTES.md summarizing previous work. Then delete these entities from this TODO file. 
+
+Use the following Markdown levels
+H1 Branch 
+H2 Date
+H3 Feature Implementation
+- Short description of what was changed. 
+
 
 ## Semantic Aware Model
 - Install semantic informed model locally for character rewrites and knowledge graph summary sections.

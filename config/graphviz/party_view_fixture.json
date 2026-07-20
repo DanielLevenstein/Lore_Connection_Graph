@@ -1,15 +1,15 @@
 {
   "schema_version": "0.1.0",
   "config_scope": "knowledge_view",
-  "view_key": "party_view",
+  "view_key": "party_view_fixture",
   "label": "Party View",
-  "description": "Combined party graph rooted on all main character and main place nodes.",
+  "description": "Screenshot-era whole graph view built only from character sheet data.",
   "inherits": "config/graphviz/global_graph_view.json",
   "merge_order": [
     "config/graphviz/global_graph_view.json",
-    "config/graphviz/party_view.json"
+    "config/graphviz/party_view_fixture.json"
   ],
-   "graph": {
+  "graph": {
     "rankdir": "LR",
     "vertical_rankdir": "TB"
   },

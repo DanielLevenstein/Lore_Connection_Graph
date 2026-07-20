@@ -1,0 +1,30 @@
+{
+  "schema_version": "0.1.0",
+  "fixture_type": "knowledge_graph_view",
+  "graph_family": "Places Graph",
+  "view": "Place Lore",
+  "top_level_tab": "Places",
+  "screenshot": "Places_Graph_Place_Lore.png",
+  "columns": [
+    "Source Documents & Place Names",
+    "Markdown Heading 1",
+    "Markdown Heading 2",
+    "Markdown Heading 3",
+    "Character Connections"
+  ],
+  "source_fixtures": [
+    "tests/fixtures/character_sheets",
+    "tests/fixtures/places/Atlantia_Lore.md",
+    "tests/fixtures/session_notes/Family_Tree.md"
+  ],
+  "connection_table": {
+    "only_connection_type": "Character",
+    "expected_names": [
+      "Orin Nightbloom"
+    ],
+    "disallowed_connection_types": [
+      "Source_Document",
+      "Group"
+    ]
+  }
+}

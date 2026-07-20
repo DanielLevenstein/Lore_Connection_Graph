@@ -21,14 +21,13 @@ It excludes:
 ## View Roles
 
 - `Single Character`: focused node graph for one selected main character or place.
-- `Character Data Only`: character-sheet-only graph path for preserving the screenshot-era baseline. This is implemented by the internal `test_fixture` view key because it identifies the screenshot source.
-- `Party View`: graph rooted on all main character and main place nodes.
+- `Character Data Only`: character-sheet-only graph path for preserving the screenshot-era baseline. This is implemented by the internal `party_view_fixture` view key because it identifies the fixture source without bringing back the old Party View.
 - `Full Knowledge Graph`: current unfiltered graph path that includes character sheets, places, session notes, source documents, and derived lore relationships.
 
 ## Migration Steps
 
 1. Keep `Character Data Only` as the locked baseline until `Structured_Knowledge_Graph_Full.png` can be reproduced through the normal UI.
-2. Compare `Character Data Only`, `Party View`, and `Full Knowledge Graph` node sets from the same lore directory and classify added nodes as desired, noisy, or duplicate.
+2. Compare `Character Data Only`, `Place Graph`, `Session Note Graph`, and `Full Knowledge Graph` node sets from the same lore directory and classify added nodes as desired, noisy, or duplicate.
 3. Promote desired place/session-note nodes into stable typed categories instead of allowing them to appear as accidental secondary characters.
 4. Add filtering or normalization rules for noisy extracted nodes before they reach `Full Knowledge Graph`.
 5. Add regression coverage for the accepted full structured node set, then regenerate the full structured screenshot under a new screenshot name.
@@ -39,5 +38,6 @@ It excludes:
 Run the app with current lore and compare:
 
 - `Character Data Only`: should show only character-sheet-derived nodes.
-- `Party View`: should show all main roots and their strongest immediate connections.
+- `Place Graph`: should show source documents, place names, and character connections from place lore.
+- `Session Note Graph`: should show dates, characters, and places from selected session-note months.
 - `Full Knowledge Graph`: should additionally show source/place/session-note-derived nodes such as `Family Tree`.

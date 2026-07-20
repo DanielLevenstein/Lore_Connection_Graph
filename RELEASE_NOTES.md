@@ -66,122 +66,58 @@ This first release packages the local roleplaying character creator as a Streaml
 - Added end-to-end coverage for failed-create validation preserving entered fields.
 - Added coverage for creating a character from the gated combined knowledge graph workflow.
 
-# Changelog
-### Knowledge Graph UI Review And Detail Panel - 2026-07-18
+# feature/knowledge_graph
 
-- Pulled the latest remote `main` into `feature/knowledge_graph` before implementation.
-- Captured the current Session Notes import graph screenshot at `docs/screenshots/Knowledge_Graph_current_2026-07-18.png`.
-- Compared the current graph fidelity against `docs/screenshots/Knowledge_Graph.png` in `reports/knowledge_graph_report.md`.
-- Combined `docs/specs/KNOWLEDGE_GRAPH_DESIGN2.md` into `docs/specs/KNOWLEDGE_GRAPH_DESIGN.md`.
-- Removed the duplicate Combined Knowledge Graph heading from the Streamlit UI.
-- Added a graph-node detail table below the combined graph chart.
-- Updated `docs/reports/ui_issue_report.md`.
+## 2026-07-18
 
-### Session Note Graph One-Screen Projection - 2026-07-18
+### Knowledge Graph UI Review And Detail Panel
+- Added the graph-node detail table, removed the duplicate Combined Knowledge Graph heading, and merged the v2 design notes into the main knowledge graph design document.
 
-- Limited session-note-derived combined graph data to internal evidence sources and extracted entity candidates instead of exposing the session-note source as a graph root.
-- Reduced the raw `Session_Notes.txt` projection estimate from 24 visible nodes and 30 edges to 4 visible nodes and 3 edges.
-- Added `docs/specs/KNOWLEDGE_GRAPH_DESIGN3.md` for the longer-term session-note extraction and review-table design.
-- Verified with `.venv/bin/python -m pytest tests/test_combined_character_graph.py tests/test_character_graph.py`.
+### Session Note Graph Projection
+- Reworked session-note graph extraction around internal evidence sources, authored entities, and a 2-3 screen graph target for larger imported campaigns.
 
-### Session Note Graph 2-3 Screen Recommendation Update - 2026-07-18
+### Party-Centered Graph Layout
+- Added party-centered rendering with authored main characters and places as graph roots, family/group/source columns, compact source labels, and refreshed graph state after lore changes.
 
-- Expanded the session-note graph target from one-screen pruning to a 2-3 screen projection for longer-running imported campaigns.
-- Added session-note entity extraction for likely characters and places, with authored character sheets sorted before derived entities.
-- Added one-paragraph main-character stubs for Vivit, Typhon, Dizlevad, Mog, and Flicker.
-- Added `docs/reports/knowledge_graph_recommendation_update_report.md`.
-- Verified with direct graph tracing and `.venv/bin/python -m pytest tests/test_combined_character_graph.py tests/test_character_graph.py`.
-- Limited graph tabs to authored main characters and authored main places.
-- Limited graph root selection to authored main characters and authored main places; session notes are retained only as internal evidence sources and never shown as graph roots.
-- Added party-centered graph rendering that keeps all main characters in one vertical column and places outside-party connections in the next character/place columns.
-- Added graph layout groups for Family Names, Party/Main Characters, Secondary Characters, and Places, verified against committed non-hidden fixtures and ordered by mention count where applicable.
-- Kept source-file labels out of the graph DOT, with sources shown only in lower detail/list rows; the family-name column naturally renders empty when no family nodes exist.
-- Added a full character connection graph mode button so the UI can switch back from the party-centered graph to the full non-session graph.
-- Fixed old `.txt` session-note bulk imports by converting them to markdown files so the Session Notes UI and Combined Knowledge Graph can read them.
-- Added a combined graph revision marker for UI lore writes, imports, deletes, restores, undo actions, and graph regenerations so graph widget state refreshes after file changes.
-- Added an opt-in Playwright screenshot capture path for hidden lore fixtures.
-- Added direct character graph generation coverage for every character sheet, including hidden lore when `LOCAL_CHATBOT_CHARACTER_GRAPH_TEST_LORE_DIR` is set.
-- Added `docs/reports/knowledge_graph_fixed_issues_report.md` summarizing fixed knowledge graph issues.
-- Replaced raw node source paths in graph evidence tables with compact source filename labels.
+# develop
 
-### Knowledge Graph Display Columns - 2026-07-19
+## 2026-07-19
 
-- Added a Combined Knowledge Graph mode switch for `Single Character` and `Whole Graph`.
-- Changed the single-character graph to show only connections associated with the selected graph node.
-- Ordered graph roots, columns, and associated graph items by mention/evidence count before name tie-breakers.
-- Collapsed duplicate graph edges to the most prominent relationship label shown between two nodes.
-- Split relationship evidence into separate table rows instead of combining evidence into one joined cell.
-- Removed Markdown bullet/list markers from evidence table display.
-- Typed named session-note source nodes such as `Family Tree` as `source_document`, placing them in the Family Names column with a distinct graph shape instead of showing them as secondary characters.
-- Labeled family-name graph nodes as `{Name} Family` and added `group` nodes such as `Ignis Cult` to the Family Names column with a distinct shape.
-- Kept graph edge text on-line with normal `label` attributes and handled ambiguity through node spacing and target-column layout instead of floating head/tail labels.
-- Moved non-main places into the secondary-character target column for focused/party graph layouts so connected target nodes stack vertically instead of drawing ambiguous arrows through each other.
-- Made graph edge-label text theme-aware so light mode uses dark slate text and dark mode uses light text.
-- Increased graph rank/node spacing so straight-line graph labels have more breathing room around their edges.
-- Added wider small-graph spacing for focused graph views to reduce default label overlap around central character nodes.
-- Reduced family/source-document icon dimensions in the left column and widened focused graph rank spacing to prevent oversized left-side icons from crowding the main character.
-- Kept family-name nodes as ordinary ovals with modest dimensions and margins, avoiding the oversized regular-circle look.
-- Fixed `Family Tree` only appearing for directly mentioned characters by deriving family-node links from family section headings and surfacing source documents connected through a character's family node.
-- Normalized the `Nighbloom` family heading to the existing `Nightbloom Family` node and stripped Markdown heading markers from evidence display.
-- Verified with `.venv/bin/python -m pytest -q tests/test_character_graph.py tests/test_combined_character_graph.py`.
+### Graph JSON Saves And Character Form Improvements
+- Added graph JSON save/backfill paths for places, session notes, imports, and restores, while making character display names editable and allowing saves without Race or Class.
 
-### Completed - Graph JSON Saves And Character Form Improvements - 2026-07-19
+### UI Validation Follow-Up
+- Added Playwright coverage for minimal character creation appearing in the graph, fixed repeated character undo state, and confirmed graph clarity grades stay out of the UI.
 
-- Pulled the latest `develop` branch from the `main` remote before implementation.
-- Added graph JSON generation for place saves, session-note saves/imports, and bulk lore import/restore backfills.
-- Changed the Combined Knowledge Graph loader to prefer saved graph JSON and regenerate missing JSON as a backfill.
-- Preserved session-note `source_document` node type when duplicate loose import-source markdown has the same graph id.
-- Made character display names editable and allowed new characters to be saved without Race or Class.
-- Updated `docs/reports/ui_issue_report.md`.
-- Verified with `.venv/bin/python -m pytest -q tests/test_entity_file_saves.py`, `.venv/bin/python -m pytest -q tests/test_session_notes.py tests/test_combined_character_graph.py tests/test_character_graph.py`, `.venv/bin/python -m pytest -q tests/e2e/test_session_notes_ui.py::test_ui_uploaded_session_note_updates_combined_graph_from_configured_notes_dir`, and `.venv/bin/python -m pytest -q tests/e2e/test_character_sheet_roundtrip_ui.py::test_create_validation_preserves_entered_fields`.
+# feature/knowledge_graph2
 
-### Graph Improvements And UI Follow-Up - 2026-07-19
+## 2026-07-19
 
-- Pull the latest `develop` branch from the `main` remote before implementation.
-- Update `docs/reports/ui_issue_report.md` after the UI/graph bugs are fixed.
-- Update the changelog at the bottom of `RELEASE_NOTES.md`; tag each entry with date and branch.
-- Keep graph-edge report grades out of the UI.
-- Ensure newly created characters show up on the knowledge graph.
-- Ensure imported session notes show up in the knowledge graph.
-- Make user/character display names editable.
-- Allow saving users/characters without defining Class or Race.
-- Set a configurable max number of secondary places and secondary characters in the graph.
-- Identify and fix why `Justice` and `Night bloom` appear in the knowledge graph even though they are not characters or places.
-- Do not render party-to-party connections in Party View.
-- Test the graph display and focused regressions before committing implementation changes.
+### Knowledge Graph Display Columns
+- Added focused and whole-graph display modes with ordered columns, de-duplicated relationship labels, cleaner evidence rows, family/group source handling, and theme-aware graph text.
 
-### Completed - UI Validation Follow-Up - 2026-07-19 - develop
+### Screenshot-Era Graph UI Restore
+- Restored the screenshot-era Combined Knowledge Graph UI for verification, added the migration path report, and reintroduced the temporary structured graph comparison view.
 
-- Pulled the latest remote `main` into `develop` before validation.
-- Confirmed the changelog remains at the bottom of `RELEASE_NOTES.md`.
-- Validated graph clarity grades remain out of the Combined Knowledge Graph UI.
-- Added Playwright coverage that creates a character with only Name and Backstory and verifies it appears in the Combined Knowledge Graph immediately.
-- Fixed character undo editor state so repeated undo actions remount restored form values instead of reusing stale widget state.
-- Tightened the character undo e2e selector to the `Edit Character` expander.
-- Updated `docs/reports/ui_issue_report.md`.
+### Broad Knowledge Graph Source Filtering
+- Treated place-lore roots as source-document provenance, hid source-document knots from broad graph views, and preserved matching extracted places as entity nodes.
 
-### Completed - Screenshot-Era Graph UI Restore - 2026-07-19 - feature/knowledge_graph2
+## 2026-07-20
 
-- Restored the screenshot-era Combined Knowledge Graph UI shape directly for verification.
-- Split the graph controls into `Single Character`, `Character Data Only`, `Party View`, and `Full Knowledge Graph`.
-- Marked `Character Data Only` as the screenshot-target renderer for `Structured_Knowledge_Graph_Full.png`.
-- Added `docs/reports/knowledge_graph_migration_path.md` for moving from fixture parity to the current full structured graph.
-- Reconnected the secondary character/place curation controls under the character-focused graph view.
-- Deferred compatibility with the newer party/full split until the restored path is verified.
-- Updated `docs/reports/ui_issue_report.md`.
+### Graph Rendering Refactor
+- Moved Streamlit knowledge graph rendering into `graphviz_rendering.py`, split graph rendering by top-level knowledge tabs, and locked the existing full renderer behind `Structured Knowledge View`.
 
-## Completed - UI Validation Follow-Up - 2026-07-19
+### Place And Session Lore Graphs
+- Added Place Lore and Session Notes lore graph layouts with source/group columns, Markdown H1-H3 heading columns, place and character connection columns, hidden empty headings, straight-line edges, and connection-count sorting.
 
-- Pulled latest remote `main` into `develop` before validation.
-- Validated the completed graph JSON saves and character form improvements.
-- Added Playwright coverage for newly created characters appearing in the Combined Knowledge Graph.
-- Fixed repeated character undo so restored snapshots are not overwritten by stale Streamlit editor widget state.
-- Updated `docs/reports/ui_issue_report.md` and the bottom changelog in `RELEASE_NOTES.md`.
+### Secondary Entity Creation Removal
+- Removed graph-based secondary character/place creation controls, draft state, and unused stub creation helpers, with e2e coverage to keep those controls absent.
 
-### Completed - Broad Knowledge Graph Source Filtering - 2026-07-19 - feature/knowledge_graph2
+### Graph View Defaults And Fixtures
+- Defaulted the Places tab to the place-lore view, renamed the party fixture config, and added six dedicated graph-view fixture JSON files for screenshot coverage.
 
-- Treated place-lore roots as `source_document` provenance nodes in the broad knowledge graph path.
-- Hid source-document knots and pruned disconnected leftovers from `Party View` and `Full Knowledge Graph`.
-- Preserved extracted places as separate entity nodes, even when their display name matches the source markdown file.
-- Verified with focused Playwright graph regressions plus graph config and combined graph unit tests.
+### Graph Screenshot Coverage
+- Added an end-to-end screenshot test for Characters `Single Character` and `Party View`, Places `Place Lore` and `Party View`, and Session Notes `Place Lore` and `Party View`, with distinct output filenames.
 
+### Lore Connection Tables
+- Limited lore-view connection tables to rows with character connections so non-character heading and document edges stay out of the table.

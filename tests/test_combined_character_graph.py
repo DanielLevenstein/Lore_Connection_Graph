@@ -236,7 +236,7 @@ Neal is a performer.
     assert "drive_make_a_name" not in combined.characters
 
 
-def test_fixture_graph_uses_party_column_layout_without_hidden_fixtures():
+def test_party_view_fixture_uses_character_column_layout_without_hidden_sources():
     combined = fixture_combined_graph()
     party_graph = party_connections_graph(combined, ["jory_ravenmark", "neal_lovington"])
 
@@ -403,7 +403,7 @@ def test_other_connection_rows_split_repeated_evidence_into_separate_rows():
     ]
 
 
-def test_fixture_graph_handles_missing_family_names_without_toggle():
+def test_party_view_fixture_handles_missing_family_names_without_toggle():
     combined = fixture_combined_graph()
 
     focused = other_connections_graph(combined, "atlantia_lore")
