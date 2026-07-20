@@ -33,8 +33,9 @@ A manual backup button has been added in the `Lore Import` Section for your conv
 
 | Version | Summary                                                                           |
 | ------- | --------------------------------------------------------------------------------- |
-| v1.0.0  | This release adds a dedicated Knowledge Graph UI using graphviz.                  |
-| v0.1.0  | Packaged as a Streamlit app for local character sheets, campaign lore management. |
+| v1.1.0 | Implemented distinct knowledge graph views for character, place and sesison tab|
+| v1.0.0 | This release adds a dedicated Knowledge Graph UI using graphviz.|
+| v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management. |
 
 ## Setup
 

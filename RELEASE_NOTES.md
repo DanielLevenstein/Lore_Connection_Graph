@@ -2,9 +2,23 @@
 
 | Version | Summary |
 | --- | --- |
+| v1.1.0 | Implemented distinct knowledge graph views for character, place and sesison tab|
 | v1.0.0 | This release adds a dedicated Knowledge Graph UI using graphviz.|
 | v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management. |
 
+## v1.1.0 - Knowledge Graph Views
+
+In this release separate knowledge graph tabs were added for every main level tab for the app. 
+Places and Groups were given dedicated icons and given priority placement in the graph.
+
+## Knowledge Graph Views
+Main Tab [Characters, Places, Session Notes]
+- Characters: [Single Character, Party View]
+- Places: [Location View, Heading View]
+- Session Notes: [Location View, Directory File View]
+
+Detailed design notes are located below:
+- [Knowledge Graph Views](docs/specs/KNOWLEDGE_GRAPH_DESIGN4.md): Multi View Knowledge Graphs
 
 ## v1.0.0 - Knowledge Graph Tab
 
