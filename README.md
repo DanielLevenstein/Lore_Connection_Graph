@@ -101,7 +101,7 @@ Feature and development flags:
 
 | Variable                                        | Enabled Value               | Purpose                                                                                                                   |
 | ----------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `LOCAL_CHATBOT_DISABLE_LORE_BACKUPS`            | `1`, `true`, `yes`, or `on` | Skips the automatic backup that normally runs when the Streamlit app starts.                                              |
+| `LOCAL_CHATBOT_DISABLE_LORE_BACKUPS`            | `1`                         | Skips the automatic backup that normally runs when the Streamlit app starts.                                              |
 | `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES`           | `1`                         | Shows graph-backed summary and backstory rewrite controls in the character editor.                                        |
 | `LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE` | `1`                         | Shows the internal attribute graph override editor. This is a maintenance/debug surface, not part of the normal app flow. |
 
