@@ -7,7 +7,7 @@
 | v1.0.0 | This release adds a dedicated Knowledge Graph UI using graphviz.|
 | v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management. |
 
-## V1.1.1
+## v1.1.1
 Enabled knowledge graph in UI without an env variable
 Removed the hidden full graph view from code as the name is no longer accurate. 
 Plan to consolidate views across all main tabs for a future release. 
