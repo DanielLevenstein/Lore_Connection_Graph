@@ -236,7 +236,7 @@ Neal is a performer.
     assert "drive_make_a_name" not in combined.characters
 
 
-def test_fixture_graph_uses_party_column_layout_without_hidden_fixtures():
+def test_party_view_fixture_uses_character_column_layout_without_hidden_sources():
     combined = fixture_combined_graph()
     party_graph = party_connections_graph(combined, ["jory_ravenmark", "neal_lovington"])
 
@@ -265,8 +265,8 @@ def test_fixture_graph_uses_party_column_layout_without_hidden_fixtures():
     assert "Session Notes" not in dot
     visible_edges = [line for line in dot.splitlines() if "->" in line and "label=" in line]
     assert visible_edges
-    assert '"jory_ravenmark" -> "neal_lovington" [label="Client", constraint="false"]' in dot
-    assert '"neal_lovington" -> "jory_ravenmark" [label="Client", constraint="false"]' in dot
+    assert '"jory_ravenmark" -> "neal_lovington" [label="Client", dir="both", constraint="false"]' in dot
+    assert '"neal_lovington" -> "jory_ravenmark" [label="Client"' not in dot
     cross_column_edges = [
         line
         for line in visible_edges
@@ -274,7 +274,6 @@ def test_fixture_graph_uses_party_column_layout_without_hidden_fixtures():
             same_column_edge in line
             for same_column_edge in [
                 '"jory_ravenmark" -> "neal_lovington"',
-                '"neal_lovington" -> "jory_ravenmark"',
             ]
         )
     ]
@@ -404,7 +403,7 @@ def test_other_connection_rows_split_repeated_evidence_into_separate_rows():
     ]
 
 
-def test_fixture_graph_handles_missing_family_names_without_toggle():
+def test_party_view_fixture_handles_missing_family_names_without_toggle():
     combined = fixture_combined_graph()
 
     focused = other_connections_graph(combined, "atlantia_lore")
@@ -583,6 +582,37 @@ def test_graph_view_roots_do_not_fallback_to_session_notes():
     combined = build_combined_character_graph([], lore_relationships=relationships)
 
     assert graph_view_root_nodes(combined, [], []) == []
+
+
+def test_graph_view_roots_do_not_promote_source_documents_as_places():
+    combined = build_combined_character_graph(
+        [],
+        place_sources=[
+            (
+                "source_document__atlantia_lore",
+                "Atlantia Lore",
+                "world_building/lore/places/Atlantia_Lore.md",
+                "source_document",
+            )
+        ],
+        lore_relationships=[
+            {
+                "source_id": "source_document__atlantia_lore",
+                "source_name": "Atlantia Lore",
+                "source_type": "source_document",
+                "source_file": "world_building/lore/places/Atlantia_Lore.md",
+                "target_id": "atlantia",
+                "target_name": "Atlantia",
+                "target_type": "place",
+                "relationship": "Location",
+                "evidence": "Atlantia is a small coastal town.",
+            }
+        ],
+    )
+
+    roots = graph_view_root_nodes(combined, [], ["Atlantia Lore", "Atlantia"])
+
+    assert [(node.name, node.node_type) for node in roots] == [("Atlantia", "place")]
 
 
 def test_full_character_connection_graph_excludes_session_notes_node():
@@ -1022,6 +1052,40 @@ def test_combined_relationship_dot_shows_most_prominent_connection_label():
     assert dot.count('"neal_lovington" -> "jory_ravenmark"') == 1
     assert '[label="Enemy"' in dot
     assert '[label="Mentioned"' not in dot
+
+
+def test_combined_relationship_dot_collapses_reciprocal_edges_to_double_arrow():
+    combined = build_combined_character_graph(
+        [],
+        lore_relationships=[
+            {
+                "source_id": "neal_lovington",
+                "source_name": "Neal Lovington",
+                "source_type": "character",
+                "target_id": "jory_ravenmark",
+                "target_name": "Jory Ravenmark",
+                "target_type": "character",
+                "relationship": "Ally",
+                "evidence": "Neal trusts Jory.",
+            },
+            {
+                "source_id": "jory_ravenmark",
+                "source_name": "Jory Ravenmark",
+                "source_type": "character",
+                "target_id": "neal_lovington",
+                "target_name": "Neal Lovington",
+                "target_type": "character",
+                "relationship": "Client",
+                "evidence": "Jory hires Neal.",
+            },
+        ],
+    )
+
+    dot = combined_relationship_dot(combined)
+    visible_edges = [line for line in dot.splitlines() if "->" in line and "label=" in line]
+
+    assert len(visible_edges) == 1
+    assert '"neal_lovington" -> "jory_ravenmark" [label="Ally / Client", dir="both"]' in dot
 
 
 def test_combined_relationship_dot_displays_rivals_label():
@@ -1551,6 +1615,70 @@ Neal Lovington performs at Royal Tittles.
     assert combined.characters["royal_tittles"].node_type == "place"
 
 
+def test_combined_graph_can_keep_place_source_separate_from_extracted_place():
+    combined = build_combined_character_graph(
+        [],
+        place_sources=[
+            (
+                "source_document__atlantia",
+                "Atlantia",
+                "world_building/lore/places/Atlantia.md",
+                "source_document",
+            )
+        ],
+        lore_relationships=[
+            {
+                "source_id": "source_document__atlantia",
+                "source_name": "Atlantia",
+                "source_type": "source_document",
+                "source_file": "world_building/lore/places/Atlantia.md",
+                "target_id": "atlantia",
+                "target_name": "Atlantia",
+                "target_type": "place",
+                "relationship": "Location",
+                "evidence": "Atlantia remains a real extracted place.",
+            }
+        ],
+    )
+
+    assert combined.characters["source_document__atlantia"].node_type == "source_document"
+    assert combined.characters["atlantia"].node_type == "place"
+
+
+def test_place_lore_source_keeps_atlantia_as_place_and_family_extraction():
+    place_path = FIXTURES_DIR / "places" / "Atlantia_Lore.md"
+    graph = extract_character_graph(load_backstory(place_path, character_id=place_path.stem))
+    combined = build_combined_character_graph(
+        [graph],
+        place_sources=[
+            (
+                "source_document__atlantia_lore",
+                "Atlantia Lore",
+                str(place_path),
+                "source_document",
+            )
+        ],
+        lore_relationships=[
+            {
+                "source_id": "source_document__atlantia_lore",
+                "source_name": "Atlantia Lore",
+                "source_type": "source_document",
+                "source_file": str(place_path),
+                "target_id": "atlantia",
+                "target_name": "Atlantia",
+                "target_type": "place",
+                "relationship": "Location",
+                "evidence": "Atlantia is a small coastal town.",
+            }
+        ],
+    )
+
+    assert any(node.name == "Atlantia Lore" and node.node_type == "source_document" for node in combined.characters.values())
+    assert combined.characters["atlantia"].node_type == "place"
+    assert not any(node.name == "Atlantia" and node.node_type == "character" for node in combined.characters.values())
+    assert any(node.node_type == "family" for node in combined.characters.values())
+
+
 def test_combined_graph_includes_lore_relationships_without_character_sheets():
     combined = build_combined_character_graph(
         [],
@@ -1696,6 +1824,139 @@ def test_combined_graph_evidence_rows_strip_markdown_bullets():
         "Neal helped Jory.",
         "Neal visited Atlantia.",
     }
+
+
+def test_combined_graph_evidence_rows_humanize_session_note_fragments():
+    combined = build_combined_character_graph(
+        [],
+        lore_relationships=[
+            {
+                "source_id": "session_1",
+                "source_name": "Session 1",
+                "source_type": "source_document",
+                "target_id": "jory_ravenmark",
+                "target_name": "Jory_Ravenmark",
+                "target_type": "character",
+                "relationship": "Mentioned",
+                "evidence": "### Session 1:",
+            },
+            {
+                "source_id": "session_1",
+                "source_name": "Session 1",
+                "source_type": "source_document",
+                "target_id": "atlantia",
+                "target_name": "Atlantia",
+                "target_type": "place",
+                "relationship": "Location",
+                "evidence": "| Door | Open |",
+            },
+            {
+                "source_id": "session_1",
+                "source_name": "Session 1",
+                "source_type": "source_document",
+                "target_id": "neal_lovington",
+                "target_name": "Neal Lovington",
+                "target_type": "character",
+                "relationship": "Mentioned",
+                "evidence": "- Neal_Lovington: Performs Here",
+            },
+        ],
+    )
+
+    rows = combined_relationship_rows(combined)
+
+    assert [row["Evidence"] for row in rows] == [
+        "Session 1 is referenced in the source notes.",
+        "Door is open.",
+        "Neal Lovington performs here.",
+    ]
+
+
+def test_combined_relationship_rows_can_use_source_preserving_evidence_rewrite_client():
+    combined = build_combined_character_graph(
+        [],
+        lore_relationships=[
+            {
+                "source_id": "session_1",
+                "source_name": "Session 1",
+                "source_type": "source_document",
+                "target_id": "jory_ravenmark",
+                "target_name": "Jory Ravenmark",
+                "target_type": "character",
+                "relationship": "Mentioned",
+                "evidence": "Jory Ravenmark near Atlantia",
+            }
+        ],
+    )
+
+    prompts = []
+
+    def rewrite_client(messages):
+        prompts.append(messages)
+        return "Jory Ravenmark was noted near Atlantia."
+
+    rows = combined_relationship_rows(combined, evidence_rewrite_client=rewrite_client)
+
+    assert rows[0]["Evidence"] == "Jory Ravenmark was noted near Atlantia."
+    assert prompts[0][0]["role"] == "system"
+    assert "Use only the supplied evidence" in prompts[0][0]["content"]
+
+
+def test_combined_relationship_rows_rejects_evidence_rewrites_that_drop_names():
+    combined = build_combined_character_graph(
+        [],
+        lore_relationships=[
+            {
+                "source_id": "session_1",
+                "source_name": "Session 1",
+                "source_type": "source_document",
+                "target_id": "jory_ravenmark",
+                "target_name": "Jory Ravenmark",
+                "target_type": "character",
+                "relationship": "Mentioned",
+                "evidence": "Jory Ravenmark near Atlantia",
+            }
+        ],
+    )
+
+    rows = combined_relationship_rows(
+        combined,
+        evidence_rewrite_client=lambda _messages: "Someone was nearby.",
+    )
+
+    assert rows[0]["Evidence"] == "Jory Ravenmark near Atlantia."
+
+
+def test_combined_relationship_rows_drop_tablekeeper_server_tag_evidence():
+    combined = build_combined_character_graph(
+        [],
+        lore_relationships=[
+            {
+                "source_id": "session_1",
+                "source_name": "Session 1",
+                "source_type": "source_document",
+                "target_id": "jory_ravenmark",
+                "target_name": "Jory Ravenmark",
+                "target_type": "character",
+                "relationship": "Mentioned",
+                "evidence": "Archivist [TABLE], Server Tag: TABLEKEEPER - 7/10/26, 11:36 PMFriday, July 10, 2026 at 11:36 PM",
+            },
+            {
+                "source_id": "session_1",
+                "source_name": "Session 1",
+                "source_type": "source_document",
+                "target_id": "jory_ravenmark",
+                "target_name": "Jory Ravenmark",
+                "target_type": "character",
+                "relationship": "Mentioned",
+                "evidence": "Jory Ravenmark entered the archive.",
+            },
+        ],
+    )
+
+    rows = combined_relationship_rows(combined)
+
+    assert [row["Evidence"] for row in rows] == ["Jory Ravenmark entered the archive."]
 
 
 def test_combined_graph_forbids_self_referencing_lore_edges():

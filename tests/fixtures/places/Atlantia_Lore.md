@@ -4,13 +4,16 @@ Atlantia is a small coastal town on the eastern edge of the known shore, built w
 
 ## Town Overview
 
-Atlantia grew around the harbor, the watch tower, and the roads that climb inland toward Sunstone Mage College. Fishing boats, supply wagons, traveling performers, and college messengers keep the town connected to the wider world, but Atlantia still thinks of itself as a place apart.
+On the edge of town a road climb inland toward Sunstone Mage College, another climbs the shore towards the watch tower. 
 
-The town is practical before it is grand. Stone walls are patched instead of replaced, family homes are expanded one room at a time, and most public arguments eventually become private bargains. People remember who helped during storms and who looked away.
+Fishing boats, supply wagons, traveling performers, and college messengers keep the town connected to the wider world, but Atlantia still thinks of itself as a place apart.
+
+The town is practical before it is grand. Stone walls are patched instead of replaced, family homes are expanded one room at a time, and most public arguments eventually become private bargains. 
+People remember who helped during storms and who looked away.
 
 ## The Harbor
 
-The harbor is the town's busiest edge. Nets dry along the lower railings, gulls gather near the fish stalls, and sailors trade news before they trade coin. On calm mornings the water looks almost silver, but locals know how quickly the coast can turn dangerous.
+The harbor is the town's busiest area. Nets dry along the lower railings, gulls gather near the fish stalls, and sailors trade news before they trade coin. On calm mornings the water looks almost silver, but locals know how quickly the coast can turn dangerous.
 
 The sea is also where many Atlantian stories become uncertain. Ships leave with promises, return with missing crew, or fail to return at all. Some families prefer practical explanations. Others keep older, stranger stories alive because grief is sometimes easier to carry when it has a shape.
 

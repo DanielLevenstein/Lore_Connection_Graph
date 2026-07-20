@@ -1,29 +1,26 @@
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 import os
+import re
 
 import streamlit as st
 
 from character_graph.combined_graph import (
     build_combined_character_graph,
     combined_attribute_rows,
-    combined_node_detail_rows,
-    combined_relationship_dot,
     clean_evidence_text,
-    full_character_connection_graph,
     graph_view_root_nodes,
-    other_connection_rows,
-    other_connections_graph,
-    party_connections_graph,
     compact,
 )
+from character_graph.extraction import extract_character_graph
 from character_graph.graph_view import (
     evidence_rows,
 )
-from character_graph.graphviz_config import load_graphviz_config
+from character_graph.ingest import load_backstory
 from character_graph.session_entities import derived_lore_entity_relationships
 from character_graph.storage import load_graph
+from graphviz_rendering import render_knowledge_graph_tabs
 
 
 from local_chatbot.storage import (
@@ -43,12 +40,10 @@ from local_chatbot.storage import (
     list_external_character_sheets,
     list_places,
     list_characters,
-    load_or_regenerate_lore_graph,
     read_place_markdown,
     read_character_profile,
     read_text,
     regenerate_character_graph,
-    regenerate_lore_graph,
     remove_character_connections,
     write_character_connections,
     write_character_profile,
@@ -108,32 +103,6 @@ LORE_BACKUP_IMPORT_SOURCE_KEY = "lore_backup_import_source"
 
 def lore_backups_disabled() -> bool:
     return os.environ.get(DISABLE_LORE_BACKUPS, "").strip().lower() in {"1", "true", "yes", "on"}
-
-
-@dataclass(frozen=True)
-class KnowledgeGraphView:
-    key: str
-    label: str
-
-
-STRUCTURED_KNOWLEDGE_VIEW = KnowledgeGraphView(
-    key="character_view",
-    label="Character View",
-)
-PARTY_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
-    key="party_view",
-    label="Party View",
-)
-FULL_KNOWLEDGE_GRAPH_VIEW = KnowledgeGraphView(
-    key="full_structured_graph",
-    label="Full Structured Graph",
-)
-
-KNOWLEDGE_GRAPH_VIEWS = (
-    STRUCTURED_KNOWLEDGE_VIEW,
-    PARTY_KNOWLEDGE_GRAPH_VIEW,
-    # FULL_KNOWLEDGE_GRAPH_VIEW,
-)
 
 
 st.set_page_config(page_title="Character Builder", page_icon=":material/forum:", layout="wide")
@@ -601,16 +570,19 @@ def attribute_graph_display_rows(profile: CharacterProfile) -> list[dict[str, st
     return rows
 
 
-def render_combined_character_graph() -> None:
-    # if os.environ.get("LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH") != "1":
-    #     return
+def render_combined_character_graph(active_main_tab: str = "Characters") -> None:
+    if os.environ.get("LOCAL_CHATBOT_ENABLE_COMBINED_GRAPH") != "1":
+        return
     characters = list_characters()
     places = list_places()
     graphs = load_lore_graphs()
 
-    place_sources = [(compact(place.name), place.name, str(place.path)) for place in places]
-    with (st.expander("Combined Knowledge Graph", expanded=False)):
-        render_pending_lore_drafts()
+    place_sources = [
+        (lore_source_document_id(place.path), display_place_name(place), str(place.path), "source_document")
+        for place in places
+    ]
+    source_label = os.environ.get("LOCAL_CHATBOT_KNOWLEDGE_GRAPH_SOURCE_LABEL", "Local Lore")
+    with (st.expander(f"Combined Knowledge Graph", expanded=False)):
         if st.button("Regenerate All Lore Graphs", icon=":material/sync:", key="regen_all_lore_graphs"):
             failures = []
             for character in characters:
@@ -633,192 +605,50 @@ def render_combined_character_graph() -> None:
             place_sources,
             place_lore_relationships(places) + derived_lore_relationships(characters, places, graphs),
         )
-        detail_rows = combined_attribute_rows(graphs)
         character_nodes = combined_main_tab_nodes(combined, characters, places)
-        if not character_nodes:
-            st.info("Add Main Character Or Place Lore To See Graph Roots.")
-            return
         graph_revision = st.session_state.get("combined_graph_revision", 0)
         main_character_ids = {node.id for node in character_nodes if node.node_type == "character"}
         main_place_ids = {node.id for node in character_nodes if node.node_type == "place"}
-        selected_view = selected_knowledge_graph_view(graph_revision)
-        graphviz_config = load_graphviz_config(selected_view.key)
-        if selected_view.key == FULL_KNOWLEDGE_GRAPH_VIEW.key:
-            render_full_knowledge_graph_view(
-                combined,
-                detail_rows,
-                characters,
-                places,
-                main_character_ids,
-                main_place_ids,
-                graphviz_config,
-            )
-        elif selected_view.key == PARTY_KNOWLEDGE_GRAPH_VIEW.key:
-            render_party_knowledge_graph_view(
-                combined,
-                detail_rows,
-                characters,
-                places,
-                character_nodes,
-                main_character_ids,
-                main_place_ids,
-                graphviz_config,
-            )
-        else:
-            render_structured_knowledge_view(
-                combined,
-                detail_rows,
-                characters,
-                places,
-                character_nodes,
-                graph_revision,
-                main_character_ids,
-                main_place_ids,
-                graphviz_config,
-            )
-
-
-def selected_knowledge_graph_view(graph_revision: int) -> KnowledgeGraphView:
-    labels = [view.label for view in KNOWLEDGE_GRAPH_VIEWS]
-    selected_label = st.segmented_control(
-        "Knowledge View",
-        labels,
-        default=STRUCTURED_KNOWLEDGE_VIEW.label,
-        key=f"combined_knowledge_view_{graph_revision}",
-        width="content",
-    )
-    label_to_view = {view.label: view for view in KNOWLEDGE_GRAPH_VIEWS}
-    return label_to_view.get(selected_label or STRUCTURED_KNOWLEDGE_VIEW.label, STRUCTURED_KNOWLEDGE_VIEW)
-
-
-def render_structured_knowledge_view(
-    combined,
-    detail_rows,
-    characters,
-    places,
-    character_nodes,
-    graph_revision: int,
-    main_character_ids: set[str],
-    main_place_ids: set[str],
-    graphviz_config,
-) -> None:
-    character_tabs = st.tabs([node.name for node in character_nodes])
-    primary_ids = {compact(character.name) for character in characters}
-    characters_by_id = {compact(character.name): character for character in characters}
-    for tab, node in zip(character_tabs, character_nodes):
-        with tab:
-            character_id = node.id
-            node_options = combined_graph_root_node_options(character_nodes)
-            node_labels = list(node_options)
-            default_node_index = (
-                node_labels.index(node.name)
-                if node.name in node_options
-                else 0
-            )
-            selected_node_label = st.selectbox(
-                f"Graph Node For {node.name}",
-                node_labels,
-                index=default_node_index,
-                key=f"combined_graph_node_{character_id}_{graph_revision}",
-            )
-            selected_node_id = node_options[selected_node_label]
-            focused_graph = other_connections_graph(combined, selected_node_id)
-            associated_rows = other_connection_rows(combined, selected_node_id)
-            node_detail_rows = combined_node_detail_rows(combined, selected_node_id)[:1]
-            st.graphviz_chart(
-                combined_relationship_dot(
-                    focused_graph,
-                    selected_node_id,
-                    main_character_ids=main_character_ids,
-                    main_place_ids=main_place_ids,
-                    label_font_color=graph_edge_label_font_color(),
-                    graphviz_config=graphviz_config,
-                ),
-                width="stretch",
-            )
-            if associated_rows:
-                st.subheader("Connections")
-                st.table(associated_rows, hide_index=True, width="stretch")
-            else:
-                st.info("No Other Connections Were Found For This Node Yet.")
-            scoped_detail_rows = [
-                row
-                for row in detail_rows
-                if compact(row["Character"]) == character_id
-            ]
-
-def render_party_knowledge_graph_view(
-    combined,
-    detail_rows,
-    characters,
-    places,
-    character_nodes,
-    main_character_ids: set[str],
-    main_place_ids: set[str],
-    graphviz_config,
-) -> None:
-    root_node_ids = [node.id for node in character_nodes]
-    st.graphviz_chart(
-        combined_relationship_dot(
-            party_connections_graph(combined, root_node_ids),
+        character_sheet_graphs = character_sheet_lore_graphs(graphs)
+        render_knowledge_graph_tabs(
+            combined=combined,
+            character_sheet_combined=build_combined_character_graph(character_sheet_graphs),
+            character_sheet_detail_rows=combined_attribute_rows(character_sheet_graphs),
+            character_nodes=character_nodes,
             main_character_ids=main_character_ids,
             main_place_ids=main_place_ids,
+            graph_revision=graph_revision,
             label_font_color=graph_edge_label_font_color(),
-            graphviz_config=graphviz_config,
-        ),
-        width="stretch",
-    )
-    if detail_rows:
-        with st.expander("Party Graph Details"):
-            st.table(detail_rows, hide_index=True, width="stretch")
-
-
-def render_full_knowledge_graph_view(
-    combined,
-    detail_rows,
-    characters,
-    places,
-    main_character_ids: set[str],
-    main_place_ids: set[str],
-    graphviz_config,
-) -> None:
-    st.graphviz_chart(
-        combined_relationship_dot(
-            full_character_connection_graph(combined),
-            main_character_ids=main_character_ids,
-            main_place_ids=main_place_ids,
-            label_font_color=graph_edge_label_font_color(),
-            graphviz_config=graphviz_config,
-        ),
-        width="stretch",
-    )
-    if detail_rows:
-        with st.expander("Full Graph Details"):
-            st.table(detail_rows, hide_index=True, width="stretch")
+            active_main_tab=active_main_tab,
+        )
 
 
 def load_lore_graphs():
     graphs = []
     for path in lore_markdown_files():
         try:
-            graph = load_or_regenerate_lore_graph(path)
+            document = load_backstory(path, character_id=compact(path.stem))
+            primary_name = session_note_source_name(path) if path_is_session_note(path) else None
+            graphs.append(extract_character_graph(document, primary_name=primary_name))
         except (OSError, ValueError):
             continue
-        if graph is not None:
-            graphs.append(graph)
     return graphs
+
+
+def character_sheet_lore_graphs(graphs):
+    return [
+        graph
+        for graph in graphs
+        if is_character_lore_path(Path(graph.primary_character.source_file))
+    ]
 
 
 def combined_main_tab_nodes(combined, characters, places):
     return graph_view_root_nodes(
         combined,
         [display_character_name(character) for character in characters],
-        [place.name for place in places],
+        [display_place_name(place) for place in places],
     )
-
-
-def combined_graph_root_node_options(nodes):
-    return {node.name: node.id for node in nodes}
 
 
 def derived_lore_relationships(characters, places, graphs) -> list[dict[str, str]]:
@@ -827,15 +657,15 @@ def derived_lore_relationships(characters, places, graphs) -> list[dict[str, str
         for graph in graphs
     }
     known_character_names = [display_character_name(character) for character in characters]
-    known_place_names = [place.name for place in places]
+    known_place_names = known_knowledge_graph_place_names(places)
     relationships: list[dict[str, str]] = []
     for path in lore_markdown_files():
         if is_character_lore_path(path):
             continue
         graph = graph_sources.get(path.resolve())
-        source_id = graph.primary_character.id if graph else compact(path.stem)
+        source_id = graph.primary_character.id if graph and not is_place_lore_path(path) else lore_source_document_id(path)
         source_name = combined_lore_source_name(path, graph)
-        source_type = "place" if is_place_lore_path(path) else "character"
+        source_type = "source_document" if is_place_lore_path(path) else "character"
         try:
             text = read_text(path)
         except OSError:
@@ -860,6 +690,36 @@ def combined_lore_source_name(path: Path, graph) -> str:
     if graph is not None:
         return graph.primary_character.name
     return path.stem.replace("_", " ")
+
+
+def known_knowledge_graph_place_names(places) -> list[str]:
+    names: list[str] = []
+    for place in places:
+        for name in place_name_aliases(place):
+            if name and name not in names:
+                names.append(name)
+    return names
+
+
+def place_name_aliases(place) -> list[str]:
+    display_name = display_place_name(place)
+    aliases = [display_name, place.path.stem.replace("_", " ")]
+    title = markdown_document_title(read_text(place.path))
+    if title:
+        aliases.append(title)
+    for name in list(aliases):
+        stripped = source_title_without_lore_suffix(name)
+        if stripped and stripped not in aliases:
+            aliases.append(stripped)
+    return aliases
+
+
+def source_title_without_lore_suffix(name: str) -> str:
+    return re.sub(r"\s+Lore$", "", name.strip(), flags=re.IGNORECASE)
+
+
+def lore_source_document_id(path: Path) -> str:
+    return f"source_document__{compact(path.stem)}"
 
 
 def is_character_lore_path(path: Path) -> bool:
@@ -915,9 +775,10 @@ def should_skip_lore_scan_path(path: Path) -> bool:
 
 def place_lore_relationships(places) -> list[dict[str, str]]:
     relationships: list[dict[str, str]] = []
+    known_place_keys = {compact(place.name) for place in places}
     for place in places:
         text = read_text(place.path)
-        source_id = compact(place.name)
+        source_id = lore_source_document_id(place.path)
         for line in place_connections_lines(text):
             if ":" in line:
                 name, relationship = line.split(":", 1)
@@ -926,15 +787,16 @@ def place_lore_relationships(places) -> list[dict[str, str]]:
             target_name = name.strip().lstrip("-").strip()
             if not target_name:
                 continue
+            target_type = "place" if compact(target_name) in known_place_keys or looks_like_place_connection(target_name) else "character"
             relationships.append(
                 {
                     "source_id": source_id,
                     "source_name": place.name,
-                    "source_type": "place",
+                    "source_type": "source_document",
                     "source_file": str(place.path),
                     "target_id": compact(target_name),
                     "target_name": target_name,
-                    "target_type": "character",
+                    "target_type": target_type,
                     "relationship": relationship.strip() or "reference",
                     "evidence": line.strip(),
                 }
@@ -956,35 +818,36 @@ def place_connections_lines(text: str) -> list[str]:
     return lines
 
 
-def prepare_pending_character(name: str) -> None:
-    clean_name = clean_display_name(name)
-    st.session_state.pending_character_profile = CharacterProfile(
-        name=clean_name,
-        pronouns="",
-        level="",
-        race="",
-        character_class="",
-        backstory=f"{character_first_name(clean_name) or clean_name}'s story has not been written yet.",
-        summary=f"{clean_name} is a secondary character awaiting a full sheet.",
-    )
-
-
-def prepare_pending_place(name: str) -> None:
-    clean_name = clean_display_name(name)
-    st.session_state.pending_place_profile = PlaceProfile(
-        name=clean_name,
-        place_type="Place",
-        summary=f"{clean_name} is a referenced place awaiting full lore.",
-    )
-
-
-def render_pending_lore_drafts() -> None:
-    if "pending_character_profile" in st.session_state:
-        st.subheader("Draft Character")
-        render_character_creator("graph_pending_character", st.session_state.pending_character_profile)
-    if "pending_place_profile" in st.session_state:
-        st.subheader("Draft Place")
-        render_place_creator_form("graph_pending_place", st.session_state.pending_place_profile)
+def looks_like_place_connection(name: str) -> bool:
+    lowered = name.strip().lower()
+    place_suffixes = {
+        "academy",
+        "bastion",
+        "cavern",
+        "city",
+        "college",
+        "coast",
+        "court",
+        "fortress",
+        "forest",
+        "guild",
+        "hall",
+        "harbor",
+        "keep",
+        "kingdom",
+        "library",
+        "mage college",
+        "monastery",
+        "school",
+        "sea",
+        "shore",
+        "temple",
+        "tower",
+        "tavern",
+        "university",
+        "village",
+    }
+    return any(lowered == suffix or lowered.endswith(f" {suffix}") for suffix in place_suffixes)
 
 
 def connection_rows_for_character(combined, character_id: str) -> list[dict[str, str]]:
@@ -1104,8 +967,8 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
 
         submitted = st.form_submit_button("Create Character", icon=":material/person_add:")
         if submitted:
-            if not all([name.strip(), backstory.strip()]):
-                st.error("Complete Name And Backstory.")
+            if not all([name.strip(), race.strip(), character_class.strip(), backstory.strip()]):
+                st.error("Complete Name, Race, Class, And Backstory.")
                 return
             try:
                 profile = CharacterProfile(
@@ -1130,8 +993,6 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
             except ValueError as exc:
                 st.error(str(exc))
             else:
-                if key_prefix == "graph_pending_character":
-                    st.session_state.pop("pending_character_profile", None)
                 clear_character_creator_state(key_prefix)
                 set_active_character(character)
                 mark_combined_graph_dirty()
@@ -1195,8 +1056,6 @@ def render_place_creator_form(key_prefix: str, draft_profile: PlaceProfile | Non
             except ValueError as exc:
                 st.error(str(exc))
             else:
-                if key_prefix == "graph_pending_place":
-                    st.session_state.pop("pending_place_profile", None)
                 clear_place_creator_state(key_prefix)
                 set_active_place(place)
                 request_main_navigation_tab("Places")
@@ -1384,7 +1243,6 @@ def render_lore_import_tools() -> None:
                 f"Imported {summary.total} Lore File{'s' if summary.total != 1 else ''} "
                 f"({summary.characters} Characters, {summary.places} Places, {summary.session_notes} Session Notes)."
             )
-            regenerate_all_lore_graph_json()
             mark_combined_graph_dirty()
             st.rerun()
         if action_cols[1].button("Create Lore Backup", icon=":material/backup:", key="create_lore_backup"):
@@ -1430,7 +1288,6 @@ def render_lore_backup_restore_dialog(overwrite_existing: bool) -> None:
             f"({summary.characters} Characters, {summary.places} Places, "
             f"{summary.session_notes} Session Notes, {summary.metadata} Metadata Files)."
         )
-        regenerate_all_lore_graph_json()
         mark_combined_graph_dirty()
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
@@ -1457,16 +1314,6 @@ def render_bulk_lore_removal_warning() -> None:
         st.rerun()
     if action_cols[1].button("Cancel", icon=":material/close:", width="stretch"):
         st.rerun()
-
-
-def regenerate_all_lore_graph_json() -> list[str]:
-    failures: list[str] = []
-    for path in lore_markdown_files():
-        try:
-            regenerate_lore_graph(path)
-        except (OSError, ValueError) as exc:
-            failures.append(f"{path.name}: {exc}")
-    return failures
 
 
 @st.dialog("Delete Session Note File?")
@@ -1919,64 +1766,12 @@ def render_character_panel() -> None:
     st.subheader("New Character")
     with st.expander("Create Character", expanded=not characters):
         render_character_creator("main_new_character")
-    if external_character_import_enabled():
-        render_external_character_sheet_import()
-        render_external_character_sheet_list()
-
-
-def render_external_character_sheet_import() -> None:
-    with st.expander("Import External Character Sheet", expanded=False):
-        external_sheet = st.file_uploader(
-            "Character Sheet File",
-            type=["pdf", "png", "jpg", "jpeg", "webp"],
-            key="external_character_sheet_import",
-        )
-        external_sheet_name = st.text_input(
-            "Character Sheet Name",
-            value="",
-            placeholder="Optional label",
-            key="external_character_sheet_name",
-        )
-        if st.button("Import Character Sheet", icon=":material/upload_file:", key="import_external_character_sheet"):
-            if external_sheet is None:
-                st.error("Choose A PDF Or Image Character Sheet Before Importing.")
-                return
-            try:
-                imported = import_external_character_sheet(
-                    external_sheet.name,
-                    external_sheet.getvalue(),
-                    display_name=external_sheet_name,
-                )
-            except ValueError as exc:
-                st.error(str(exc))
-                return
-            request_main_navigation_tab("Characters")
-            mark_combined_graph_dirty()
-            st.session_state["character_panel_status"] = f"Imported External Character Sheet: {imported.path.name}."
-            st.rerun()
-
-
-def render_external_character_sheet_list() -> None:
-    external_sheets = list_external_character_sheets()
-    if not external_sheets:
-        return
-    with st.expander("External Character Sheets", expanded=False):
-        rows = [
-            {
-                "Name": sheet.name,
-                "Format": sheet.path.suffix.lower().lstrip(".").upper(),
-                "File": sheet.path.name,
-            }
-            for sheet in external_sheets
-        ]
-        st.table(rows, hide_index=True, width="stretch")
-
 
 def render_character_editor(character: Character) -> None:
     profile = read_character_profile(character)
     with st.expander("Edit Character", expanded=bool(st.session_state.get(f"character_status_{character.name}", ""))):
         with st.form(f"edit_character_{character.name}"):
-            display_name = st.text_input("Name", value=profile.name)
+            st.text_input("Name", value=profile.name, disabled=True)
             name_cols = st.columns(2)
             first_name = name_cols[0].text_input("First Name", value=profile.first_name)
             family_name = name_cols[1].text_input("Family Name", value=profile.family_name)
@@ -2124,7 +1919,7 @@ def render_character_editor(character: Character) -> None:
                 ):
                     updated_sections = mark_updated_section(updated_sections, "Character Summary")
                 updated = CharacterProfile(
-                    name=display_name.strip() or profile.name,
+                    name=profile.name,
                     pronouns=pronouns.strip(),
                     level=level.strip(),
                     race=race.strip(),
@@ -2198,7 +1993,7 @@ def render_character_info(character: Character, model_config=None) -> None:
     if character_message:
         st.success(character_message)
     render_character_editor(character)
-    # render_relationship_graph(character)
+    render_relationship_graph(character)
 
 
 st.title("Roleplaying Character Creator")
@@ -2230,4 +2025,5 @@ with session_notes_tab:
     import_session_note()
     render_session_notes()
 
-render_combined_character_graph()
+active_main_navigation_tab = st.session_state.get(main_navigation_key, main_navigation_default)
+render_combined_character_graph(active_main_navigation_tab)

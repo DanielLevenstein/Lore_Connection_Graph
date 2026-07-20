@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass, field, replace
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .schema import CharacterGraph
 
@@ -27,6 +27,8 @@ CANONICAL_SESSION_NAME_VARIANTS = {
     "typhon": {"Typheb", "Typhen", "Typhin"},
 }
 MAX_FOCUSED_GRAPH_CONNECTIONS = 6
+EvidenceRewriteClient = Callable[[list[dict[str, str]]], str]
+SERVER_TAG_EVIDENCE_RE = re.compile(r"\bServer Tag:\s*TABLEKEEPER\s*[-\u2013\u2014]")
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,7 @@ class CombinedRelationshipEdge:
     relationship_type: str
     relationship_label: str
     evidence: list[str] = field(default_factory=list)
+    bidirectional: bool = False
 
 
 @dataclass
@@ -64,7 +67,7 @@ class GraphClarityMetric:
 
 def build_combined_character_graph(
     graphs: list[CharacterGraph],
-    place_sources: list[tuple[str, str, str]] | None = None,
+    place_sources: list[tuple[str, str, str] | tuple[str, str, str, str]] | None = None,
     lore_relationships: list[dict[str, str]] | None = None,
 ) -> CombinedCharacterGraph:
     combined = CombinedCharacterGraph()
@@ -113,12 +116,14 @@ def build_combined_character_graph(
                         node_type="family",
                     ),
                 )
-    for place_id, place_name, source_file in place_sources or []:
+    for place_source in place_sources or []:
+        place_id, place_name, source_file = place_source[:3]
+        node_type = place_source[3] if len(place_source) > 3 else "place"
         combined.characters[place_id] = CombinedCharacterNode(
             id=place_id,
             name=display_name(place_name),
             source_file=source_file,
-            node_type="place",
+            node_type=node_type,
         )
     for relationship in lore_relationships or []:
         source_id = relationship.get("source_id", "")
@@ -261,10 +266,14 @@ def combined_primary_display_name(graph: CharacterGraph, session_note_graph: boo
 def combined_primary_node_type(graph: CharacterGraph, session_note_graph: bool) -> str:
     if session_note_graph and is_named_session_source(graph.primary_character.name, graph.primary_character.source_file):
         return "source_document"
+    if is_named_place_source(graph.primary_character.name, graph.primary_character.source_file):
+        return "source_document"
     return "character"
 
 
 def combined_lore_node_type(name: str, source_file: str, fallback_type: str) -> str:
+    if fallback_type == "source_document":
+        return "source_document"
     if is_named_session_source(name, source_file):
         return "source_document"
     return fallback_type
@@ -282,6 +291,14 @@ def is_named_session_source(name: str, source_file: str) -> bool:
         return False
     source_key = compact(source_name)
     return source_key not in {"sessionnote", "sessionnotes"} and compact(name) == source_key
+
+
+def is_named_place_source(name: str, source_file: str) -> bool:
+    normalized_source = source_file.replace("\\", "/").lower()
+    if "/places/" not in normalized_source:
+        return False
+    source_name = normalized_source.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    return compact(name) == compact(source_name)
 
 
 def merge_duplicate_nodes(graph: CombinedCharacterGraph) -> None:
@@ -408,23 +425,39 @@ def one_word_relationship(value: str) -> str:
     return words[0] if words else "reference"
 
 
-def combined_relationship_rows(graph: CombinedCharacterGraph) -> list[dict[str, str]]:
+def combined_relationship_rows(
+    graph: CombinedCharacterGraph,
+    evidence_rewrite_client: EvidenceRewriteClient | None = None,
+) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for edge in graph.edges:
         source = graph.characters.get(edge.source)
         target = graph.characters.get(edge.target)
-        for evidence in edge.evidence or [""]:
+        for evidence in relationship_row_evidence(edge.evidence):
             rows.append(
                 {
                     "Character": source.name if source else edge.source,
-                    "Character Type": source.node_type.title() if source else "",
                     "Relationship": edge.relationship_label,
                     "Connection": target.name if target else edge.target,
                     "Connection Type": target.node_type.title() if target else "",
-                    "Evidence": compact_evidence([evidence]),
+                    "Evidence": compact_evidence([evidence], evidence_rewrite_client=evidence_rewrite_client),
                 }
             )
     return rows
+
+
+def relationship_row_evidence(evidence: list[str]) -> list[str]:
+    if not evidence:
+        return [""]
+    return [
+        item
+        for item in evidence
+        if not is_server_tag_tablekeeper_evidence(item)
+    ]
+
+
+def is_server_tag_tablekeeper_evidence(value: str) -> bool:
+    return bool(SERVER_TAG_EVIDENCE_RE.search(value))
 
 
 def combined_attribute_rows(graphs: list[CharacterGraph]) -> list[dict[str, str]]:
@@ -518,7 +551,7 @@ def graph_view_root_nodes(
 ) -> list[CombinedCharacterNode]:
     main_character_ids = {compact(name) for name in main_character_names or []}
     main_place_ids = {compact(name) for name in main_place_names or []}
-    nodes = [node for node in graph.characters.values() if node.node_type in {"character", "place", "source_document"}]
+    nodes = [node for node in graph.characters.values() if node.node_type in {"character", "place"}]
     main_nodes = [
         node
         for node in nodes
@@ -529,7 +562,7 @@ def graph_view_root_nodes(
                 and (compact(node.name) in main_character_ids or node.id in main_character_ids)
             )
             or (
-                node.node_type in {"place", "source_document"}
+                node.node_type == "place"
                 and (compact(node.name) in main_place_ids or node.id in main_place_ids)
             )
         )
@@ -1021,7 +1054,13 @@ def combined_relationship_dot(
         f"  node [{dot_attributes(graphviz_config.get('node', {}))}];",
         f"  edge [{dot_attributes(edge_graphviz_attributes(graphviz_config, label_font_color))}];",
     ]
-    column_groups = graph_column_groups(display_characters, display_edges, main_character_keys, main_place_keys)
+    column_groups = graph_column_groups(
+        display_characters,
+        display_edges,
+        main_character_keys,
+        main_place_keys,
+        graphviz_config.get("column_layout", "character"),
+    )
     column_by_node = graph_column_by_node(column_groups)
     for character_id, character in display_characters.items():
         node_attributes = graphviz_node_attributes(
@@ -1132,6 +1171,8 @@ def graphviz_node_attributes(
         "color": default_node.get("color", "#94a3b8"),
     }
     overrides = graphviz_config.get("node_type_overrides", {}).get(node_type, {})
+    if source_heading_level(node_type) is not None:
+        overrides = {**source_heading_node_attributes(node_type), **overrides}
     attributes.update(overrides)
     if focused:
         attributes.update(graphviz_config.get("focus_node", {}))
@@ -1140,11 +1181,43 @@ def graphviz_node_attributes(
     return attributes
 
 
+def source_heading_node_attributes(node_type: str) -> dict[str, Any]:
+    level = source_heading_level(node_type) or 1
+    entity_type = source_heading_entity_type(node_type)
+    sizes = {
+        1: {"width": 1.45, "height": 0.58, "fontsize": 11, "margin": "0.10,0.05"},
+        2: {"width": 1.25, "height": 0.5, "fontsize": 10, "margin": "0.08,0.04"},
+        3: {"width": 1.05, "height": 0.42, "fontsize": 9, "margin": "0.06,0.03"},
+    }
+    attributes = {
+        "shape": "folder",
+        "fillcolor": "#fef9c3",
+        **sizes.get(level, sizes[3]),
+    }
+    if entity_type == "place":
+        attributes.update({"shape": "component", "fillcolor": "#dcfce7"})
+    elif entity_type == "group":
+        attributes.update({"shape": "trapezium", "fillcolor": "#e9d5ff"})
+    return attributes
+
+
+def source_heading_level(node_type: str) -> int | None:
+    match = re.fullmatch(r"source_heading(?:_(?:place|group))?(?:_(?P<level>[1-6]))?", node_type)
+    if match is None:
+        return None
+    return int(match.group("level") or 1)
+
+
+def source_heading_entity_type(node_type: str) -> str | None:
+    match = re.fullmatch(r"source_heading_(?P<entity>place|group)(?:_[1-6])?", node_type)
+    return match.group("entity") if match else None
+
+
 def dot_attributes(attributes: dict[str, Any]) -> str:
     return ", ".join(
         f'{escape_dot(str(key))}={dot_attribute_value(str(key), value)}'
         for key, value in attributes.items()
-        if value is not None and key not in {"vertical_rankdir"}
+        if value is not None and key not in {"vertical_rankdir", "column_layout"}
     )
 
 
@@ -1188,9 +1261,10 @@ def edge_dot_statement(
     nodes: dict[str, CombinedCharacterNode],
     constraint: str,
 ) -> str:
+    direction = ', dir="both"' if edge.bidirectional else ""
     return (
         f'  "{escape_dot(edge.source)}" -> "{escape_dot(edge.target)}" '
-        f'[{edge_label_attributes(edge.relationship_label)}{constraint}];'
+        f'[{edge_label_attributes(edge.relationship_label)}{direction}{constraint}];'
     )
 
 
@@ -1199,15 +1273,16 @@ def graph_column_groups(
     edges: list[CombinedRelationshipEdge],
     main_character_keys: set[str],
     main_place_keys: set[str],
+    column_layout: str = "character",
 ) -> dict[str, list[str]]:
-    groups = {
-        "column_0_family_names": [],
-        "column_1_main_characters": [],
-        "column_2_secondary_characters": [],
-        "column_3_places": [],
-    }
+    groups = graph_column_group_template(column_layout)
     weights = node_mention_weights(edges)
+    connection_counts = node_connection_counts(edges)
     for node_id, node in nodes.items():
+        if is_markdown_lore_column_layout(column_layout):
+            group_name = markdown_lore_column_group(node, column_layout)
+            groups[group_name].append(node_id)
+            continue
         key = compact(node.name)
         if node.node_type == "family":
             groups["column_0_family_names"].append(node_id)
@@ -1224,24 +1299,113 @@ def graph_column_groups(
         else:
             groups["column_2_secondary_characters"].append(node_id)
     for group_name, group_ids in groups.items():
-        group_ids.sort(
-            key=lambda current_id: (
-                graph_column_node_type_rank(group_name, nodes[current_id].node_type),
-                0 if compact(nodes[current_id].name) in main_place_keys or compact(current_id) in main_place_keys else 1,
-                -weights.get(current_id, 0),
-                nodes[current_id].name.lower(),
+        if is_markdown_lore_column_layout(column_layout):
+            group_ids.sort(
+                key=lambda current_id: (
+                    -connection_counts.get(current_id, 0),
+                    graph_column_node_type_rank(group_name, nodes[current_id].node_type),
+                    nodes[current_id].name.lower(),
+                )
             )
-        )
+        else:
+            group_ids.sort(
+                key=lambda current_id: (
+                    graph_column_node_type_rank(group_name, nodes[current_id].node_type),
+                    0 if compact(nodes[current_id].name) in main_place_keys or compact(current_id) in main_place_keys else 1,
+                    -weights.get(current_id, 0),
+                    nodes[current_id].name.lower(),
+                )
+            )
     return groups
 
 
+def graph_column_group_template(column_layout: str) -> dict[str, list[str]]:
+    if is_markdown_lore_column_layout(column_layout):
+        return {
+            markdown_lore_column_0_name(column_layout): [],
+            "column_1_markdown_heading_1": [],
+            "column_2_markdown_heading_2": [],
+            "column_3_markdown_heading_3": [],
+            "column_4_character_connections": [],
+        }
+    return {
+        "column_0_family_names": [],
+        "column_1_main_characters": [],
+        "column_2_secondary_characters": [],
+        "column_3_places": [],
+    }
+
+
+def markdown_lore_column_0_name(column_layout: str) -> str:
+    if column_layout == "place_lore_directory":
+        return "column_0_source_documents"
+    if column_layout in {"session_note_lore", "session_note_lore_directory"}:
+        return "column_0_source_documents_groups"
+    return "column_0_source_documents_places"
+
+
+def markdown_lore_column_group(node: CombinedCharacterNode, column_layout: str) -> str:
+    if node.node_type == "source_document":
+        return markdown_lore_column_0_name(column_layout)
+    if column_layout == "place_lore_directory":
+        if node.node_type == "place":
+            return "column_1_markdown_heading_1"
+        if node.node_type == "group":
+            return "column_4_character_connections"
+        heading_level = source_heading_level(node.node_type)
+        if heading_level is not None:
+            heading_level = min(3, heading_level)
+            return f"column_{heading_level}_markdown_heading_{heading_level}"
+        if node.node_type == "character":
+            return "column_4_character_connections"
+        return "column_4_character_connections"
+    if column_layout == "session_note_lore_directory":
+        if node.node_type == "group":
+            return "column_0_source_documents_groups"
+        if node.node_type == "place":
+            return "column_1_markdown_heading_1"
+        heading_level = source_heading_level(node.node_type)
+        if heading_level is not None:
+            heading_level = min(3, heading_level)
+            return f"column_{heading_level}_markdown_heading_{heading_level}"
+        if node.node_type == "character":
+            return "column_4_character_connections"
+        return "column_4_character_connections"
+    if column_layout == "place_lore" and node.node_type == "place":
+        return "column_0_source_documents_places"
+    if column_layout == "place_lore" and node.node_type == "group":
+        return "column_0_source_documents_places"
+    if column_layout == "session_note_lore" and node.node_type == "place":
+        return "column_0_source_documents_groups"
+    if column_layout == "session_note_lore" and node.node_type == "group":
+        return "column_0_source_documents_groups"
+    heading_level = source_heading_level(node.node_type)
+    if heading_level is not None:
+        heading_level = min(3, heading_level)
+        return f"column_{heading_level}_markdown_heading_{heading_level}"
+    if node.node_type in {"character", "place"}:
+        return "column_4_character_connections"
+    return "column_4_character_connections"
+
+
 def graph_column_node_type_rank(group_name: str, node_type: str) -> int:
-    if group_name == "column_0_family_names":
+    if group_name in {"column_0_family_names", "column_0_source_documents", "column_0_source_documents_places", "column_0_source_documents_groups"}:
+        entity_type = source_heading_entity_type(node_type)
         return {
             "source_document": 0,
-            "family": 1,
-            "group": 2,
-        }.get(node_type, 3)
+            "place": 1,
+            "group": 1,
+            "family": 2,
+        }.get(entity_type or node_type, 3)
+    if group_name in {
+        "column_1_main_characters",
+        "column_1_markdown_heading_1",
+        "column_2_markdown_heading_2",
+        "column_3_markdown_heading_3",
+    }:
+        level = source_heading_level(node_type)
+        if level is not None:
+            return level
     return 0
 
 
@@ -1260,11 +1424,54 @@ def edge_constraint_attribute(
     vertical_layout: bool,
     broad_source: str,
 ) -> str:
+    attributes = []
     if vertical_layout and edge.source == broad_source:
-        return ', constraint="false"'
+        attributes.append('constraint="false"')
     if column_layout_requested and column_by_node.get(edge.source) == column_by_node.get(edge.target):
-        return ', constraint="false"'
-    return ""
+        attributes.append('constraint="false"')
+    if column_layout_requested:
+        source_column = column_by_node.get(edge.source)
+        target_column = column_by_node.get(edge.target)
+        if source_column in {
+            "column_0_family_names",
+            "column_0_source_documents",
+            "column_0_source_documents_places",
+            "column_0_source_documents_groups",
+        } and target_column in {
+            "column_1_markdown_heading_1",
+            "column_2_markdown_heading_2",
+            "column_3_markdown_heading_3",
+            "column_2_secondary_characters",
+            "column_3_places",
+            "column_4_character_connections",
+        }:
+            attributes.extend(["tailport=e", "headport=w"])
+        elif target_column in {
+            "column_0_family_names",
+            "column_0_source_documents",
+            "column_0_source_documents_places",
+            "column_0_source_documents_groups",
+        } and source_column in {
+            "column_1_markdown_heading_1",
+            "column_2_markdown_heading_2",
+            "column_3_markdown_heading_3",
+            "column_2_secondary_characters",
+            "column_3_places",
+            "column_4_character_connections",
+        }:
+            attributes.extend(["tailport=w", "headport=e"])
+    if not attributes:
+        return ""
+    return ", " + ", ".join(dict.fromkeys(attributes))
+
+
+def is_markdown_lore_column_layout(column_layout: str) -> bool:
+    return column_layout in {
+        "place_lore",
+        "place_lore_directory",
+        "session_note_lore",
+        "session_note_lore_directory",
+    }
 
 
 def prominent_relationship_edges(edges: list[CombinedRelationshipEdge]) -> list[CombinedRelationshipEdge]:
@@ -1296,9 +1503,54 @@ def prominent_relationship_edges(edges: list[CombinedRelationshipEdge]) -> list[
                 relationship_type=prominent.relationship_type,
                 relationship_label=prominent.relationship_label,
                 evidence=evidence,
+                bidirectional=prominent.bidirectional,
             )
         )
-    return sorted(collapsed, key=lambda edge: first_seen[(edge.source, edge.target)])
+    return reciprocal_relationship_edges(collapsed, first_seen)
+
+
+def reciprocal_relationship_edges(
+    edges: list[CombinedRelationshipEdge],
+    first_seen: dict[tuple[str, str], int],
+) -> list[CombinedRelationshipEdge]:
+    grouped: dict[frozenset[str], list[CombinedRelationshipEdge]] = {}
+    for edge in edges:
+        grouped.setdefault(frozenset({edge.source, edge.target}), []).append(edge)
+    collapsed: list[CombinedRelationshipEdge] = []
+    reciprocal_first_seen: dict[tuple[str, str], int] = {}
+    for edge_group in grouped.values():
+        if len(edge_group) == 1:
+            edge = edge_group[0]
+            collapsed.append(edge)
+            reciprocal_first_seen[(edge.source, edge.target)] = first_seen[(edge.source, edge.target)]
+            continue
+        ordered = sorted(edge_group, key=lambda edge: first_seen[(edge.source, edge.target)])
+        evidence: list[str] = []
+        labels: list[str] = []
+        relationship_types: list[str] = []
+        for edge in ordered:
+            if edge.relationship_label not in labels:
+                labels.append(edge.relationship_label)
+            if edge.relationship_type not in relationship_types:
+                relationship_types.append(edge.relationship_type)
+            for item in edge.evidence:
+                if item and item not in evidence:
+                    evidence.append(item)
+        source_edge = ordered[0]
+        collapsed.append(
+            CombinedRelationshipEdge(
+                source=source_edge.source,
+                target=source_edge.target,
+                relationship_type=" / ".join(relationship_types),
+                relationship_label=" / ".join(labels),
+                evidence=evidence,
+                bidirectional=True,
+            )
+        )
+        reciprocal_first_seen[(source_edge.source, source_edge.target)] = first_seen[
+            (source_edge.source, source_edge.target)
+        ]
+    return sorted(collapsed, key=lambda edge: reciprocal_first_seen[(edge.source, edge.target)])
 
 
 def node_mention_weights(edges: list[CombinedRelationshipEdge]) -> dict[str, int]:
@@ -1308,6 +1560,14 @@ def node_mention_weights(edges: list[CombinedRelationshipEdge]) -> dict[str, int
         weights[edge.source] = weights.get(edge.source, 0) + weight
         weights[edge.target] = weights.get(edge.target, 0) + weight
     return weights
+
+
+def node_connection_counts(edges: list[CombinedRelationshipEdge]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for edge in edges:
+        counts[edge.source] = counts.get(edge.source, 0) + 1
+        counts[edge.target] = counts.get(edge.target, 0) + 1
+    return counts
 
 
 def graph_column_rank_lines(column_groups: dict[str, list[str]]) -> list[str]:
@@ -1358,12 +1618,126 @@ def display_name(value: str) -> str:
     return value.replace("_", " ")
 
 
-def compact_evidence(values: list[str]) -> str:
-    return " ".join(clean_evidence_text(value) for value in values if value.strip())
+def compact_evidence(
+    values: list[str],
+    evidence_rewrite_client: EvidenceRewriteClient | None = None,
+) -> str:
+    return " ".join(
+        polished_evidence_text(value, evidence_rewrite_client=evidence_rewrite_client)
+        for value in values
+        if value.strip()
+    ).strip()
 
 
 def clean_evidence_text(value: str) -> str:
-    return re.sub(r"^\s*(?:#{1,6}|[-*+]|[0-9]+[.)])\s+", "", " ".join(value.split()))
+    return deterministic_evidence_sentence(value)
+
+
+def polished_evidence_text(
+    value: str,
+    evidence_rewrite_client: EvidenceRewriteClient | None = None,
+) -> str:
+    cleaned = deterministic_evidence_sentence(value)
+    if not cleaned or evidence_rewrite_client is None:
+        return cleaned
+    response = evidence_rewrite_client(evidence_rewrite_messages(cleaned))
+    candidate = deterministic_evidence_sentence(response)
+    if not candidate or not evidence_rewrite_preserves_required_terms(cleaned, candidate):
+        return cleaned
+    return candidate
+
+
+def evidence_rewrite_messages(evidence: str) -> list[dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "Polish roleplaying session-note evidence into one grammatical sentence. "
+                "Use only the supplied evidence. Preserve names, places, groups, dates, and concrete facts."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Evidence: {evidence}\n\nReturn one sentence only.",
+        },
+    ]
+
+
+def evidence_rewrite_preserves_required_terms(source: str, candidate: str) -> bool:
+    source_terms = set(re.findall(r"\b[A-Z][A-Za-z0-9]*(?:\s+[A-Z][A-Za-z0-9]*)*\b", source))
+    candidate_lower = candidate.lower()
+    return all(term.lower() in candidate_lower for term in source_terms)
+
+
+def deterministic_evidence_sentence(value: str) -> str:
+    text = " ".join(value.strip().split())
+    if not text:
+        return ""
+    text = strip_markdown_prefix(text)
+    text = strip_inline_markdown(text)
+    text = humanize_markdown_table_row(text)
+    if not text:
+        return ""
+    text = humanize_colon_fragment(text)
+    text = text.replace("_", " ")
+    text = " ".join(text.split())
+    text = capitalize_sentence_start(text)
+    if text and not re.search(r'[.!?][)"\']?$', text):
+        text += "."
+    return text
+
+
+def strip_markdown_prefix(text: str) -> str:
+    previous = ""
+    while text != previous:
+        previous = text
+        text = re.sub(r"^\s*(?:#{1,6}|[-*+]|[0-9]+[.)])\s+", "", text).strip()
+    return text.rstrip(":").strip() if re.fullmatch(r"Session\s+\d+:?", text, re.IGNORECASE) else text
+
+
+def strip_inline_markdown(text: str) -> str:
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = re.sub(r"__([^_]+)__", r"\1", text)
+    text = re.sub(r"\*([^*]+)\*", r"\1", text)
+    return text
+
+
+def humanize_markdown_table_row(text: str) -> str:
+    if re.fullmatch(r"\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)+\|?", text):
+        return ""
+    if not (text.startswith("|") and text.endswith("|")):
+        return text
+    cells = [cell.strip() for cell in text.strip("|").split("|") if cell.strip()]
+    if not cells:
+        return ""
+    if len(cells) == 1:
+        return cells[0]
+    if len(cells) == 2:
+        return f"{cells[0]} is {cells[1].lower()}"
+    return ", ".join(cells[:-1]) + f", and {cells[-1].lower()}"
+
+
+def humanize_colon_fragment(text: str) -> str:
+    if re.fullmatch(r"Session\s+\d+", text, re.IGNORECASE):
+        return f"{text} is referenced in the source notes"
+    match = re.fullmatch(r"([^:]{2,80}):\s*([^:]{2,120})", text)
+    if not match:
+        return text
+    subject = match.group(1).strip()
+    phrase = match.group(2).strip()
+    if not subject or not phrase:
+        return text
+    if phrase.istitle():
+        phrase = phrase.lower()
+    return f"{subject} {phrase[:1].lower()}{phrase[1:]}"
+
+
+def capitalize_sentence_start(text: str) -> str:
+    for index, char in enumerate(text):
+        if char.isalpha():
+            return text[:index] + char.upper() + text[index + 1 :]
+    return text
 
 
 def escape_dot(value: str) -> str:
