@@ -6,11 +6,7 @@ Character rewrites are an explicit, player-requested editing aid for improving a
 
 ## Current Status
 
-The UI already exposes rewrite actions behind:
-
-```text
-LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES=1
-```
+The UI exposes rewrite actions directly in the character editor.
 
 The buttons are:
 
@@ -19,35 +15,47 @@ The buttons are:
 - `Rewrite Backstory`
 - `Undo Changes`
 
-`Undo Changes` remains available even when graph rewrite generation is disabled. The undo stack is recursive in the practical UI sense: each saved mutation pushes a snapshot, and repeated undo actions walk backward through prior snapshots.
+`Undo Changes` remains available alongside rewrite actions. The undo stack is recursive in the practical UI sense: each saved mutation pushes a snapshot, and repeated undo actions walk backward through prior snapshots.
 
 ## Rewrite Engine
 
-Use the deterministic graph rewrite engine that ships in the codebase. Do not call a language model that is external to the repository release, including downloaded model artifacts that external users may not have access to.
+Use a small local model through a narrow adapter, with the deterministic graph rewrite engine retained as the fallback and test oracle. The previous LangChain/LangGraph rewrite path underperformed the earlier graph-backed prose path, so the next implementation should remove that extra orchestration layer and call one local inference backend directly.
 
 Release behavior:
 
-- Engine: `deterministic-graph-rewrite`
-- Inputs: authored character profile fields plus knowledge graph characters, places, attributes, relationships, and evidence.
+- Preferred model: `Qwen/Qwen2.5-0.5B-Instruct-GGUF` with `Q4_K_M`.
+- Preferred runner: app-managed `llama cli` subprocess.
+- Fallback engine: `deterministic-graph-rewrite`.
+- Inputs: authored character profile fields plus compact knowledge graph segments for the character's identity, places, relationships, drives, alliances, enemies, traits, and evidence.
 - Role: generate compact summaries and backstory drafts from source-backed graph facts.
 
-This is the best default for the current release because it is offline, fixture-testable, and available to every user who has the codebase.
+The selected model is Qwen2.5 0.5B Q4_K_M because it provides the fastest practical Qwen-family local baseline after parser and prompt-boundary fixes. SmolLM2 135M and 360M made prompt evaluation faster, but both cut off prose mid-sentence or repeated themselves on the Orin fixture. TinyLlama produced real prose, but copied fact-line wording and repeated itself. The larger Qwen 1.5B model remains a comparison candidate when the smaller model fails semantic gates.
 
-Future model-backed rewrites can be reconsidered only when the model is a codebase-owned, redistributable dependency with deterministic tests and no hidden download requirement.
+This model must be treated as optional runtime data, not committed repository content. The app should report missing artifact/download status visibly and keep the current character fields unchanged until a clean candidate is produced and accepted.
 
-The graph rewrite output should be labeled as graph-backed generated text and should still preserve original sections for review before acceptance.
+The deterministic fallback remains important because it is offline, fixture-testable, and available to every user who has the codebase. Unit tests should inject fake rewrite clients and noisy model-output fixtures rather than invoking a real downloaded model.
+
+The model rewrite output should be labeled as graph-backed generated text and should still preserve original sections for review before acceptance.
+
+References:
+
+- Qwen 0.5B GGUF model card: <https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF>
+- Qwen 1.5B Q4_K_M GGUF model card, retained as a larger comparison: <https://huggingface.co/JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF>
+- TinyLlama 1.1B Chat GGUF model card, retained as a fallback comparison: <https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF>
+- SmolLM2 360M GGUF model card, rejected for truncated prose: <https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF>
+- SmolLM2 135M GGUF model card, rejected for repetition and truncated prose: <https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF>
+- llama.cpp install docs: <https://llama.cpp/>
 
 ## Rewrite Context
 
-Every rewrite request should combine authored prose and derived graph fields. The rewrite context should include:
+Every rewrite request should combine authored prose and derived graph fields, but the model prompt should stay small. The prompt should not dump the full graph or the full character sheet when a compact source packet will do the job. The rewrite context should include:
 
 - Character name, first name, family name, race, class, level, pronouns.
-- Current summary and current backstory.
-- Preserved original summary or backstory when the current section is already auto-generated.
+- Current target section in truncated form.
+- Preserved original target section in truncated form when the current section is already auto-generated.
 - Character details: drives, alliances, enemies, home/origin, gender, custom stat fields.
-- Knowledge graph attributes, places, and relationships.
-- Combined graph connections when available.
-- Source evidence for graph facts.
+- Knowledge graph segments associated with the character: identity, origin, places, drives, alliances, enemies, traits, and story relationships.
+- Short source evidence for each graph segment when available.
 - The requested operation: populate blank summary, repopulate summary, or rewrite backstory.
 
 The prompt should clearly rank source authority:
@@ -58,6 +66,85 @@ The prompt should clearly rank source authority:
 4. Inferred graph relationships.
 
 When sources conflict, the rewrite should preserve authored prose and avoid inventing a correction.
+
+## Local Model Adapter
+
+Model invocation should live behind a small adapter with this behavioral contract:
+
+- Accept structured chat messages from `rewrite_prompt`.
+- Ensure the configured model artifact is present, downloading it only through the approved model-download path.
+- Surface download and generation status to Streamlit without mixing status text into editable character fields.
+- Run inference through an app-managed `llama cli` subprocess.
+- Return only the model's candidate prose to the rewrite pipeline.
+- Raise a clear `RuntimeError` when the Python runtime dependency, model artifact, runner initialization, or output contract fails.
+
+The adapter must not expose LangChain, LangGraph, raw subprocess details, or download implementation details to the Streamlit form handler. Streamlit should call the same high-level `graph_generated_summary` and `graph_generated_backstory` functions with a configured local rewrite client.
+
+The first implementation should prefer explicit configuration constants over broad settings machinery:
+
+- Model id: `Qwen/Qwen2.5-0.5B-Instruct-GGUF`.
+- Quantization: `Q4_K_M`.
+- Prompt version: `character-rewrite-v7-local-qwen-0.5b-writing-quality`.
+- Output mode: summary or backstory.
+- Max generated tokens: short bounded values appropriate to each mode.
+- Temperature: low, deterministic prose generation.
+- Context window, batch size, and thread count: conservative defaults chosen to avoid container memory spikes.
+
+If the selected Qwen 0.5B model still fails semantic gates on the fixture set after parser and graph-segment prompt cleanup, the next design review should compare TinyLlama or a larger Qwen candidate with the same compact prompt. The implementation should not silently promote to a larger model.
+
+## Service-Free Model Execution
+
+The character rewrite feature must run without requiring the user to start, monitor, or stop an external model service. The Streamlit app should own the entire one-shot execution lifecycle for each rewrite request.
+
+### Runner options:
+
+1. App-managed `llama cli` subprocess.
+2. App-managed Python worker process using `llama_cpp`.
+3. LangChain/LangGraph orchestration around a local model.
+4. In-process `llama_cpp` generation inside Streamlit.
+
+The preferred implementation is option 1. It avoids the `llama-cpp-python` crashes seen during local validation, avoids loading GGUF weights into the long-running Streamlit process, and still does not require a user-managed model service. The app starts `llama cli` for a rewrite request, captures stdout and stderr, parses timing metadata, and lets the process exit.
+
+Option 2 was tested and rejected for this pass because `llama-cpp-python` crashed the Python process while loading the selected GGUF model. Option 3 is rejected because the previous LangChain/LangGraph rewrite version performed worse than the earlier graph-backed path while adding orchestration complexity that the app does not need. Option 4 is rejected because the app process can retain model memory after generation or crash with the Python binding.
+Option 4 is rejected because it would require the user to install a separate dependency and would we would have to manage the session starting and stopping code.
+
+### Execution model:
+
+- Build the prompt and model invocation arguments in the Streamlit app process.
+- Check whether the configured GGUF artifact is available in the local model cache.
+- If the artifact is missing, display a Streamlit status area that explains the first-run download and streams coarse progress when available.
+- Start a short-lived `llama cli` process for the rewrite request.
+- Pass the local GGUF path and prompt with explicit command arguments.
+- Capture stdout as untrusted candidate prose.
+- Capture stderr as diagnostics and timing metadata.
+- Use explicit arguments: bounded context, bounded generation tokens, low temperature, conservative batch size, and conservative thread count.
+- Return structured JSON containing either candidate text plus metadata or a typed error.
+- Treat the returned candidate text as untrusted model output until it passes cleanup and validation.
+- Return the cleaned candidate to the rewrite pipeline, or raise a user-visible error while leaving character fields unchanged.
+
+This is an app-owned CLI adapter, not a server adapter. The implementation should not call `llama serve` and should not require an OpenAI-compatible localhost endpoint. It does require the user to install the `llama` CLI once; README should document that dependency.
+
+### Runtime and lifecycle rules:
+
+- Detect `llama` with a lightweight runtime check before model-backed rewrites.
+- Use a per-model lock so two rewrite clicks cannot download or initialize the same model artifact at the same time.
+- Disable or ignore duplicate rewrite submissions while a generation is in progress for the active character.
+- Do not load the GGUF model in the Streamlit process.
+- Kill the CLI process on timeout or cancellation.
+- Do not read candidate prose from stderr. stderr is diagnostics only.
+- Use conservative memory settings first: small context window, small batch size, no memory locking by default, and no GPU offload unless explicitly added later.
+- Do not persist partial output from interrupted, failed, or timed-out generation.
+- Record non-sensitive metadata for accepted rewrites: model id, quantization, prompt version, source hash, and generation timestamp.
+
+The app needs readiness checks that can distinguish "llama CLI missing", "model artifact not downloaded yet", "CLI failed to start", "model failed to initialize", and "generation failed." Add a small model-lifecycle helper whose public contract is limited to `is_runtime_available`, `is_model_available`, `ensure_model_available`, and `generate`.
+
+### Docker safety rules:
+
+- Do not load the model at app import time.
+- Prefer the short-lived CLI process so model memory is released when generation ends.
+- Keep model-backed rewrite tests fake-client based by default so CI and Docker smoke tests do not load GGUF weights.
+- Add one opt-in integration test for local machines that have the model artifact and enough memory.
+- If `llama` is unavailable, the app should continue to run with deterministic graph rewrites and show model-backed rewrites as unavailable.
 
 ## Attribute Graph Overrides
 
@@ -102,9 +189,21 @@ The app should reject or warn on output that:
 - Contains a full character sheet instead of the requested section.
 - Omits all source-backed relationships when the request was specifically graph-driven.
 
+Raw model output must be sanitized before persistence. The cleaner should strip or reject:
+
+- Loader and download text if it leaks through the backend.
+- llama.cpp diagnostics if they leak through the backend.
+- Prompt echoes or chat-template fragments.
+- Token timing and performance summaries.
+- Markdown fences around an otherwise valid section.
+- Labels such as `Summary:` or `Backstory:`.
+- Empty or truncated fragments.
+
+No raw backend diagnostic line may be saved into `Character Summary`, `Character Backstory`, `PROFILE.json`, or the semantic report candidate sections.
+
 ## Semantic Quality Gate
 
-The first release gate uses a deterministic local semantic scorer rather than a live model judge. The scorer compares a candidate rewrite against a source context made from:
+The release gate uses a deterministic local semantic scorer rather than a live model judge. The scorer compares a candidate rewrite against a source context made from:
 
 - Existing authored summary and backstory.
 - Character stats and details.
@@ -116,7 +215,15 @@ The score combines:
 - Required concept coverage for core facts such as race, class, drives, places, and supported relationships.
 - Concision, because a summary should improve a bloated source by preserving facts in less space.
 
-This gate is intentionally modest. It catches regressions where generated summaries ignore graph facts or simply copy the original backstory, while remaining fast and offline-friendly. A future model-backed evaluator can replace the hash embedder behind the same `candidate + source_context + required_terms -> score` shape.
+This gate is intentionally modest. It catches regressions where generated summaries ignore graph facts, simply copy the original backstory, or lose the profile-plus-graph signals that made the deterministic rewrite score well. A future model-backed evaluator can replace the hash embedder behind the same `candidate + source_context + required_terms -> score` shape.
+
+The semantic improvement report should compare:
+
+- Newest Model Rewrite candidate.
+- Existing generated section.
+- Original authored backstory.
+
+The model-backed path should remain disabled for save if the model candidate does not beat the original authored section and does not preserve required terms. The UI may still display the failure reason, but it should keep the existing sheet unchanged.
 
 ## Save Semantics
 
@@ -137,7 +244,7 @@ Undo should:
 - Restore the most recent snapshot.
 - Pop only one snapshot per click.
 - Regenerate the graph after restoring the sheet.
-- Remain visible and usable whether or not `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES` is enabled.
+- Remain visible and usable alongside rewrite actions.
 
 Future durable undo can store snapshots under `world_building/lore/character_sheets/<character>/undo/`, but the current session stack is sufficient for the first implementation.
 
@@ -148,7 +255,7 @@ The editor should show both versions when originals exist:
 - Current or generated summary beside original summary.
 - Current or generated backstory beside original backstory.
 
-Rewrite buttons should appear only when `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES=1`. Save and undo should always remain available.
+Rewrite buttons should always appear in the character editor. Save and undo should always remain available.
 
 ## Test Plan
 
@@ -160,6 +267,9 @@ Unit tests should cover:
 - Rewrite save semantics.
 - Repeated undo stack behavior through storage-independent helpers.
 - Rewrite/context construction for graph-backed summaries and backstories.
+- Local model adapter lifecycle with missing `llama` CLI, missing artifact, available artifact, failed initialization, failed generation, and empty output.
+- Model output cleanup for leaked diagnostics, prompt echoes, performance lines, Markdown fences, and valid prose.
+- Semantic report formatting for local model, existing generated, and original backstory candidates.
 
 End-to-end tests should cover:
 
@@ -169,3 +279,4 @@ End-to-end tests should cover:
 - Undo restores the previous Markdown sheet.
 - A semantic-aware comparison where the graph-generated Orin Nightbloom summary scores higher than the original generated backstory.
 - Legacy `Autogenerated` title markers are hidden from the character selector and heading.
+- Visible status when a model artifact must be downloaded before the first rewrite.

@@ -31,11 +31,11 @@ The new session-note graph is much easier to read, and it satisfies the one-scre
 
 The app treats characters and places as authored lore entities:
 
-- `local_chatbot.storage.list_characters()` reads character Markdown files from `CHARACTERS_DIR`, either as `<name>.md` files or directories containing `BACKSTORY.md`.
-- `local_chatbot.storage.create_character()` writes a character sheet and regenerates that character's graph JSON.
-- `local_chatbot.character_generator.RandomCharacterGenerator` creates deterministic character profiles, then saves them through `create_generated_character()`.
-- `local_chatbot.storage.list_places()` reads place Markdown files from `PLACES_DIR`.
-- `local_chatbot.storage.create_place()` and `create_place_markdown()` write place Markdown files.
+- `language_model.storage.list_characters()` reads character Markdown files from `CHARACTERS_DIR`, either as `<name>.md` files or directories containing `BACKSTORY.md`.
+- `language_model.storage.create_character()` writes a character sheet and regenerates that character's graph JSON.
+- `language_model.character_generator.RandomCharacterGenerator` creates deterministic character profiles, then saves them through `create_generated_character()`.
+- `language_model.storage.list_places()` reads place Markdown files from `PLACES_DIR`.
+- `language_model.storage.create_place()` and `create_place_markdown()` write place Markdown files.
 
 That means the combined graph should ideally promote entities that can become real character or place files. Session-note prose should not directly create dozens of visible graph nodes from capitalized fragments.
 

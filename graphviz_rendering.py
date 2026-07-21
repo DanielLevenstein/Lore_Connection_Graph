@@ -169,6 +169,7 @@ def render_knowledge_graph_tabs(
                         label_font_color=label_font_color,
                         title=SESSION_FILE_VIEW_TAB,
                         key="session_lore_file_view_source_file",
+                        hide_source_document_roots=True,
                     )
                 else:
                     render_place_file_view_tab(
@@ -347,7 +348,10 @@ def render_place_heading_view_tab(
     hide_source_document_roots=True,
 ) -> None:
     st.subheader(title)
-    projected_graph = place_lore_graph(combined)
+    projected_graph = markdown_header_lore_graph(
+        combined,
+        hide_source_document_roots=hide_source_document_roots,
+    )
     selected_heading_id = render_lore_heading_filter(
         combined,
         source_predicate=is_place_source_document_node,
@@ -358,7 +362,11 @@ def render_place_heading_view_tab(
     if selected_heading_id is None:
         st.info("Add Markdown Headings To Place Lore To Use Section View.")
         return
-    place_graph = place_lore_graph(combined, heading_id=selected_heading_id)
+    place_graph = markdown_header_lore_graph(
+        combined,
+        heading_id=selected_heading_id,
+        hide_source_document_roots=hide_source_document_roots,
+    )
     if not place_graph.characters:
         st.info("No Place Lore Connections Were Found For This Heading.")
         return
@@ -391,6 +399,7 @@ def render_lore_graph(
         graphviz_config=graphviz_config,
         relationship_rows=place_lore_connection_rows(lore_graph),
         lore_note_rows=note_rows,
+        hide_source_document_roots=hide_source_document_roots
     )
 
 
@@ -411,7 +420,7 @@ def render_session_file_view_tab(
         label="Session Note File",
         key=key,
     )
-    session_graph = session_note_lore_graph(
+    session_graph = markdown_header_lore_graph(
         combined,
         source_file=selected_source_file,
         fanout_linked_characters=True,
@@ -441,7 +450,7 @@ def render_session_heading_view_tab(
     show_lore_notes: bool = True,
 ) -> None:
     st.subheader(title)
-    projected_graph = session_note_lore_graph(combined)
+    projected_graph = markdown_header_lore_graph(combined)
     selected_heading_id = render_lore_heading_filter(
         combined,
         source_predicate=is_session_note_node,
@@ -452,7 +461,7 @@ def render_session_heading_view_tab(
     if selected_heading_id is None:
         st.info("Add Markdown Headings To Session Notes To Use Section View.")
         return
-    session_graph = session_note_lore_graph(combined, heading_id=selected_heading_id)
+    session_graph = markdown_header_lore_graph(combined, heading_id=selected_heading_id)
     if not session_graph.characters:
         st.info("No Session Note Connections Were Found For This Heading.")
         return
@@ -547,17 +556,13 @@ def render_character_data_only_graph_view(
     label_font_color: str,
     graphviz_config: dict[str, Any],
 ) -> None:
-    st.graphviz_chart(
-        combined_relationship_dot(
-            full_character_connection_graph(combined),
-            main_character_ids=main_character_ids,
-            label_font_color=label_font_color,
-            graphviz_config=graphviz_config,
-        ),
-        width="stretch",
+    render_relationship_graph(
+        full_character_connection_graph(combined),
+        main_character_ids=main_character_ids,
+        label_font_color=label_font_color,
+        graphviz_config=graphviz_config,
+        relationship_rows=detail_rows,
     )
-    st.subheader("Connections")
-    st.table(detail_rows, hide_index=True, width="stretch")
 
 
 def render_structured_knowledge_view(
@@ -585,6 +590,7 @@ def render_relationship_graph(
     graphviz_config: dict[str, Any],
     relationship_rows: list[dict[str, str]] | None = None,
     lore_note_rows: list[dict[str, str]] | None = None,
+    hide_source_document_roots: bool = False,
 ) -> None:
     st.graphviz_chart(
         combined_relationship_dot(
@@ -593,6 +599,7 @@ def render_relationship_graph(
             main_place_ids=main_place_ids,
             label_font_color=label_font_color,
             graphviz_config=graphviz_config,
+            hide_source_document_roots=hide_source_document_roots
         ),
         width="stretch",
     )
@@ -867,7 +874,7 @@ def place_lore_graph(
     return filter_lore_graph_by_heading(projected_graph, heading_id) if heading_id is not None else projected_graph
 
 
-def session_note_lore_graph(
+def markdown_header_lore_graph(
     graph: CombinedCharacterGraph,
     *,
     source_file: str | None = None,
@@ -990,6 +997,13 @@ def graph_without_source_document_roots(graph: CombinedCharacterGraph) -> Combin
             if edge.source in visible_characters and edge.target in visible_characters
         ],
     )
+
+
+def markdown_heading_level(node: CombinedCharacterNode | None) -> int | None:
+    if node is None:
+        return None
+    match = re.fullmatch(r"source_heading(?:_(?:place|group))?_(?P<level>\d+)", node.node_type)
+    return int(match.group("level")) if match else None
 
 
 def append_linked_character_fanout(

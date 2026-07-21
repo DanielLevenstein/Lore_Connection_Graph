@@ -1,0 +1,538 @@
+from __future__ import annotations
+
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_DIR))
+
+from character_graph.extraction import extract_character_graph
+from character_graph.ingest import load_backstory
+from language_model.character_rewrites import (
+    RewriteClient,
+    RewriteResult,
+    candidate_paragraphs,
+    graph_generated_backstory_result,
+    graph_generated_summary_result,
+    rewrite_contract_issues,
+    rewrite_quality_context,
+    rewrite_required_terms,
+    semantic_rewrite_score,
+)
+from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_config
+from language_model.rewrite_quality import writing_quality_score
+from language_model.storage import Character, read_character_profile
+
+
+DEFAULT_CHARACTER_PATH = ROOT_DIR / "tests" / "fixtures" / "character_sheets" / "Orin_Nightbloom.md"
+DEFAULT_REPORT_PATH = ROOT_DIR / "docs" / "reports" / "semantic_backstory_improvement.md"
+DEFAULT_SENTENCE_LENGTH_CHART_PATH = ROOT_DIR / "docs" / "reports" / "semantic_sentence_lengths.png"
+ACCEPTANCE_SCORE_THRESHOLD = 70.0
+SUMMARY_LENGTH_TARGET_MIN_WORDS = 30
+SUMMARY_LENGTH_TARGET_MAX_WORDS = 60
+MODEL_REWRITE_LABEL = "Model Rewrite"
+
+
+@dataclass(frozen=True)
+class ReportCandidate:
+    label: str
+    text: str
+    kind: str = "candidate"
+
+
+@dataclass(frozen=True)
+class EvaluatedCandidate:
+    label: str
+    text: str
+    semantic_score: object
+    writing_score: object
+    status: str
+    rejection_reason: str
+    length_score: float
+
+
+@dataclass(frozen=True)
+class ReportEvaluation:
+    candidates: tuple[ReportCandidate, ...]
+    evaluated_candidates: tuple[EvaluatedCandidate, ...]
+    quality_messages: tuple[str, ...]
+    sentence_chart_candidates: tuple[tuple[str, object], ...]
+
+
+def build_report(
+    character_path: Path = DEFAULT_CHARACTER_PATH,
+    rewrite_client: RewriteClient | None = None,
+    sentence_length_chart_path: Path | None = None,
+) -> str:
+    return build_character_rewrite_report(
+        character_path=character_path,
+        rewrite_client=rewrite_client,
+        sentence_length_chart_path=sentence_length_chart_path,
+        report_title="Semantic Improvement Report: Orin Nightbloom",
+        rewrite_kind="backstory",
+        generate_model_result=graph_generated_backstory_result,
+        existing_label="Existing Generated Section",
+        original_label="Original Backstory",
+        include_summary_length_score=False,
+    )
+
+
+def build_character_rewrite_report(
+    character_path: Path,
+    rewrite_client: RewriteClient | None,
+    sentence_length_chart_path: Path | None,
+    report_title: str,
+    rewrite_kind: str,
+    generate_model_result: Callable,
+    existing_label: str,
+    original_label: str,
+    include_summary_length_score: bool,
+) -> str:
+    character = Character(name=character_path.stem, path=character_path)
+    profile = read_character_profile(character)
+    graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
+    rewrite_client = rewrite_client or real_model_rewrite_client()
+    try:
+        model_result = generate_model_result(graph, profile, rewrite_client=rewrite_client)
+    except RuntimeError as exc:
+        candidate_text = getattr(exc, "candidate_text", "")
+        model_result = RewriteResult(text=candidate_text, attempts=())
+    model_story = model_result.text
+    model_metadata = getattr(rewrite_client, "last_metadata", {})
+    existing_text = existing_candidate_text(profile, rewrite_kind)
+    original_text = original_candidate_text(profile, rewrite_kind)
+    source_context = rewrite_quality_context(graph, profile)
+    required_terms = rewrite_required_terms(graph, profile, rewrite_kind)
+    candidates = [ReportCandidate(MODEL_REWRITE_LABEL, model_story)]
+    if original_text.strip() != existing_text.strip():
+        candidates.append(ReportCandidate(existing_label, existing_text))
+    candidates.append(ReportCandidate(original_label, original_text, "source"))
+    evaluation = evaluate_report_candidates(
+        candidates,
+        rewrite_kind=rewrite_kind,
+        source_context=source_context,
+        required_terms=required_terms,
+    )
+    model_evaluation = next(candidate for candidate in evaluation.evaluated_candidates if candidate.label == MODEL_REWRITE_LABEL)
+    source_evaluation = next(candidate for candidate in evaluation.evaluated_candidates if candidate.label == original_label)
+    delta = round(model_evaluation.semantic_score.score - source_evaluation.semantic_score.score, 4)
+    if sentence_length_chart_path:
+        render_sentence_length_chart(list(evaluation.sentence_chart_candidates), sentence_length_chart_path)
+    score_table = score_table_for_evaluation(evaluation, rewrite_kind)
+
+    chart_markdown = sentence_length_chart_markdown(sentence_length_chart_path)
+    rendered_candidates = render_single_character_candidates(
+        original_label=original_label,
+        original_text=original_text,
+        model_result=model_result,
+        existing_label=existing_label,
+        existing_text=existing_text,
+        include_existing=original_text.strip() != existing_text.strip(),
+    )
+    return (
+        f"# {report_title}\n\n"
+        "## Rewrite Engine\n\n"
+        f"- Rewrite engine: `{LOCAL_REWRITE_MODEL_ENGINE}`\n"
+        "- Evaluation: semantic similarity, sentence length fit, and sentence quality.\n\n"
+        "## Model Runtime\n\n"
+        f"{model_runtime_section(model_metadata)}\n\n"
+        "## Candidate\n\n"
+        f"{rendered_candidates}\n\n"
+        "## Scores\n\n"
+        f"{score_table}\n\n"
+        "## Sentence Lengths\n\n"
+        f"{chart_markdown}"
+        "## Result\n\n"
+        f"{result_summary(model_story, delta)}\n"
+    )
+
+
+def evaluate_report_candidates(
+    candidates: list[ReportCandidate],
+    rewrite_kind: str,
+    source_context: str,
+    required_terms: list[str],
+) -> ReportEvaluation:
+    evaluated = []
+    quality_messages = []
+    for candidate in candidates:
+        semantic_score = semantic_rewrite_score(candidate.text, source_context, required_terms)
+        writing_score = writing_quality_score(candidate.text)
+        length_score = candidate_length_score(candidate.text, rewrite_kind)
+        if candidate.kind == "source":
+            status = "Source"
+            rejection_reason = ""
+        else:
+            status = status_for_score(semantic_score)
+            rejection_reason = candidate_rejection_reason(candidate.text, rewrite_kind, semantic_score, length_score)
+        if rejection_reason:
+            quality_messages.append(f"{candidate.label}: {rejection_reason}")
+        evaluated.append(
+            EvaluatedCandidate(
+                candidate.label,
+                candidate.text,
+                semantic_score,
+                writing_score,
+                status,
+                rejection_reason,
+                length_score,
+            )
+        )
+    return ReportEvaluation(
+        candidates=tuple(candidates),
+        evaluated_candidates=tuple(evaluated),
+        quality_messages=tuple(quality_messages),
+        sentence_chart_candidates=tuple((candidate.label, candidate.writing_score) for candidate in evaluated),
+    )
+
+
+def candidate_rejection_reason(candidate: str, rewrite_kind: str, semantic_score, length_score: float) -> str:
+    reasons = candidate_rejection_reasons(candidate, rewrite_kind, semantic_score, length_score)
+    return format_rejection_reasons(reasons)
+
+
+def candidate_rejection_reasons(candidate: str, rewrite_kind: str, semantic_score, length_score: float) -> tuple[str, ...]:
+    if normalized_score(semantic_score.score) >= ACCEPTANCE_SCORE_THRESHOLD:
+        return ()
+    reasons = rewrite_contract_issues(candidate, candidate, rewrite_kind)
+    if length_score < 100:
+        reasons.append(f"{length_score_label(rewrite_kind).lower()} below target")
+    reasons.append("overall score below 70")
+    return tuple(dict.fromkeys(reasons))
+
+
+def format_rejection_reasons(reasons: tuple[str, ...]) -> str:
+    return "; ".join(reasons)
+
+
+def candidate_length_score(candidate: str, rewrite_kind: str) -> float:
+    if rewrite_kind == "summary":
+        return summary_length_score(candidate)
+    return backstory_length_score(candidate)
+
+
+def length_score_label(rewrite_kind: str) -> str:
+    return "Summary Length Score" if rewrite_kind == "summary" else "Length Score"
+
+
+def backstory_length_score(backstory: str) -> float:
+    paragraph_count = len(candidate_paragraphs(backstory))
+    if paragraph_count == 2:
+        return 100.0
+    if paragraph_count == 0:
+        return 0.0
+    return max(0.0, 100.0 - (abs(paragraph_count - 2) * 50.0))
+
+
+def score_table_for_evaluation(evaluation: ReportEvaluation, rewrite_kind: str) -> str:
+    rows = [evaluation_score_row(candidate, rewrite_kind) for candidate in evaluation.evaluated_candidates]
+    if rewrite_kind == "summary":
+        headers = [
+            "Candidate",
+            "Status",
+            "Overall",
+            "Summary Length Score",
+            "Similarity",
+            "Sentence Length Score",
+            "Sentence Quality",
+        ]
+    else:
+        headers = [
+            "Candidate",
+            "Status",
+            "Overall",
+            "Length Score",
+            "Similarity",
+            "Sentence Length Score",
+            "Sentence Quality",
+        ]
+    table = markdown_table(headers, rows, alignments=["left", "left", "right", "right", "right", "right", "right"])
+    return table + rejection_reasons_section(evaluation.evaluated_candidates)
+
+
+def rejection_reasons_section(candidates) -> str:
+    rows = [
+        f"- {candidate.label}: {candidate.rejection_reason}"
+        for candidate in candidates
+        if candidate.rejection_reason
+    ]
+    if not rows:
+        return ""
+    return "\n\n### Rejection Reasons\n\n" + "\n".join(rows)
+
+
+def existing_candidate_text(profile, rewrite_kind: str) -> str:
+    if rewrite_kind == "summary":
+        return profile.summary
+    return profile.backstory
+
+
+def original_candidate_text(profile, rewrite_kind: str) -> str:
+    if rewrite_kind == "summary":
+        return profile.backstory or profile.original_backstory or profile.summary
+    return profile.original_backstory or profile.backstory
+
+
+def model_runtime_section(metadata: dict) -> str:
+    prompt_eval_time = metadata.get("prompt_eval_time_ms")
+    rows = [
+        ["Model", metadata.get("model_id", "not reported")],
+        ["Quantization", metadata.get("quantization", "not reported")],
+        ["Prompt version", metadata.get("prompt_version", "not reported")],
+        ["Max tokens", metadata.get("max_tokens", "not reported")],
+        ["Temperature", metadata.get("temperature", "not reported")],
+        ["Top P", metadata.get("top_p", "not reported")],
+        ["Repeat penalty", metadata.get("repeat_penalty", "not reported")],
+        ["Seed", metadata.get("seed", "not reported")],
+        ["Context size", metadata.get("n_ctx", "not reported")],
+        ["Batch size", metadata.get("n_batch", "not reported")],
+        ["Threads", metadata.get("n_threads", "not reported")],
+        ["GPU layers", metadata.get("n_gpu_layers", "not reported")],
+        ["Device", metadata.get("device", "not reported")],
+        ["Timeout seconds", metadata.get("timeout_seconds", "not reported")],
+        ["Prompt hash", metadata.get("prompt_hash", "not reported")],
+        ["Prompt eval time", f"{prompt_eval_time} ms" if prompt_eval_time else "not reported"],
+        ["Prompt tokens", metadata.get("prompt_tokens", "not reported")],
+        ["Completion tokens", metadata.get("completion_tokens", "not reported")],
+        ["Total tokens", metadata.get("total_tokens", "not reported")],
+    ]
+    return markdown_table(["Metric", "Value"], rows)
+
+
+def model_candidate_section(model_result: RewriteResult) -> str:
+    return f"### {MODEL_REWRITE_LABEL}\n\n{model_result.text}"
+
+
+def render_single_character_candidates(
+    original_label: str,
+    original_text: str,
+    model_result: RewriteResult,
+    existing_label: str,
+    existing_text: str,
+    include_existing: bool,
+) -> str:
+    sections = [
+        model_candidate_section(model_result),
+    ]
+    if include_existing:
+        sections.append(f"### {existing_label}\n\n{existing_text}")
+    sections.append(f"### {original_label}\n\n{original_text}")
+    return "\n\n".join(sections)
+
+
+def result_summary(model_story: str, delta: float) -> str:
+    if not model_story.strip():
+        return (
+            "The local model run did not produce an acceptable rewrite, so its score is reported as `0.0000`. "
+            "The existing generated section remains the better candidate for this fixture."
+        )
+    return (
+        f"The model rewrite changes the writing quality score versus the original section by `{delta:.4f}`."
+    )
+
+
+def real_model_rewrite_client() -> RewriteClient:
+    return LocalRewriteModelClient(
+        config=load_local_config(allow_download=True),
+        status_callback=lambda message: print(message, file=sys.stderr),
+    )
+
+
+def evaluation_score_row(candidate: EvaluatedCandidate, rewrite_kind: str) -> list[str]:
+    return [
+        candidate.label,
+        candidate.status,
+        f"{normalized_score(candidate.semantic_score.score):.2f}",
+        f"{candidate.length_score:.2f}",
+        f"{normalized_score(candidate.semantic_score.semantic_similarity):.2f}",
+        f"{candidate.writing_score.sentence_length:.2f}",
+        f"{normalized_score(candidate.semantic_score.sentence_quality):.2f}",
+    ]
+
+
+def normalized_score(score: float) -> float:
+    return score * 100
+
+
+def status_for_score(score) -> str:
+    return "Accepted" if normalized_score(score.score) >= ACCEPTANCE_SCORE_THRESHOLD else "Rejected"
+
+
+def summary_word_count(summary: str) -> int:
+    return len(summary.split())
+
+
+def summary_length_score(summary: str) -> float:
+    word_count = summary_word_count(summary)
+    if word_count == 0:
+        return 0.0
+    if SUMMARY_LENGTH_TARGET_MIN_WORDS <= word_count <= SUMMARY_LENGTH_TARGET_MAX_WORDS:
+        return 100.0
+    if word_count < SUMMARY_LENGTH_TARGET_MIN_WORDS:
+        return round((word_count / SUMMARY_LENGTH_TARGET_MIN_WORDS) * 100, 2)
+    return round((SUMMARY_LENGTH_TARGET_MAX_WORDS / word_count) * 100, 2)
+
+
+def sentence_length_rows(candidates: list[tuple[str, object]]) -> list[list[str]]:
+    rows = []
+    for label, score in candidates:
+        for bucket in score.sentence_length_buckets:
+            rows.append(
+                [
+                    label,
+                    bucket.category,
+                    bucket.word_range,
+                    str(bucket.count),
+                    f"{bucket.percentage:.2f}%",
+                    f"{score.avg_sentence_length:.2f}",
+                ]
+            )
+    return rows
+
+
+def sentence_length_chart_markdown(chart_path: Path | None) -> str:
+    if not chart_path:
+        return ""
+    try:
+        display_path = chart_path.relative_to(DEFAULT_REPORT_PATH.parent)
+    except ValueError:
+        display_path = chart_path
+    return f"![Sentence length distribution]({display_path.as_posix()})\n\n"
+
+
+def sentence_length_chart_matrix(candidates: list[tuple[str, Any]]) -> tuple[list[str], list[str], list[list[float]]]:
+    from sklearn.feature_extraction import DictVectorizer
+
+    categories = ["Fragment", "Short", "Medium", "Long", "Run-on"]
+    labels = [label for label, _score in candidates]
+    records = []
+    for _label, score in candidates:
+        record = {category: 0.0 for category in categories}
+        record.update({bucket.category: bucket.percentage for bucket in score.sentence_length_buckets})
+        records.append(record)
+    vectorizer = DictVectorizer(sparse=False)
+    matrix = vectorizer.fit_transform(records)
+    feature_names = list(vectorizer.get_feature_names_out())
+    ordered_indexes = [feature_names.index(category) for category in categories]
+    ordered_matrix = matrix[:, ordered_indexes]
+    return labels, categories, ordered_matrix.tolist()
+
+
+def render_sentence_length_chart(candidates: list[tuple[str, Any]], chart_path: Path) -> Path:
+    import os
+    import tempfile
+
+    matplotlib_cache_dir = Path(tempfile.gettempdir()) / "lore_connection_graph_matplotlib"
+    matplotlib_cache_dir.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("MPLCONFIGDIR", str(matplotlib_cache_dir))
+    os.environ.setdefault("XDG_CACHE_HOME", str(matplotlib_cache_dir))
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from sklearn.neighbors import KernelDensity
+
+    labels, categories, matrix = sentence_length_chart_matrix(candidates)
+    bucket_centers = np.array([2.5, 10.5, 20.5, 30.5, 40.5])
+    chart_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, axes = plt.subplots(1, len(labels), figsize=(12, 3.8), sharey=True)
+    if len(labels) == 1:
+        axes = [axes]
+    colors = ["#7c8da6", "#4c9a72", "#d6a03d", "#c66b45", "#b54848"]
+    for axis, (label, score), percentages in zip(axes, candidates, matrix):
+        bars = axis.bar(categories, percentages, color=colors)
+        kde_values = sentence_length_kde_values(score.sentence_word_counts, bucket_centers, KernelDensity)
+        if kde_values:
+            axis.plot(
+                categories,
+                kde_values,
+                color="#222222",
+                marker="o",
+                linewidth=2,
+                label="KDE",
+            )
+        axis.set_title(label)
+        axis.set_ylim(0, 100)
+        axis.set_ylabel("Sentences (%)")
+        axis.tick_params(axis="x", rotation=35)
+        axis.grid(axis="y", linestyle=":", linewidth=0.8, alpha=0.6)
+        for bar, percentage in zip(bars, percentages):
+            axis.text(
+                bar.get_x() + bar.get_width() / 2,
+                min(percentage + 2, 96),
+                f"{percentage:.0f}%",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+        if kde_values:
+            axis.legend(loc="upper left", frameon=False, fontsize=8)
+    fig.tight_layout()
+    fig.savefig(chart_path, dpi=160)
+    plt.close(fig)
+    return chart_path
+
+
+def sentence_length_kde_values(
+    sentence_word_counts: tuple[int, ...],
+    bucket_centers,
+    kernel_density_cls,
+) -> list[float]:
+    if not sentence_word_counts:
+        return []
+    samples = [[count] for count in sentence_word_counts]
+    kde = kernel_density_cls(kernel="gaussian", bandwidth=6.0).fit(samples)
+    densities = [float(value) for value in kde.score_samples([[center] for center in bucket_centers])]
+    density_values = [2.718281828459045 ** value for value in densities]
+    max_density = max(density_values)
+    if max_density <= 0:
+        return [0.0 for _center in bucket_centers]
+    return [(density / max_density) * 100 for density in density_values]
+
+
+def markdown_table(headers: list[str], rows: list[list[str]], alignments: list[str] | None = None) -> str:
+    alignments = alignments or ["left"] * len(headers)
+    table_rows = [[str(cell) for cell in row] for row in rows]
+    widths = [
+        max(len(str(headers[index])), *(len(row[index]) for row in table_rows))
+        for index in range(len(headers))
+    ]
+    separator = [
+        markdown_separator(width, alignments[index] if index < len(alignments) else "left")
+        for index, width in enumerate(widths)
+    ]
+    rendered = [markdown_table_row(headers, widths), markdown_table_row(separator, widths)]
+    rendered.extend(markdown_table_row(row, widths) for row in table_rows)
+    return "\n".join(rendered)
+
+
+def markdown_table_row(cells: list[str], widths: list[int]) -> str:
+    padded = [cell.ljust(widths[index]) for index, cell in enumerate(cells)]
+    return "| " + " | ".join(padded) + " |"
+
+
+def markdown_separator(width: int, alignment: str) -> str:
+    dashes = "-" * max(3, width)
+    if alignment == "right":
+        return dashes[:-1] + ":"
+    if alignment == "center":
+        return ":" + dashes[2:] + ":"
+    return dashes
+
+
+def write_report(
+    report_path: Path = DEFAULT_REPORT_PATH,
+    sentence_length_chart_path: Path = DEFAULT_SENTENCE_LENGTH_CHART_PATH,
+) -> Path:
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(build_report(sentence_length_chart_path=sentence_length_chart_path), encoding="utf-8")
+    return report_path
+
+
+if __name__ == "__main__":
+    path = write_report()
+    print(path)

@@ -3,15 +3,15 @@ from pathlib import Path
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
 from character_graph.schema import CharacterGraph, CharacterNode, PrimaryCharacterRef, RelationshipEdge
-from local_chatbot.character_rewrites import (
+from language_model.character_rewrites import (
     graph_generated_backstory,
     graph_generated_summary,
     rewrite_quality_context,
     rewrite_required_terms,
     semantic_rewrite_score,
 )
-from local_chatbot.storage import Character, read_character_profile
-from scripts.generate_semantic_improvement_report import build_report
+from language_model.storage import Character, read_character_profile
+from scripts.generate_single_character_backstory_rewrite_report import build_report
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -33,7 +33,7 @@ MODEL_BACKSTORY = (
 def rewrite_client_with(summary: str = MODEL_SUMMARY, backstory: str = MODEL_BACKSTORY):
     def rewrite_client(messages: list[dict[str, str]]) -> str:
         prompt = messages[-1]["content"]
-        if "Write one polished character summary sentence" in prompt:
+        if "character summary" in prompt:
             return summary
         if "Rewrite the character backstory" in prompt:
             return backstory
@@ -59,7 +59,7 @@ def test_orin_graph_generated_summary_scores_better_than_original_backstory():
     assert "Sunstone Mage College" in generated_summary
     assert generated_score.score > original_score.score
     assert generated_score.concept_coverage >= original_score.concept_coverage
-    assert generated_score.concision > original_score.concision
+    assert generated_score.sentence_quality > original_score.sentence_quality
 
 
 def test_graph_generated_summary_uses_default_graph_engine_without_model():
@@ -130,8 +130,11 @@ def test_semantic_improvement_report_includes_scores_and_result():
     report = build_report(rewrite_client=rewrite_client_with())
 
     assert "# Semantic Improvement Report: Orin Nightbloom" in report
-    assert "Source context similarity compares each candidate" in report
-    assert "Graph rewrite" in report
-    assert "Existing generated section" in report
+    assert "semantic similarity, sentence length fit, and sentence quality" in report
+    assert "Local model rewrite" in report
+    assert "Existing Generated Section" in report
     assert "Original section" in report
-    assert "improves the overall quality score over the original section" in report
+    assert "## Sentence Lengths" in report
+    assert "Sentence Length Score" in report
+    assert "Coverage" not in report.split("## Scores", 1)[1].split("## Sentence Lengths", 1)[0]
+    assert "changes the writing quality score versus the original section" in report

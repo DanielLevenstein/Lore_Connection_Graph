@@ -1018,11 +1018,15 @@ def combined_relationship_dot(
     main_place_ids: set[str] | None = None,
     label_font_color: str = "#cbd5e1",
     graphviz_config: dict[str, Any] | None = None,
+    hide_source_document_roots=False,
 ) -> str:
     graphviz_config = graphviz_config or default_graphviz_config()
     main_character_keys = {compact(value) for value in main_character_ids or set()}
     main_place_keys = {compact(value) for value in main_place_ids or set()}
-    display_characters = graph.characters
+    display_characters = relationship_dot_display_characters(
+        graph,
+        hide_source_document_roots=hide_source_document_roots,
+    )
     if focus_node_id in display_characters:
         main_character_keys.update({compact(focus_node_id), compact(display_characters[focus_node_id].name)})
     display_edges = [
@@ -1097,6 +1101,49 @@ def combined_relationship_dot(
     return "\n".join(lines)
 
 
+def relationship_dot_display_characters(
+    graph: CombinedCharacterGraph,
+    *,
+    hide_source_document_roots: bool,
+) -> dict[str, CombinedCharacterNode]:
+    hidden_ids = duplicate_source_document_root_ids(graph)
+    if hide_source_document_roots:
+        hidden_ids.update(
+            node_id
+            for node_id, node in graph.characters.items()
+            if node.node_type == "source_document"
+        )
+    return {
+        node_id: node
+        for node_id, node in graph.characters.items()
+        if node_id not in hidden_ids
+    }
+
+
+def duplicate_source_document_root_ids(graph: CombinedCharacterGraph) -> set[str]:
+    duplicate_source_ids: set[str] = set()
+    source_document_ids = {
+        node_id
+        for node_id, node in graph.characters.items()
+        if node.node_type == "source_document"
+    }
+    for edge in graph.edges:
+        if edge.source not in source_document_ids:
+            continue
+        source = graph.characters.get(edge.source)
+        heading = graph.characters.get(edge.target)
+        if source is None or heading is None:
+            continue
+        if source_heading_level(heading.node_type) != 1:
+            continue
+        source_labels = {compact(source.name)}
+        if source.source_file:
+            source_labels.add(compact(Path(source.source_file).stem))
+        if compact(heading.name) in source_labels:
+            duplicate_source_ids.add(edge.source)
+    return duplicate_source_ids
+
+
 def default_graphviz_config() -> dict[str, Any]:
     return {
         "graph": {
@@ -1148,7 +1195,6 @@ def default_graphviz_config() -> dict[str, Any]:
             "default": {"ranksep": 0.65, "nodesep": 0.35},
         },
     }
-
 
 def edge_graphviz_attributes(graphviz_config: dict[str, Any], label_font_color: str) -> dict[str, Any]:
     edge_config = dict(graphviz_config.get("edge", {}))

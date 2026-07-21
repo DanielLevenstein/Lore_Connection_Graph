@@ -1,11 +1,33 @@
 # Release Notes
 
-| Version | Summary |
-| --- | --- |
-| v1.1.1 | Enable knowledge graph feature and partial code cleanup |
-| v1.1.0 | Implemented distinct knowledge graph views for character, place and sesison tab|
-| v1.0.0 | This release adds a dedicated Knowledge Graph UI using graphviz.|
-| v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management. |
+| Version | Summary                                                                                    |
+| --- |--------------------------------------------------------------------------------------------|
+| v2.0.0 | Add local character rewrite tuning, rewrite quality reports, summary and backstory rewrite |
+| v1.1.1 | Enable knowledge graph feature and partial code cleanup                                    |
+| v1.1.0 | Implemented distinct knowledge graph views for character, place and sesison tab            |
+| v1.0.0 | This release adds a dedicated Knowledge Graph UI using graphviz.                           |
+| v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management.          |
+
+## v2.0.0 - Character Rewrite Tuning
+
+This release focuses on the local character rewrite workflow: generated graph-backed summaries and backstories, measured rewrite quality, and safe promotion of accepted generated text into character Markdown.
+The selected rewrite model is `qwen2.5-0.5b-instruct-q4_k_m`.
+
+### Highlights
+
+- Switched character rewrites to the local `llama` CLI model path with deterministic graph rewrites kept as the fallback path.
+- Added graph-backed summary and backstory rewrite controls in the character editor, with reviewable generated text after save and rerun.
+- Added normalized quality reports for single-character and multi-character summary and backstory evaluation.
+- Added sentence-structure charting for the single-character rewrite flow, including sentence category distributions and KDE overlays.
+- Tuned the rewrite path around the smaller Qwen 0.5B local model candidate and removed retry-loop behavior so model tuning can focus on the output itself.
+- Fixed `Replace Original` so accepted generated summary and backstory text is promoted into the main Markdown and stale generated/original markers are removed.
+
+### Quality
+
+- Added focused Streamlit e2e coverage for character rewrite controls and generated text review.
+- Added model-level contract tests for summary and backstory rewrite behavior.
+- Added regression coverage for accepting generated character sections and preserving promoted text in Markdown and profile metadata.
+- Regenerated the single-character and multi-character rewrite reports during the tuning pass.
 
 ## v1.1.1
 Enabled knowledge graph in UI without an env variable

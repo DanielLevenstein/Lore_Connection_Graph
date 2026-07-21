@@ -1,9 +1,9 @@
 from datetime import date
 
-import local_chatbot.session_notes as session_notes
-import local_chatbot.storage as storage
+import language_model.session_notes as session_notes
+import language_model.storage as storage
 from character_graph.storage import load_graph
-from local_chatbot.storage import (
+from language_model.storage import (
     CharacterProfile,
     PlaceProfile,
     create_character,

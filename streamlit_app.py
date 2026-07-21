@@ -23,12 +23,11 @@ from character_graph.storage import load_graph
 from graphviz_rendering import render_knowledge_graph_tabs
 
 
-from local_chatbot.storage import (
+from language_model.storage import (
     Character,
     CharacterProfile,
     Place,
     PlaceProfile,
-    append_character_connections,
     character_family_name,
     character_first_name,
     create_character,
@@ -36,8 +35,6 @@ from local_chatbot.storage import (
     default_details,
     delete_character_profile,
     delete_place_profile,
-    import_external_character_sheet,
-    list_external_character_sheets,
     list_places,
     list_characters,
     read_place_markdown,
@@ -49,11 +46,18 @@ from local_chatbot.storage import (
     write_character_profile,
     write_place_markdown,
 )
-from local_chatbot.character_rewrites import (
+
+from language_model.character_rewrites import (
     graph_generated_backstory as build_graph_generated_backstory,
     graph_generated_summary as build_graph_generated_summary,
 )
-from local_chatbot.session_notes import (
+from language_model.rewrite_model import (
+    LocalRewriteModelClient,
+    LocalRewriteModelError,
+    LocalRewriteModelLifecycle,
+    load_local_config,
+)
+from language_model.session_notes import (
     child_markdown_sections,
     combine_markdown_section,
     hide_markdown_section_heading,
@@ -76,7 +80,7 @@ from local_chatbot.session_notes import (
     write_markdown_section,
     write_session_note,
 )
-from local_chatbot.lore_import import (
+from language_model.lore_import import (
     BACKUP_KIND_SNAPSHOT,
     backup_lore_files,
     clear_local_lore,
@@ -85,7 +89,7 @@ from local_chatbot.lore_import import (
     read_lore_backup_date,
     restore_lore_backup,
 )
-from local_chatbot.paths import (
+from language_model.paths import (
     CHARACTERS_DIR,
     LORE_DIR,
     PLACES_DIR,
@@ -94,7 +98,7 @@ from local_chatbot.paths import (
     WORLD_BUILDING_BACKUP_DIR,
 )
 
-ENABLE_CHARACTER_REWRITE = "LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES"
+ALLOW_LOCAL_REWRITE_MODEL_DOWNLOAD = "LOCAL_CHATBOT_ALLOW_MODEL_DOWNLOAD"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 DISABLE_LORE_BACKUPS = "LOCAL_CHATBOT_DISABLE_LORE_BACKUPS"
 MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
@@ -256,8 +260,8 @@ def clean_display_name(name: str) -> str:
     return cleaned.rstrip(" -:|")
 
 
-def graph_rewrites_enabled() -> bool:
-    return os.environ.get(ENABLE_CHARACTER_REWRITE) == "1"
+def local_model_downloads_enabled() -> bool:
+    return os.environ.get(ALLOW_LOCAL_REWRITE_MODEL_DOWNLOAD) == "1"
 
 
 def attribute_graph_override_enabled() -> bool:
@@ -293,26 +297,29 @@ def remove_auto_generated_section(profile: CharacterProfile, section: str) -> li
 
 
 def accept_current_character_text(profile: CharacterProfile) -> CharacterProfile:
-    accepted = profile
-    if profile.original_backstory.strip():
-        accepted = replace(
-            accepted,
-            original_backstory="",
-            auto_generated_sections=remove_auto_generated_section(accepted, "Character Backstory"),
-            updated_sections=remove_updated_section(accepted.updated_sections or [], "Character Backstory"),
-        )
-    if profile.original_summary.strip():
-        accepted = replace(
-            accepted,
-            original_summary="",
-            auto_generated_sections=remove_auto_generated_section(accepted, "Character Summary"),
-            updated_sections=remove_updated_section(accepted.updated_sections or [], "Character Summary"),
-        )
-    return accepted
+    auto_generated_sections = remove_auto_generated_section(profile, "Character Backstory")
+    auto_generated_sections = [
+        value for value in auto_generated_sections if value.lower() != "character summary"
+    ]
+    updated_sections = remove_updated_section(profile.updated_sections or [], "Character Backstory")
+    updated_sections = remove_updated_section(updated_sections, "Character Summary")
+    return replace(
+        profile,
+        original_backstory="",
+        original_summary="",
+        auto_generated_sections=auto_generated_sections,
+        updated_sections=updated_sections,
+    )
 
 
 def graph_generated_summary(character: Character, profile: CharacterProfile) -> str:
     graph = character_graph_or_regenerate(character)
+    rewrite_client = local_rewrite_client_or_none()
+    if rewrite_client:
+        try:
+            return build_graph_generated_summary(graph, profile, rewrite_client=rewrite_client)
+        except LocalRewriteModelError as exc:
+            st.warning(f"Model-backed summary failed; using deterministic graph rewrite. {exc}")
     return build_graph_generated_summary(graph, profile)
 
 
@@ -328,7 +335,42 @@ def character_graph_or_regenerate(character: Character):
 
 def graph_generated_backstory(character: Character, profile: CharacterProfile) -> str:
     graph = character_graph_or_regenerate(character)
+    rewrite_client = local_rewrite_client_or_none()
+    if rewrite_client:
+        try:
+            return build_graph_generated_backstory(graph, profile, rewrite_client=rewrite_client)
+        except LocalRewriteModelError as exc:
+            st.warning(f"Model-backed backstory failed; using deterministic graph rewrite. {exc}")
     return build_graph_generated_backstory(graph, profile)
+
+
+def local_rewrite_client_or_none() -> LocalRewriteModelClient | None:
+    config = load_local_config(allow_download=local_model_downloads_enabled())
+    lifecycle = LocalRewriteModelLifecycle(config)
+    if not lifecycle.is_runtime_available():
+        st.warning("llama CLI is not installed; using deterministic graph rewrite.")
+        return None
+    if not lifecycle.is_model_available() and not config.allow_download:
+        st.warning("Local rewrite model is not downloaded; using deterministic graph rewrite.")
+        return None
+    return LocalRewriteModelClient(config=config, status_callback=local_model_status_callback())
+
+
+def local_model_status_callback():
+    status_message = st.empty()
+    progress_message = st.empty()
+
+    def update(message: str) -> None:
+        download_match = re.search(r"Downloading local rewrite model:\s*(\d+)%", message)
+        if download_match:
+            percent = max(0, min(100, int(download_match.group(1))))
+            status_message.info(f"Downloading local rewrite model: {percent}%")
+            progress_message.progress(percent)
+            return
+        progress_message.empty()
+        status_message.info(message)
+
+    return update
 
 
 def mark_auto_generated(profile: CharacterProfile, section: str) -> list[str]:
@@ -1767,7 +1809,9 @@ def render_character_panel() -> None:
 
 def render_character_editor(character: Character) -> None:
     profile = read_character_profile(character)
-    with st.expander("Edit Character", expanded=bool(st.session_state.get(f"character_status_{character.name}", ""))):
+    st.markdown("#### Edit Character")
+    editor_context = st.container()
+    with editor_context:
         with st.form(f"edit_character_{character.name}"):
             st.text_input("Name", value=profile.name, disabled=True)
             name_cols = st.columns(2)
@@ -1821,7 +1865,7 @@ def render_character_editor(character: Character) -> None:
                 enemies = detail_cols[2].text_area("Enemies", value=render_list_field(profile.enemies), height=96)
                 details_value = profile.details or default_details(profile)
                 details = st.text_area("Character Details", value=details_value, height=120)
-            action_cols = st.columns(5 if graph_rewrites_enabled() else 3)
+            action_cols = st.columns(5)
             save_requested = action_cols[0].form_submit_button(
                 "Save Character",
                 icon=":material/save:",
@@ -1829,26 +1873,20 @@ def render_character_editor(character: Character) -> None:
                 args=("Characters",),
             )
             populate_summary = False
-            repopulate_summary = False
-            rewrite_backstory = False
-            if graph_rewrites_enabled():
-                repopulate_summary = action_cols[1].form_submit_button(
-                    "Repopulate Summary",
-                    icon=":material/sync:",
-                    on_click=request_main_navigation_tab,
-                    args=("Characters",),
-                )
-                rewrite_backstory = action_cols[2].form_submit_button(
-                    "Rewrite Backstory",
-                    icon=":material/edit_note:",
-                    on_click=request_main_navigation_tab,
-                    args=("Characters",),
-                )
-                delete_col = action_cols[3]
-                undo_col = action_cols[4]
-            else:
-                delete_col = action_cols[1]
-                undo_col = action_cols[2]
+            repopulate_summary = action_cols[1].form_submit_button(
+                "Repopulate Summary",
+                icon=":material/sync:",
+                on_click=request_main_navigation_tab,
+                args=("Characters",),
+            )
+            rewrite_backstory = action_cols[2].form_submit_button(
+                "Rewrite Backstory",
+                icon=":material/edit_note:",
+                on_click=request_main_navigation_tab,
+                args=("Characters",),
+            )
+            delete_col = action_cols[3]
+            undo_col = action_cols[4]
             delete_requested = delete_col.form_submit_button(
                 "Delete Character",
                 icon=":material/delete_forever:",
