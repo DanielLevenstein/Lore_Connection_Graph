@@ -8,15 +8,15 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
-from local_chatbot.character_rewrites import (
+from language_model.character_rewrites import (
     RewriteClient,
     graph_generated_backstory,
     rewrite_quality_context,
     rewrite_required_terms,
     semantic_rewrite_score,
 )
-from local_chatbot.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_language_model_config
-from local_chatbot.storage import Character, read_character_profile
+from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_language_model_config
+from language_model.storage import Character, read_character_profile
 
 
 DEFAULT_CHARACTER_PATH = ROOT_DIR / "tests" / "fixtures" / "character_sheets" / "Orin_Nightbloom.md"

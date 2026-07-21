@@ -72,8 +72,8 @@ def run_graph_rewrite(
         {
             "role": "system",
             "content": (
-                "Rewrite roleplaying character lore using only facts from the supplied character sheet "
-                "and knowledge graph context."
+                "Rewrite roleplaying character lore using only facts from the supplied character sheet."
+                "You will be graded on prose style and and coverage of story details."
             ),
         },
         {"role": "user", "content": prompt},

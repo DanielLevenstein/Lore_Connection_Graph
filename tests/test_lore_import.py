@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from character_graph.storage import load_graph
-import local_chatbot.lore_import as lore_import
-from local_chatbot.lore_import import (
+import language_model.lore_import as lore_import
+from language_model.lore_import import (
     BACKUP_KIND_BACKUP,
     BACKUP_KIND_SNAPSHOT,
     backup_lore_files,
