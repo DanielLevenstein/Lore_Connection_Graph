@@ -50,7 +50,7 @@ def build_report(character_path: Path = DEFAULT_CHARACTER_PATH, rewrite_client: 
     if original_backstory.strip() != existing_generated_backstory.strip():
         score_rows.append(score_row("Original section", original_score, "Source"))
     score_table = markdown_table(
-        ["Candidate", "Status", "Overall", "Similarity", "Coverage", "Concision"],
+        ["Candidate", "Status", "Overall", "Similarity", "Coverage", "Sentence Quality"],
         score_rows,
         alignments=["left", "left", "right", "right", "right", "right"],
     )

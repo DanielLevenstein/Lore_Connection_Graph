@@ -712,12 +712,71 @@ def covered_term_ratio(candidate: str, required_terms: list[str]) -> float:
 
 
 def rewrite_concision_score(candidate: str) -> float:
-    word_count = len(term_tokens(candidate))
-    if 18 <= word_count <= 90:
+    return run_on_sentence_score(candidate)
+
+
+def run_on_sentence_score(candidate: str) -> float:
+    sentences = candidate_sentences(candidate)
+    if not sentences:
+        return 0.0
+    penalties = [sentence_quality_penalty(sentence) for sentence in sentences]
+    return max(0.0, 1.0 - (sum(penalties) / len(penalties)))
+
+
+def sentence_token_counts(candidate: str) -> list[int]:
+    return [len(term_tokens(sentence)) for sentence in candidate_sentences(candidate)]
+
+
+def candidate_sentences(candidate: str) -> list[str]:
+    sentences = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", candidate.strip())
+        if sentence.strip()
+    ]
+    return [sentence for sentence in sentences if term_tokens(sentence)]
+
+
+def sentence_quality_penalty(sentence: str) -> float:
+    tokens = term_tokens(sentence)
+    if not tokens:
         return 1.0
-    if word_count < 18:
-        return max(0.0, word_count / 18)
-    return max(0.0, 1.0 - ((word_count - 90) / 160))
+    return min(1.0, run_on_sentence_penalty(len(tokens)) + dangling_sentence_penalty(tokens))
+
+
+def run_on_sentence_penalty(word_count: int) -> float:
+    if word_count <= 35:
+        return 0.0
+    if word_count <= 55:
+        return (word_count - 35) / 40
+    return min(1.0, 0.5 + ((word_count - 55) / 40))
+
+
+def dangling_sentence_penalty(tokens: list[str]) -> float:
+    dangling_endings = {
+        "a",
+        "an",
+        "and",
+        "as",
+        "at",
+        "because",
+        "by",
+        "for",
+        "from",
+        "in",
+        "into",
+        "of",
+        "or",
+        "that",
+        "the",
+        "to",
+        "under",
+        "with",
+    }
+    if tokens[-1] in dangling_endings:
+        return 1.0
+    if len(tokens) >= 2 and tokens[-2:] in (["and", "to"], ["reason", "to"]):
+        return 1.0
+    return 0.0
 
 
 def unique_values(values) -> list[str]:

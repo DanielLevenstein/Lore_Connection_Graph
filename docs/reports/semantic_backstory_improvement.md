@@ -13,16 +13,16 @@
 | Model             | Qwen/Qwen2.5-0.5B-Instruct-GGUF      |
 | Quantization      | Q4_K_M                               |
 | Prompt version    | character-rewrite-v5-local-qwen-0.5b |
-| Prompt eval time  | 1999.73 ms                           |
+| Prompt eval time  | 1948.19 ms                           |
 | Prompt tokens     | 595                                  |
-| Completion tokens | 205                                  |
-| Total tokens      | 800                                  |
+| Completion tokens | 165                                  |
+| Total tokens      | 760                                  |
 
 ## Candidate
 
 ### Local Model Rewrite
 
-Orin Nightbloom, a Half-Orc Bard, was born with a weight the world seldom places on a child, the weight of a half-orc heritage clashing with the refined air of the Sunstone Mage College nestled on the frosted coast of his life. He shouldered his lineage with the strength of a lineage elder, a duty his mother, a revered elven mage, instilled in him. His magic a beacon in, Orin Nightbloom excelled, his talent a testament to his heritage. The loss of Orin Nightbloom's Mother left more than grief behind; it gave Orin a reason to understand the curse shadowing his family and to. Orin came of age at Sunstone Mage College, a place that sharpened both his talent and his sense of exile. The drive to stop a younger relative from repeating their worst choice is to break a curse that only worsens when ignored. The character's relationship to Orin Nightbloom's Mother is known as brave.
+Orin Nightbloom, a Half-Orc Bard, was born with a weight the world seldom places on a child, the weight of a half-orc heritage clashing with the refined air of Sunstone Mage College. He shouldered his lineage with the strength of a lineage elder, a duty his mother, a revered elven mage, instilled in him. Orin excelled, his magic a beacon in. He came of age at Sunstone Mage College, a place that sharpened both his talent and his sense of exile. The loss of Orin Nightbloom's Mother left more than grief behind; it gave Orin a reason to understand the curse shadowing his family and to. He seeks to stop a younger relative from repeating their worst choice, breaking a curse that only worsens when ignored.
 
 ### Existing Generated Section
 
@@ -42,12 +42,12 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 ## Scores
 
-| Candidate                  | Status   | Overall | Similarity | Coverage | Concision |
-| -------------------------- | -------- | ------: | ---------: | -------: | --------: |
-| Local model rewrite        | Accepted | 0.8159  | 0.8777     | 0.8750   | 0.5750    |
-| Existing generated section | Accepted | 0.7754  | 0.7334     | 0.7500   | 0.9062    |
-| Original section           | Source   | 0.4444  | 0.7875     | 0.3750   | 0.0000    |
+| Candidate                  | Status   | Overall | Similarity | Coverage | Sentence Quality |
+| -------------------------- | -------- | ------: | ---------: | -------: | ---------------: |
+| Local model rewrite        | Accepted | 0.7616  | 0.8307     | 0.7500   | 0.6667           |
+| Existing generated section | Accepted | 0.7942  | 0.7334     | 0.7500   | 1.0000           |
+| Original section           | Source   | 0.6320  | 0.7875     | 0.3750   | 0.9383           |
 
 ## Result
 
-The local model rewrite improves the overall quality score over the original section by `0.3715`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
+The local model rewrite improves the overall quality score over the original section by `0.1296`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.

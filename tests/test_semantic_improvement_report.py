@@ -1,4 +1,5 @@
 import scripts.generate_semantic_improvement_report as report_script
+from language_model.character_rewrites import rewrite_concision_score
 from scripts.generate_semantic_improvement_report import build_report
 
 
@@ -51,6 +52,7 @@ def test_semantic_report_formats_three_version_score_table():
     assert "Prompt eval time" in report
     assert "12.34 ms" in report
     assert "Status" in report
+    assert "Sentence Quality" in report
     assert any("Local model rewrite" in line for line in table_lines)
     assert any("Existing generated section" in line for line in table_lines)
     assert any("Original section" in line for line in table_lines)
@@ -79,3 +81,33 @@ def test_semantic_report_records_rejected_model_candidate():
     assert "fixture model echoed the prompt" in report
     assert "Local model rewrite        | Rejected" in report
     assert "existing generated section remains the better candidate" in report
+
+
+def test_rewrite_concision_score_penalizes_run_on_sentences():
+    concise = (
+        "Orin studies at Sunstone Mage College. "
+        "His mother's curse drives him to protect a younger relative."
+    )
+    run_on = (
+        "Orin studies at Sunstone Mage College while remembering his mother and trying to break the curse "
+        "and protect a younger relative and honor his lineage and prove himself and keep singing and keep "
+        "fighting and keep searching for answers without pausing or changing direction."
+    )
+
+    assert rewrite_concision_score(concise) == 1.0
+    assert rewrite_concision_score(run_on) < rewrite_concision_score(concise)
+
+
+def test_rewrite_concision_score_penalizes_dangling_sentence_fragments():
+    clean = (
+        "Orin came of age at Sunstone Mage College. "
+        "His mother's curse gave him a reason to protect his family."
+    )
+    malformed = (
+        "Orin came of age at Sunstone Mage College. "
+        "He excelled, his magic a beacon in. "
+        "The curse gave Orin a reason to."
+    )
+
+    assert rewrite_concision_score(malformed) < rewrite_concision_score(clean)
+    assert rewrite_concision_score(malformed) < 0.5
