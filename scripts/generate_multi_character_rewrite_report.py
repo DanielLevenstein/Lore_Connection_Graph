@@ -19,7 +19,7 @@ from language_model.character_rewrites import (
 )
 from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_language_model_config
 from language_model.storage import Character, CharacterProfile, read_character_profile
-from scripts.generate_semantic_improvement_report import markdown_table
+from scripts.generate_semantic_improvement_report import markdown_table, model_runtime_section
 
 
 CHARACTER_SHEETS_DIR = ROOT_DIR / "tests" / "fixtures" / "character_sheets"
@@ -38,8 +38,13 @@ def build_report(
     paths = character_paths or DEFAULT_CHARACTER_PATHS
     rewrite_client = rewrite_client or real_model_rewrite_client()
     results = [generate_character_outputs(path, rewrite_client) for path in paths]
+    model_metadata = getattr(rewrite_client, "last_metadata", {})
     sections = [
         "# Multi-Character Rewrite Comparison",
+        "",
+        "## Model Runtime",
+        "",
+        model_runtime_section(model_metadata),
         "",
         "## Rewrite Engine",
         "",
@@ -141,7 +146,7 @@ def generated_candidate(generate) -> str:
     try:
         return generate()
     except RuntimeError as exc:
-        return f"_No acceptable generated candidate was produced. {exc}_"
+        return f"Exception thrown on candidate generation {exc}_"
 
 
 def summary_score_row(character_name: str, summary: str, score) -> list[str]:

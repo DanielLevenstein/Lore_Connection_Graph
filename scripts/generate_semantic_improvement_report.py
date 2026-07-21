@@ -62,9 +62,11 @@ def build_report(character_path: Path = DEFAULT_CHARACTER_PATH, rewrite_client: 
         "- Source context similarity compares each candidate against the assembled character profile and graph evidence.\n\n"
         "## Model Runtime\n\n"
         f"{model_runtime_section(model_metadata)}\n\n"
+        f"{model_error_section(model_error)}"
         "## Candidate\n\n"
         "### Local Model Rewrite\n\n"
-        f"{model_candidate_section(model_story, model_error)}\n\n"
+        f"{model_candidate_section(model_story)}\n\n"
+        f"{model_error_section(model_error)}"
         "### Existing Generated Section\n\n"
         f"{existing_generated_backstory}\n\n"
         "### Original Backstory\n\n"
@@ -82,6 +84,18 @@ def model_runtime_section(metadata: dict) -> str:
         ["Model", metadata.get("model_id", "not reported")],
         ["Quantization", metadata.get("quantization", "not reported")],
         ["Prompt version", metadata.get("prompt_version", "not reported")],
+        ["Max tokens", metadata.get("max_tokens", "not reported")],
+        ["Temperature", metadata.get("temperature", "not reported")],
+        ["Top P", metadata.get("top_p", "not reported")],
+        ["Repeat penalty", metadata.get("repeat_penalty", "not reported")],
+        ["Seed", metadata.get("seed", "not reported")],
+        ["Context size", metadata.get("n_ctx", "not reported")],
+        ["Batch size", metadata.get("n_batch", "not reported")],
+        ["Threads", metadata.get("n_threads", "not reported")],
+        ["GPU layers", metadata.get("n_gpu_layers", "not reported")],
+        ["Device", metadata.get("device", "not reported")],
+        ["Timeout seconds", metadata.get("timeout_seconds", "not reported")],
+        ["Prompt hash", metadata.get("prompt_hash", "not reported")],
         ["Prompt eval time", f"{prompt_eval_time} ms" if prompt_eval_time else "not reported"],
         ["Prompt tokens", metadata.get("prompt_tokens", "not reported")],
         ["Completion tokens", metadata.get("completion_tokens", "not reported")],
@@ -90,12 +104,11 @@ def model_runtime_section(metadata: dict) -> str:
     return markdown_table(["Metric", "Value"], rows)
 
 
-def model_candidate_section(model_story: str, model_error: str) -> str:
-    if model_story.strip():
-        return model_story
-    detail = f" {model_error}" if model_error else ""
-    return f"_No acceptable local model rewrite was produced.{detail}_"
+def model_candidate_section(model_story: str) -> str:
+    return model_story
 
+def model_error_section(model_error: str) -> str:
+    return f" \n\nERROR: {model_error}" if model_error else ""
 
 def result_summary(model_story: str, delta: float) -> str:
     if not model_story.strip():

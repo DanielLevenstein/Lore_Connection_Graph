@@ -13,16 +13,30 @@
 | Model             | JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF |
 | Quantization      | Q4_K_M                                     |
 | Prompt version    | character-rewrite-v6-local-qwen-1.5b       |
-| Prompt eval time  | 8885.81 ms                                 |
+| Max tokens        | 640                                        |
+| Temperature       | 0.75                                       |
+| Top P             | 0.85                                       |
+| Repeat penalty    | 1.15                                       |
+| Seed              | 2310                                       |
+| Context size      | 8192                                       |
+| Batch size        | 64                                         |
+| Threads           | 2                                          |
+| GPU layers        | 0                                          |
+| Device            | none                                       |
+| Timeout seconds   | 180                                        |
+| Prompt hash       | 363508d65f2866c4                           |
+| Prompt eval time  | 8924.35 ms                                 |
 | Prompt tokens     | 615                                        |
-| Completion tokens | 156                                        |
-| Total tokens      | 771                                        |
+| Completion tokens | 330                                        |
+| Total tokens      | 945                                        |
 
 ## Candidate
 
 ### Local Model Rewrite
 
-Orin Nightbloom, known as Orin, was born into a world that couldn't accept his heritage. Despite the weight of his half-orc lineage, Orin excelled at Sunstone Mage College, a place that sharpened both his talent and his sense of exile. His mother, a revered elven mage, instilled in him the duty to understand the curse shadowing their family. Orin's drive is to stop a younger relative from repeating their worst choice, a curse that only worsens when ignored, and to break a curse that only worsens when ignored. His mother's legacy and the tension between his heritage and the refined environment of Sunstone Mage College have shaped his character, leading him to believe that his actions will change the course of history.
+Orin Nightbloom was born into an era where identity is shaped by tradition and circumstance. Born with a weight he could barely comprehend—the legacy of his half-orc heritage clashing with the refined air of Sunstone Mage College on the frosted coast. He came to understand that this tension, left unaddressed, would only grow heavier.
+
+Orin’s life was defined by two opposing forces: the weight of lineage and the pressure from his surroundings. His mother, a revered elven mage, instilled in him the responsibility of understanding and breaking the curse shadowing their family history. This duty became more than just an inheritance; it became Orin's drive.
 
 ### Existing Generated Section
 
@@ -44,10 +58,10 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 | Candidate                  | Status   | Overall | Similarity | Coverage | Sentence Quality |
 | -------------------------- | -------- | ------: | ---------: | -------: | ---------------: |
-| Local model rewrite        | Accepted | 0.6959  | 0.7334     | 0.6250   | 0.7900           |
+| Local model rewrite        | Accepted | 0.6268  | 0.7675     | 0.3750   | 0.9472           |
 | Existing generated section | Accepted | 0.7588  | 0.7334     | 0.7500   | 0.8229           |
 | Original section           | Source   | 0.5470  | 0.7875     | 0.3750   | 0.5129           |
 
 ## Result
 
-The local model rewrite improves the overall quality score over the original section by `0.1489`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
+The local model rewrite improves the overall quality score over the original section by `0.0798`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.

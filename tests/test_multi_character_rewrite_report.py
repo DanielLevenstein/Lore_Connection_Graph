@@ -7,6 +7,18 @@ class CapturingRewriteClient:
         "model_id": "fixture-model",
         "quantization": "Q4_K_M",
         "prompt_version": "fixture-prompt",
+        "max_tokens": "640",
+        "temperature": "0.65",
+        "top_p": "0.85",
+        "repeat_penalty": "1.15",
+        "seed": "2310",
+        "n_ctx": "8192",
+        "n_batch": "64",
+        "n_threads": "2",
+        "n_gpu_layers": "0",
+        "device": "none",
+        "timeout_seconds": "180",
+        "prompt_hash": "multi1234567890",
     }
 
     def __init__(self) -> None:
@@ -31,6 +43,19 @@ def test_multi_character_report_compares_three_characters():
     report = build_report(rewrite_client=client)
 
     assert "# Multi-Character Rewrite Comparison" in report
+    assert "## Model Runtime" in report
+    assert "fixture-model" in report
+    assert "fixture-prompt" in report
+    assert "Temperature" in report
+    assert "0.65" in report
+    assert "Top P" in report
+    assert "0.85" in report
+    assert "Repeat penalty" in report
+    assert "1.15" in report
+    assert "Seed" in report
+    assert "2310" in report
+    assert "Prompt hash" in report
+    assert "multi1234567890" in report
     assert "Orin Nightbloom uses the generation 1 auto-generated backstory as source material." in report
     assert "### Orin Nightbloom" in report
     assert "### Jory Ravenmark" in report

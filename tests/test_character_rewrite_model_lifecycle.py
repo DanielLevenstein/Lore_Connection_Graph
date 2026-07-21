@@ -293,7 +293,14 @@ def test_model_rewrite_quality_flags_repetition_and_truncation():
 
 
 def test_worker_process_returns_cli_output_and_timing_metadata(tmp_path, monkeypatch):
-    config = LocalRewriteModelConfig(cache_dir=tmp_path, filename="model.gguf")
+    config = LocalRewriteModelConfig(
+        cache_dir=tmp_path,
+        filename="model.gguf",
+        temperature=0.65,
+        top_p=0.85,
+        repeat_penalty=1.15,
+        seed=2310,
+    )
     commands = []
 
     def fake_run(command, **_kwargs):
@@ -311,10 +318,26 @@ def test_worker_process_returns_cli_output_and_timing_metadata(tmp_path, monkeyp
     assert result.ok
     assert commands[0][:2] == ["llama", "completion"]
     assert "--device" in commands[0]
+    assert commands[0][commands[0].index("--temp") + 1] == "0.65"
+    assert commands[0][commands[0].index("--top-p") + 1] == "0.85"
+    assert commands[0][commands[0].index("--repeat-penalty") + 1] == "1.15"
+    assert commands[0][commands[0].index("--seed") + 1] == "2310"
     assert "<|im_start|>assistant" in commands[0][-1]
     assert result.text == "Backstory: Mara keeps the archive safe."
     assert result.metadata["prompt_eval_time_ms"] == "42.50"
     assert result.metadata["prompt_tokens"] == "12"
+    assert result.metadata["temperature"] == "0.65"
+    assert result.metadata["top_p"] == "0.85"
+    assert result.metadata["repeat_penalty"] == "1.15"
+    assert result.metadata["seed"] == "2310"
+    assert result.metadata["max_tokens"] == str(config.max_tokens)
+    assert result.metadata["n_ctx"] == str(config.n_ctx)
+    assert result.metadata["n_batch"] == str(config.n_batch)
+    assert result.metadata["n_threads"] == str(config.n_threads)
+    assert result.metadata["n_gpu_layers"] == str(config.n_gpu_layers)
+    assert result.metadata["device"] == config.device
+    assert result.metadata["timeout_seconds"] == str(config.timeout_seconds)
+    assert len(result.metadata["prompt_hash"]) == 16
 
 
 def test_worker_process_reports_timeout(tmp_path, monkeypatch):
@@ -356,6 +379,9 @@ def test_load_local_language_model_config_resolves_relative_cache_dir(tmp_path):
   "model_id": "example/model",
   "filename": "example.gguf",
   "cache_dir": "models/example",
+  "top_p": 0.7,
+  "repeat_penalty": 1.2,
+  "seed": 42,
   "n_ctx": 1024,
   "device": "none"
 }
@@ -368,6 +394,9 @@ def test_load_local_language_model_config_resolves_relative_cache_dir(tmp_path):
     assert config.model_id == "example/model"
     assert config.filename == "example.gguf"
     assert config.cache_dir.name == "example"
+    assert config.top_p == 0.7
+    assert config.repeat_penalty == 1.2
+    assert config.seed == 42
 
 
 def test_default_local_language_model_config_uses_fast_probe_model():

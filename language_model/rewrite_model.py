@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -48,6 +49,9 @@ class LocalRewriteModelConfig:
     prompt_version: str = LOCAL_REWRITE_PROMPT_VERSION
     max_tokens: int = 640
     temperature: float = 0.2
+    top_p: float = 0.85
+    repeat_penalty: float = 1.15
+    seed: int = -1
     n_ctx: int = 8192
     n_batch: int = 64
     n_threads: int = 2
@@ -229,6 +233,12 @@ def run_worker_process(config: LocalRewriteModelConfig, messages: list[dict[str,
         "--no-op-offload",
         "--temp",
         str(config.temperature),
+        "--top-p",
+        str(config.top_p),
+        "--repeat-penalty",
+        str(config.repeat_penalty),
+        "--seed",
+        str(config.seed),
         "--no-display-prompt",
         "--no-conversation",
         "--simple-io",
@@ -255,6 +265,18 @@ def run_worker_process(config: LocalRewriteModelConfig, messages: list[dict[str,
         "model_id": config.model_id,
         "quantization": config.quantization,
         "prompt_version": config.prompt_version,
+        "max_tokens": str(config.max_tokens),
+        "temperature": str(config.temperature),
+        "top_p": str(config.top_p),
+        "repeat_penalty": str(config.repeat_penalty),
+        "seed": str(config.seed),
+        "n_ctx": str(config.n_ctx),
+        "n_batch": str(config.n_batch),
+        "n_threads": str(config.n_threads),
+        "n_gpu_layers": str(config.n_gpu_layers),
+        "device": config.device,
+        "timeout_seconds": str(config.timeout_seconds),
+        "prompt_hash": prompt_hash(prompt),
     }
     metadata.update(parse_llama_timing(diagnostics))
     return WorkerResult(ok=True, text=process.stdout, metadata=metadata)
@@ -270,6 +292,10 @@ def prompt_from_messages(messages: list[dict[str, str]]) -> str:
         f"{user}<|im_end|>\n"
         "<|im_start|>assistant\n"
     )
+
+
+def prompt_hash(prompt: str) -> str:
+    return hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:16]
 
 
 def parse_llama_timing(diagnostics: str) -> dict[str, str]:

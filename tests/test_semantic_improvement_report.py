@@ -17,6 +17,18 @@ class FakeRewriteClient:
         "model_id": "fixture-model",
         "quantization": "Q4_K_M",
         "prompt_version": "fixture-prompt",
+        "max_tokens": "640",
+        "temperature": "0.65",
+        "top_p": "0.85",
+        "repeat_penalty": "1.15",
+        "seed": "2310",
+        "n_ctx": "8192",
+        "n_batch": "64",
+        "n_threads": "2",
+        "n_gpu_layers": "0",
+        "device": "none",
+        "timeout_seconds": "180",
+        "prompt_hash": "abc123def4567890",
         "prompt_eval_time_ms": "12.34",
         "prompt_tokens": "321",
         "completion_tokens": "42",
@@ -51,6 +63,16 @@ def test_semantic_report_formats_three_version_score_table():
     assert "Source context similarity compares each candidate" in report
     assert "Prompt eval time" in report
     assert "12.34 ms" in report
+    assert "Temperature" in report
+    assert "0.65" in report
+    assert "Top P" in report
+    assert "0.85" in report
+    assert "Repeat penalty" in report
+    assert "1.15" in report
+    assert "Seed" in report
+    assert "2310" in report
+    assert "Prompt hash" in report
+    assert "abc123def4567890" in report
     assert "Status" in report
     assert "Sentence Quality" in report
     assert any("Local model rewrite" in line for line in table_lines)
