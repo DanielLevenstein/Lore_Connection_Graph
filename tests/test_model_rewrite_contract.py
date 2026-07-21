@@ -4,7 +4,10 @@ from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
 from language_model.character_rewrites import (
     clean_model_rewrite,
+    graph_generated_backstory,
+    graph_generated_backstory_result,
     graph_generated_summary,
+    graph_generated_summary_result,
     model_rewrite_quality_issues,
     rewrite_prompt,
     rewrite_quality_context,
@@ -35,6 +38,13 @@ REPETITIVE_JORY_SUMMARY = (
     "She follows every storm track and every rumor she can find. "
     "She follows every storm track and every rumor she can find."
 )
+GOOD_JORY_BACKSTORY = (
+    "Jory Ravenmark grew up reading the sea from an island watchtower, where her family taught her how to "
+    "listen for storms and survive hard weather. The leviathan attack took both fathers from her and left her "
+    "with grief, mercy she cannot explain, and a vow to find the beast again.\n\n"
+    "She now turns that grief into protection for other families wounded by the sea. Every rumor, storm track, "
+    "and old memory pulls Jory closer to the monster that shattered her home."
+)
 
 
 def jory_profile_and_graph():
@@ -55,6 +65,42 @@ def test_summary_prompt_has_single_candidate_contract():
     assert "Write three" not in prompt
 
 
+def test_backstory_prompt_has_two_paragraph_contract():
+    profile, graph = jory_profile_and_graph()
+
+    prompt = rewrite_prompt("backstory", graph, profile)
+
+    assert "Rewrite the character backstory as exactly 2 concise paragraphs." in prompt
+    assert "Preserve the named people, places, relationships, and drives." in prompt
+    assert "Return only the rewritten prose." in prompt
+    assert "2 to 4 concise paragraphs" not in prompt
+
+
+def test_rewrite_api_sends_mode_specific_source_context_to_model_client():
+    profile, graph = jory_profile_and_graph()
+    prompts = []
+
+    def capturing_client(messages):
+        assert messages[0]["role"] == "system"
+        assert "Rewrite roleplaying character lore" in messages[0]["content"]
+        assert messages[1]["role"] == "user"
+        prompts.append(messages[1]["content"])
+        if "character summary" in messages[1]["content"]:
+            return GOOD_JORY_SUMMARY
+        if "Rewrite the character backstory" in messages[1]["content"]:
+            return GOOD_JORY_BACKSTORY
+        raise AssertionError(f"Unexpected rewrite prompt: {messages[1]['content']}")
+
+    assert graph_generated_summary(graph, profile, rewrite_client=capturing_client) == GOOD_JORY_SUMMARY
+    assert graph_generated_backstory(graph, profile, rewrite_client=capturing_client) == GOOD_JORY_BACKSTORY
+
+    summary_prompt, backstory_prompt = prompts
+    assert "Current summary source: Haunted by the loss of her family" in summary_prompt
+    assert "Current backstory source:" not in summary_prompt
+    assert "Current backstory source: Jory was a sailor" in backstory_prompt
+    assert "Current summary source:" not in backstory_prompt
+
+
 def test_summary_generation_collapses_multiple_model_alternatives():
     profile, graph = jory_profile_and_graph()
 
@@ -69,6 +115,69 @@ def test_summary_generation_collapses_multiple_model_alternatives():
     assert summary == GOOD_JORY_SUMMARY
     assert "another possible summary" not in summary
     assert "\n\n" not in summary
+
+
+def test_summary_generation_retries_once_and_returns_retry_candidate():
+    profile, graph = jory_profile_and_graph()
+    calls = []
+
+    def retrying_client(messages):
+        calls.append(messages[-1]["content"])
+        if len(calls) == 1:
+            return RUN_ON_JORY_SUMMARY
+        return GOOD_JORY_SUMMARY
+
+    result = graph_generated_summary_result(graph, profile, rewrite_client=retrying_client)
+
+    assert result.text == GOOD_JORY_SUMMARY
+    assert len(result.attempts) == 2
+    assert result.attempts[0].normalized_text == RUN_ON_JORY_SUMMARY
+    assert "summary sentence too long" in result.attempts[0].validation_issues
+    assert result.attempts[1].validation_issues == ()
+    assert "Previous candidate:" in calls[1]
+    assert "Return only the final rewritten prose." in calls[1]
+
+
+def test_backstory_generation_retries_once_and_returns_retry_candidate():
+    profile, graph = jory_profile_and_graph()
+    first_attempt = "Jory Ravenmark follows the sea after the leviathan."
+    calls = []
+
+    def retrying_client(messages):
+        calls.append(messages[-1]["content"])
+        if len(calls) == 1:
+            return first_attempt
+        return GOOD_JORY_BACKSTORY
+
+    result = graph_generated_backstory_result(graph, profile, rewrite_client=retrying_client)
+
+    assert result.text == GOOD_JORY_BACKSTORY
+    assert len(result.attempts) == 2
+    assert result.attempts[0].normalized_text == first_attempt
+    assert "backstory paragraph count" in result.attempts[0].validation_issues
+    assert result.attempts[1].validation_issues == ()
+    assert "Previous candidate:" in calls[1]
+
+
+def test_backstory_generation_strips_diagnostics_and_keeps_two_paragraphs():
+    profile, graph = jory_profile_and_graph()
+
+    def noisy_backstory_client(_messages):
+        return (
+            "llama.cpp build: fixture\n"
+            f"Backstory: {GOOD_JORY_BACKSTORY}\n\n"
+            "A third paragraph should not survive model-output normalization.\n"
+            "prompt eval time = 12.00 ms\n"
+        )
+
+    backstory = graph_generated_backstory(graph, profile, rewrite_client=noisy_backstory_client)
+
+    assert backstory == GOOD_JORY_BACKSTORY
+    assert backstory.count("\n\n") == 1
+    assert "Backstory:" not in backstory
+    assert "llama.cpp" not in backstory
+    assert "third paragraph" not in backstory
+    assert "prompt eval time" not in backstory
 
 
 def test_summary_metrics_distinguish_usable_run_on_and_repetitive_candidates():

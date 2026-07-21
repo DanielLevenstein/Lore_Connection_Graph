@@ -23,21 +23,13 @@
 | GPU layers        | 0                                                    |
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
-| Prompt hash       | be814e180e8ec290                                     |
-| Prompt eval time  | 10491.74 ms                                          |
-| Prompt tokens     | 467                                                  |
-| Completion tokens | 94                                                   |
-| Total tokens      | 561                                                  |
+| Prompt hash       | a5a405072a612deb                                     |
+| Prompt eval time  | 9867.50 ms                                           |
+| Prompt tokens     | 599                                                  |
+| Completion tokens | 63                                                   |
+| Total tokens      | 662                                                  |
 
 ## Candidate
-
-### Local Model Rewrite
-
-Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable mercy shown by a monstrous leviathan that has driven her to blend nomadic hunter-memories with a burning oath to track and face the beast she seeks to vanquish.
-
-### Existing Summary
-
-Haunted by the loss of her family and the inexplicable mercy shown by a monstrous leviathan, Jory Ravenmark blends her nomadic hunter-memories with a burning oath to track and face the beast.
 
 ### Source Backstory
 
@@ -47,13 +39,29 @@ She learned to read the open sea as her father once had before her. She greaved 
 
 Jory Ravenmark directed her grief to become a beacon of light to her community helping others who had lost love ones to the sea work on rebuilding their lives into something their ancestors would be proud of.
 
+### Local Model Rewrite
+
+#### Initial Generation
+
+Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable mercy shown by a monstrous leviathan that has driven her to blend nomadic hunter-memories with a burning oath to track and face the beast she seeks to vanquish. Her mother died at sea, while her father was consumed by loneliness which drove him to drink heavily; these traumatic losses have fueled her quest for vengeance against an entity she believes is responsible.
+
+#### Retry Generation
+
+Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable mercy shown by a monstrous leviathan that has driven her to blend nomadic hunter-memories with a burning oath to track and face the beast she seeks to vanquish, even in its monstrous form.
+
+### Existing Summary
+
+Haunted by the loss of her family and the inexplicable mercy shown by a monstrous leviathan, Jory Ravenmark blends her nomadic hunter-memories with a burning oath to track and face the beast.
+
 ## Scores
 
-| Candidate           | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality |
-| ------------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: |
-| Local model rewrite | Rejected | 46.76   | 100.00               | 68.29      | 0.00                  | 17.86            |
-| Existing Summary    | Rejected | 44.21   | 100.00               | 72.24      | 48.00                 | 62.50            |
-| Source Backstory    | Source   | 54.87   | 31.75                | 90.26      | 72.89                 | 84.26            |
+| Candidate                   | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality | 
+| --------------------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: | 
+| Source Backstory            | Source   | 54.87   | 31.75                | 90.26      | 72.89                 | 84.26            | 
+| Local model rewrite initial | Rejected | 51.30   | 76.92                | 73.98      | 22.00                 | 30.60            | 
+| Local model rewrite retry   | Rejected | 41.68   | 100.00               | 63.98      | 0.00                  | 0.00             | 
+| Existing Summary            | Rejected | 44.21   | 100.00               | 72.24      | 48.00                 | 62.50            | 
+
 
 ## Sentence Lengths
 
@@ -61,4 +69,4 @@ Jory Ravenmark directed her grief to become a beacon of light to her community h
 
 ## Result
 
-The local model rewrite changes the writing quality score versus the original section by `-0.0811`.
+The local model rewrite changes the writing quality score versus the original section by `-0.1319`.

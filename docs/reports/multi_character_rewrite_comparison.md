@@ -19,7 +19,7 @@
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
 | Prompt hash       | 9f1d57257b232b81                                     |
-| Prompt eval time  | 11533.68 ms                                          |
+| Prompt eval time  | 11736.22 ms                                          |
 | Prompt tokens     | 665                                                  |
 | Completion tokens | 269                                                  |
 | Total tokens      | 934                                                  |
@@ -32,19 +32,19 @@
 
 ## Generated Summary Scores
 
-| Character       | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality |
-| --------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: |
-| Orin Nightbloom | Rejected | 46.82   | 100.00               | 49.09      | 20.00                 | 35.71            |
-| Jory Ravenmark  | Rejected | 46.76   | 100.00               | 68.29      | 0.00                  | 17.86            |
-| Neal Lovington  | Rejected | 69.52   | 100.00               | 65.03      | 54.00                 | 90.62            |
+| Candidate       | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality | Rejection Reasons                                 |
+| --------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: | ------------------------------------------------- |
+| Orin Nightbloom | Rejected | 46.30   | 100.00               | 49.63      | 16.00                 | 32.14            | summary sentence too long; overall score below 70 |
+| Jory Ravenmark  | Rejected | 41.68   | 100.00               | 63.98      | 0.00                  | 0.00             | summary sentence too long; overall score below 70 |
+| Neal Lovington  | Rejected | 69.52   | 100.00               | 65.03      | 54.00                 | 90.62            | overall score below 70                            |
 
 ## Generated Backstory Scores
 
-| Character       | Status   | Overall | Similarity | Sentence Length Score | Sentence Quality |
-| --------------- | -------- | ------: | ---------: | --------------------: | ---------------: |
-| Orin Nightbloom | Accepted | 74.24   | 64.73      | 75.20                 | 89.17            |
-| Jory Ravenmark  | Rejected | 68.36   | 69.16      | 86.00                 | 92.22            |
-| Neal Lovington  | Rejected | 68.46   | 61.95      | 58.29                 | 90.71            |
+| Candidate       | Status   | Overall | Length Score | Similarity | Sentence Length Score | Sentence Quality | Rejection Reasons      |
+| --------------- | -------- | ------: | -----------: | ---------: | --------------------: | ---------------: | ---------------------- |
+| Orin Nightbloom | Accepted | 74.24   | 100.00       | 64.73      | 75.20                 | 89.17            |                        |
+| Jory Ravenmark  | Rejected | 68.36   | 100.00       | 69.16      | 86.00                 | 92.22            | overall score below 70 |
+| Neal Lovington  | Rejected | 68.46   | 100.00       | 61.95      | 58.29                 | 90.71            | overall score below 70 |
 
 ## Character Outputs
 
@@ -54,7 +54,7 @@ Source material: generation 1 auto-generated backstory
 
 #### Generated Summary
 
-Orin Nightbloom is a Half-Orc Bard from Sunstone Mage College, driven to preserve by stopping his younger relative's worst choice and breaking a curse that worsens when ignored through history lessons instilled by his mother as an elven mage.
+Orin Nightbloom is a Half-Orc Bard from Sunstone Mage College who drives to preserve by stopping his younger relative's worst choice and breaking a curse that worsens when ignored through history lessons instilled by his mother as an elven mage.
 
 #### Generated Backstory
 
@@ -68,7 +68,7 @@ Source material: current character backstory
 
 #### Generated Summary
 
-Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable mercy shown by a monstrous leviathan that has driven her to blend nomadic hunter-memories with a burning oath to track and face the beast she seeks to vanquish.
+Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable mercy shown by a monstrous leviathan that has driven her to blend nomadic hunter-memories with a burning oath to track and face the beast she seeks to vanquish, even in its monstrous form.
 
 #### Generated Backstory
 

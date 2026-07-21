@@ -23,6 +23,21 @@ class RewriteQualityScore:
 
 
 @dataclass(frozen=True)
+class RewriteAttempt:
+    attempt_number: int
+    raw_text: str
+    cleaned_text: str
+    normalized_text: str
+    validation_issues: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RewriteResult:
+    text: str
+    attempts: tuple[RewriteAttempt, ...]
+
+
+@dataclass(frozen=True)
 class StorySignals:
     first_name: str
     identity: str
@@ -48,8 +63,7 @@ def graph_generated_summary(
     profile: CharacterProfile,
     rewrite_client: RewriteClient | None = None,
 ) -> str:
-    prompt = rewrite_prompt("summary", graph, profile)
-    return run_graph_rewrite(prompt, graph, profile, "summary", rewrite_client=rewrite_client)
+    return graph_generated_summary_result(graph, profile, rewrite_client=rewrite_client).text
 
 
 def graph_generated_backstory(
@@ -57,8 +71,25 @@ def graph_generated_backstory(
     profile: CharacterProfile,
     rewrite_client: RewriteClient | None = None,
 ) -> str:
+    return graph_generated_backstory_result(graph, profile, rewrite_client=rewrite_client).text
+
+
+def graph_generated_summary_result(
+    graph: CharacterGraph,
+    profile: CharacterProfile,
+    rewrite_client: RewriteClient | None = None,
+) -> RewriteResult:
+    prompt = rewrite_prompt("summary", graph, profile)
+    return run_graph_rewrite_result(prompt, graph, profile, "summary", rewrite_client=rewrite_client)
+
+
+def graph_generated_backstory_result(
+    graph: CharacterGraph,
+    profile: CharacterProfile,
+    rewrite_client: RewriteClient | None = None,
+) -> RewriteResult:
     prompt = rewrite_prompt("backstory", graph, profile)
-    return run_graph_rewrite(prompt, graph, profile, "backstory", rewrite_client=rewrite_client)
+    return run_graph_rewrite_result(prompt, graph, profile, "backstory", rewrite_client=rewrite_client)
 
 
 def run_graph_rewrite(
@@ -68,6 +99,16 @@ def run_graph_rewrite(
     kind: str,
     rewrite_client: RewriteClient | None = None,
 ) -> str:
+    return run_graph_rewrite_result(prompt, graph, profile, kind, rewrite_client=rewrite_client).text
+
+
+def run_graph_rewrite_result(
+    prompt: str,
+    graph: CharacterGraph,
+    profile: CharacterProfile,
+    kind: str,
+    rewrite_client: RewriteClient | None = None,
+) -> RewriteResult:
     messages = [
         {
             "role": "system",
@@ -79,13 +120,52 @@ def run_graph_rewrite(
         {"role": "user", "content": prompt},
     ]
     response = rewrite_client(messages) if rewrite_client else deterministic_graph_rewrite(kind, graph, profile)
-    cleaned = clean_model_rewrite(response)
-    rewritten = humanize_generated_text(cleaned)
-    if rewrite_client and kind == "summary":
-        rewritten = trim_summary_candidate(rewritten)
-    if rewrite_client and kind == "backstory":
-        rewritten = trim_backstory_candidate(rewritten)
-    return rewritten
+    if not rewrite_client:
+        text = humanize_generated_text(clean_model_rewrite(response))
+        attempt = RewriteAttempt(
+            attempt_number=1,
+            raw_text=response,
+            cleaned_text=text,
+            normalized_text=text,
+            validation_issues=(),
+        )
+        return RewriteResult(text=text, attempts=(attempt,))
+    attempts = [rewrite_attempt(response, kind, attempt_number=1)]
+    if rewrite_client and attempts[0].validation_issues:
+        retry_messages = [
+            messages[0],
+            {"role": "user", "content": retry_rewrite_prompt(kind, prompt, attempts[0])},
+        ]
+        attempts.append(rewrite_attempt(rewrite_client(retry_messages), kind, attempt_number=2))
+    final_attempt = best_rewrite_attempt(attempts)
+    return RewriteResult(text=final_attempt.normalized_text, attempts=tuple(attempts))
+
+
+def rewrite_attempt(response: str, kind: str, attempt_number: int) -> RewriteAttempt:
+    cleaned = humanize_generated_text(clean_model_rewrite(response))
+    normalized = normalize_rewrite_candidate(cleaned, kind)
+    return RewriteAttempt(
+        attempt_number=attempt_number,
+        raw_text=response,
+        cleaned_text=cleaned,
+        normalized_text=normalized,
+        validation_issues=tuple(rewrite_contract_issues(cleaned, normalized, kind)),
+    )
+
+
+def normalize_rewrite_candidate(candidate: str, kind: str) -> str:
+    if kind == "summary":
+        return trim_summary_candidate(candidate)
+    if kind == "backstory":
+        return trim_backstory_candidate(candidate)
+    return candidate.strip()
+
+
+def best_rewrite_attempt(attempts: list[RewriteAttempt]) -> RewriteAttempt:
+    for attempt in reversed(attempts):
+        if attempt.normalized_text.strip():
+            return attempt
+    return attempts[0]
 
 
 def deterministic_graph_rewrite(kind: str, graph: CharacterGraph, profile: CharacterProfile) -> str:
@@ -222,6 +302,83 @@ def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) 
     )
     prompt_parts.append("Return only the rewritten prose. Do not include headings, labels, diagnostics, or the prompt.")
     return "\n\n".join(prompt_parts)
+
+
+def retry_rewrite_prompt(kind: str, original_prompt: str, attempt: RewriteAttempt) -> str:
+    issue_guidance = retry_issue_guidance(attempt.validation_issues)
+    if kind == "summary":
+        repair_instruction = (
+            "Rewrite the previous candidate as exactly one character summary paragraph. "
+            "Use 30 to 60 words and one to three complete sentences. "
+            "Do not provide alternatives, drafts, headings, labels, analysis, or Markdown. "
+            "Preserve only source-backed facts from the original prompt."
+        )
+    elif kind == "backstory":
+        repair_instruction = (
+            "Rewrite the previous candidate as exactly two concise prose paragraphs. "
+            "Preserve source-backed names, places, relationships, and drives. "
+            "Avoid repeated sentences and repeated phrases. "
+            "Do not include headings, labels, analysis, or Markdown fences."
+        )
+    else:
+        raise ValueError(f"Unknown rewrite kind: {kind}")
+    return "\n\n".join(
+        [
+            repair_instruction,
+            issue_guidance,
+            "Previous candidate:",
+            compact_source_text(attempt.normalized_text or attempt.cleaned_text, 900),
+            "Original request:",
+            original_prompt,
+            "Return only the final rewritten prose.",
+        ]
+    )
+
+
+def retry_issue_guidance(issues: tuple[str, ...]) -> str:
+    if not issues:
+        return "Improve the candidate so it follows the requested output shape."
+    issue_text = "; ".join(issues)
+    return f"Repair goals: {issue_text}."
+
+
+def rewrite_contract_issues(cleaned: str, normalized: str, kind: str) -> list[str]:
+    issues = []
+    if not normalized.strip():
+        return ["empty candidate"]
+    issues.extend(model_rewrite_quality_issues(cleaned))
+    if kind == "summary":
+        issues.extend(summary_contract_issues(cleaned, normalized))
+    elif kind == "backstory":
+        issues.extend(backstory_contract_issues(cleaned, normalized))
+    return unique_values(issues)
+
+
+def summary_contract_issues(cleaned: str, normalized: str) -> list[str]:
+    issues = []
+    paragraphs = candidate_paragraphs(cleaned)
+    if len(paragraphs) > 1:
+        issues.append("multiple summary alternatives")
+    word_count = len(normalized.split())
+    if word_count < 30 or word_count > 60:
+        issues.append("summary length outside 30 to 60 words")
+    sentence_lengths = [len(term_tokens(sentence)) for sentence in candidate_sentences(normalized)]
+    if any(length > 35 for length in sentence_lengths) or (len(sentence_lengths) == 1 and word_count > 25):
+        issues.append("summary sentence too long")
+    return issues
+
+
+def backstory_contract_issues(cleaned: str, normalized: str) -> list[str]:
+    issues = []
+    if len(candidate_paragraphs(normalized)) != 2 and len(candidate_paragraphs(cleaned)) != 2:
+        issues.append("backstory paragraph count")
+    if any(len(term_tokens(sentence)) > 35 for sentence in candidate_sentences(normalized)):
+        issues.append("sentence too long")
+    return issues
+
+
+def candidate_paragraphs(candidate: str) -> list[str]:
+    return [paragraph.strip() for paragraph in candidate.split("\n\n") if paragraph.strip()]
 
 
 def prompt_injection_indicators(source_text: str) -> list[str]:

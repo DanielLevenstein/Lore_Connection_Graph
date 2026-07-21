@@ -23,27 +23,13 @@
 | GPU layers        | 0                                                    |
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
-| Prompt hash       | 02f0e87e27d4b079                                     |
-| Prompt eval time  | 15840.42 ms                                          |
-| Prompt tokens     | 679                                                  |
-| Completion tokens | 477                                                  |
-| Total tokens      | 1156                                                 |
+| Prompt hash       | 31f038cd70bc8da4                                     |
+| Prompt eval time  | 16362.65 ms                                          |
+| Prompt tokens     | 919                                                  |
+| Completion tokens | 149                                                  |
+| Total tokens      | 1068                                                 |
 
 ## Candidate
-
-### Local Model Rewrite
-
-Orin Nightbloom is a Half-Orc Bard who excelled at Sunstone Mage College but came of age grappling with the weight of his heritage and the isolation it often leaves behind. His mother, an esteemed elven mage revered for her arcane knowledge, instilled in him a sense of responsibility to understand and prevent the curse shadowing their family history—a duty that became Orin's driving force. He sought not just mastery over magic but also redemption from the weight of his past choices and responsibilities.
-
-Orin's drive is rooted deeply into breaking the curse that only worsens when ignored, stemming from a desire to avoid repeating generations' mistakes and honor her legacy in ways she could never have foreseen or understood. The lessons he learned at Sunstone Mage College sharpened not just as an individual but also as part of his community’s struggle against these ancient, unseen forces.
-
-### Existing Generated Section
-
-Orin Nightbloom is a Half-Orc Bard whose life has been shaped by the tension between legacy and self-invention. Orin came of age at Sunstone Mage College, a place that sharpened both his talent and his sense of exile.
-
-The loss of Orin Nightbloom's Mother left more than grief behind; it gave Orin a reason to understand the curse shadowing his family and to stop it from claiming anyone else.
-
-Now Orin carries his music forward as a form of defiance, trying to stop a younger relative from repeating their worst choice while turning inherited sorrow into something brave enough to protect the living.
 
 ### Original Backstory
 
@@ -53,13 +39,46 @@ Orin, consumed, poured over his mother's forgotten grimoires, a desperate tapest
 
 Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a shield against the encroaching darkness. He carries with him the weight of his mother’s fading notes, the echo of her pain, the notes of his own, fueled by a promise to break the cycle, to save his young cousin, to silence the chorus of the cursed. He carries the weight of the Sunstone mage college, a living monument to the pain their whispers could not heal, and a beacon for the path that could. Most of all, he carries the sorrow of his loss, the ache of a mother’s legacy left untarnished, and a burden that could, with his intervention, finally be lifted.
 
+### Local Model Rewrite
+
+#### Initial Generation
+
+Orin Nightbloom is a Half-Orc Bard who excelled at Sunstone Mage College but came of age grappling with the weight of his heritage and the isolation it often leaves behind. His mother, an esteemed elven mage revered for her arcane knowledge, instilled in him a sense of responsibility to understand and prevent the curse shadowing their family history—a duty that became Orin's driving force. He sought not just mastery over magic but also redemption from the weight of his past choices and responsibilities.
+
+Orin's drive is rooted deeply into breaking the curse that only worsens when ignored, stemming from a desire to avoid repeating generations' mistakes and honor her legacy in ways she could never have foreseen or understood. The lessons he learned at Sunstone Mage College sharpened not just as an individual but also as part of his community’s struggle against these ancient, unseen forces.
+
+Orin Nightbloom is known for his bravery and dedication to making amends with the past, a trait that drives him in both personal and communal endeavors aimed at preventing future suffering. His actions are guided by a deep respect for history and an unwavering commitment to ensuring that Orin's family does not suffer from the same fate as those who came before them.
+
+Through his skills and determination, Orin aims to stop younger relatives from repeating their worst choices—choices that have left legacies of pain and suffering in the past—and break the curse that only worsens when ignored. His legacy is one of perseverance and hope, a beacon for others facing similar challenges and a testament to the strength found within the bonds forged by history itself.
+
+Orin Nightbloom's journey at Sunstone Mage College was pivotal not just as an educational experience but also in his understanding of how he could contribute meaningfully to a world where magic and destiny intertwine. His drive is rooted in breaking curses, preventing future suffering, honoring those who came before him, and making amends for the mistakes that have shaped their lives.
+
+Through these drives, Orin Nightbloom seeks not just personal glory but also redemption from the weight of his past choices and responsibilities as part of a legacy that stretches back generations. His actions are driven by a deep respect for history and an unwavering commitment to ensuring that future suffering is prevented through bravery and a dedication to making amends in ways she could never have foreseen or understood.
+
+#### Retry Generation
+
+Orin Nightbloom is a Half-Orc Bard who excelled at Sunstone Mage College but came of age grappling with the weight of his heritage and the isolation it often leaves behind. The lessons he learned sharpened not just as an individual, but also in breaking the curse that only worsens when ignored—stemming from the responsibility to stop a younger relative from repeating their worst choice. Orin's drive is rooted deeply into avoiding history's mistakes by honoring his mother's legacy and preventing the shadow of her revered elven mage life being overshadowed by generations past. Sunstone Mage College provided not just magical skills but also shaped him as part of a community’s struggle against ancient, unseen forces that only worsen when they’re ignored.
+
+### Existing Generated Section
+
+Orin Nightbloom is a Half-Orc Bard whose life has been shaped by the tension between legacy and self-invention. Orin came of age at Sunstone Mage College, a place that sharpened both his talent and his sense of exile.
+
+The loss of Orin Nightbloom's Mother left more than grief behind; it gave Orin a reason to understand the curse shadowing his family and to stop it from claiming anyone else.
+
+Now Orin carries his music forward as a form of defiance, trying to stop a younger relative from repeating their worst choice while turning inherited sorrow into something brave enough to protect the living.
+
 ## Scores
 
-| Candidate                  | Status   | Overall | Similarity | Sentence Length Score | Sentence Quality |
-| -------------------------- | -------- | ------: | ---------: | --------------------: | ---------------: |
-| Local model rewrite        | Rejected | 59.71   | 67.07      | 59.20                 | 68.67            |
-| Existing Generated Section | Accepted | 75.88   | 73.34      | 75.00                 | 82.29            |
-| Original Backstory         | Source   | 54.70   | 78.75      | 56.53                 | 51.29            |
+| Candidate                   | Status   | Overall | Length Score | Similarity | Sentence Length Score | Sentence Quality |
+| --------------------------- | -------- | ------: | -----------: | ---------: | --------------------: | ---------------: |
+| Original Backstory          | Source   | 54.70   | 50.00        | 78.75      | 56.53                 | 51.29            |
+| Local model rewrite initial | Accepted | 70.04   | 0.00         | 66.94      | 53.85                 | 64.30            |
+| Local model rewrite retry   | Rejected | 66.23   | 50.00        | 68.99      | 55.00                 | 69.79            |
+| Existing Generated Section  | Accepted | 75.88   | 50.00        | 73.34      | 75.00                 | 82.29            |
+
+### Rejection Reasons
+
+- Local model rewrite retry: backstory paragraph count; length score below target; overall score below 70
 
 ## Sentence Lengths
 
@@ -67,4 +86,4 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 ## Result
 
-The local model rewrite changes the writing quality score versus the original section by `0.0501`.
+The local model rewrite changes the writing quality score versus the original section by `0.1153`.

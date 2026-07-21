@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR))
 
-from language_model.character_rewrites import RewriteClient, graph_generated_summary
+from language_model.character_rewrites import RewriteClient, graph_generated_summary_result
 from scripts.generate_semantic_improvement_report import (
     build_character_rewrite_report,
     real_model_rewrite_client,
@@ -29,7 +29,7 @@ def build_report(
         sentence_length_chart_path=sentence_length_chart_path,
         report_title="Semantic Summary Improvement Report: Jory Ravenmark",
         rewrite_kind="summary",
-        generate_model_text=graph_generated_summary,
+        generate_model_result=graph_generated_summary_result,
         existing_label="Existing Summary",
         original_label="Source Backstory",
         include_summary_length_score=True,

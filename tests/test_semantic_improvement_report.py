@@ -67,6 +67,25 @@ class RepetitiveRewriteClient(FakeRewriteClient):
         )
 
 
+class RetryRewriteClient(FakeRewriteClient):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self, messages):
+        self.calls += 1
+        if self.calls == 1:
+            return (
+                "Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable mercy "
+                "shown by a monstrous leviathan that has driven her to blend nomadic hunter-memories with a burning "
+                "oath to track and face the beast she seeks to vanquish."
+            )
+        return (
+            "Jory Ravenmark is a Human Barbarian haunted by family loss at sea. "
+            "She turns island watchtower memories into a protective oath, hunting the monstrous leviathan that "
+            "took her father."
+        )
+
+
 def test_semantic_report_formats_three_version_score_table():
     report = build_report(rewrite_client=FakeRewriteClient())
     score_table = report.split("## Scores", 1)[1].split("## Sentence Lengths", 1)[0]
@@ -284,10 +303,31 @@ def test_summary_report_keeps_rejected_generated_text_outside_error_section():
 
     assert "## Model Error" not in report
     assert "ERROR:" not in report
-    assert "repetitive wording" not in report
     local_candidate = report.split("### Local Model Rewrite", 1)[1].split("### Existing Summary", 1)[0]
     assert "Jory Ravenmark keeps searching the sea" in local_candidate
-    assert "Local model rewrite | Rejected" in report
+    assert "repetitive wording" not in local_candidate
+    assert "Rejection Reasons" in report
+    score_table = report.split("## Scores", 1)[1].split("### Rejection Reasons", 1)[0]
+    assert "Rejection Reasons" not in score_table
+    assert "repetitive wording" in report
+    assert "- Local model rewrite initial: repeated sentence; repetitive wording; overall score below 70" in report
+    assert "Local model rewrite initial | Rejected |" in report
+    assert "Local model rewrite retry" in report
+
+
+def test_single_character_summary_report_displays_initial_generation_and_retry():
+    client = RetryRewriteClient()
+
+    report = summary_report_script.build_report(rewrite_client=client)
+    local_candidate = report.split("### Local Model Rewrite", 1)[1].split("### Existing Summary", 1)[0]
+
+    assert client.calls == 2
+    assert "#### Initial Generation" in local_candidate
+    assert "#### Retry Generation" in local_candidate
+    assert "beast she seeks to vanquish" in local_candidate
+    assert "hunting the monstrous leviathan that took her father" in local_candidate
+    assert "Local model rewrite initial |" in report
+    assert "Local model rewrite retry" in report
 
 
 def test_jory_summary_tuning_metrics_without_generating_report():

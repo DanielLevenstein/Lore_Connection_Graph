@@ -268,7 +268,7 @@ def test_party_view_fixture_uses_character_column_layout_without_hidden_sources(
     assert visible_edges
     assert (
         '"jory_ravenmark" -> "neal_lovington" '
-        '[label="Client", dir="both", arrowhead="normal", arrowtail="normal", constraint="false"]'
+        '[label="Client", dir="both", constraint="false"]'
     ) in dot
     assert '"neal_lovington" -> "jory_ravenmark" [label="Client"' not in dot
     cross_column_edges = [
@@ -453,26 +453,31 @@ def test_full_structured_graph_groups_places_groups_and_families_in_column_zero(
     )
 
     column_order = [
-        dot.index("cluster_column_0_context_entities"),
+        dot.index("cluster_column_0_family_names"),
         dot.index("cluster_column_1_main_characters"),
         dot.index("cluster_column_2_secondary_characters"),
+        dot.index("cluster_column_3_places"),
     ]
-    context_column = dot[
-        dot.index('subgraph "cluster_column_0_context_entities"') :
+    family_column = dot[
+        dot.index('subgraph "cluster_column_0_family_names"') :
         dot.index('subgraph "cluster_column_1_main_characters"')
     ]
-    secondary_column = dot[dot.index('subgraph "cluster_column_2_secondary_characters"') :]
+    secondary_column = dot[
+        dot.index('subgraph "cluster_column_2_secondary_characters"') :
+        dot.index('subgraph "cluster_column_3_places"')
+    ]
+    places_column = dot[dot.index('subgraph "cluster_column_3_places"') :]
 
     assert 'splines="line"' in dot
     assert column_order == sorted(column_order)
-    assert '"royal_tittles"' in context_column
-    assert '"lantern_house"' in context_column
-    assert '"ignis_cult"' in context_column
-    assert '"family_ravenmark"' in context_column
-    assert '"jory_ravenmark"' not in context_column
+    assert '"ignis_cult"' in family_column
+    assert '"family_ravenmark"' in family_column
+    assert '"jory_ravenmark"' not in family_column
     assert '"orin_nightbloom"' in secondary_column
+    assert '"royal_tittles"' in places_column
+    assert '"lantern_house"' in places_column
     assert '"family_ravenmark" [label="Ravenmark Family", fillcolor="#fef3c7"' in dot
-    assert 'shape="trapezium", width=1.9, height=0.8, margin="0.14,0.06"' in dot
+    assert '"ignis_cult" [label="Ignis Cult", fillcolor="#e9d5ff", color="#94a3b8", shape="trapezium"' in dot
 
 
 def test_other_connection_rows_split_repeated_evidence_into_separate_rows():
@@ -1186,7 +1191,7 @@ def test_combined_relationship_dot_collapses_reciprocal_edges_to_double_arrow():
     assert len(visible_edges) == 1
     assert (
         '"neal_lovington" -> "jory_ravenmark" '
-        '[label="Ally / Client", dir="both", arrowhead="normal", arrowtail="normal"]'
+        '[label="Ally / Client", dir="both"]'
     ) in dot
 
 

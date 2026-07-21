@@ -21,9 +21,12 @@ from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewrit
 from language_model.rewrite_quality import writing_quality_score
 from language_model.storage import Character, CharacterProfile, read_character_profile
 from scripts.generate_semantic_improvement_report import (
+    backstory_length_score,
+    candidate_rejection_reason,
     markdown_table,
     model_runtime_section,
     normalized_score,
+    rejection_reasons_section,
     status_for_score,
     summary_length_score,
 )
@@ -81,22 +84,38 @@ def summary_score_table_for_results(results: list[dict]) -> str:
         for result in results
     ]
     return markdown_table(
-        ["Character", "Status", "Overall", "Summary Length Score", "Similarity", "Sentence Length Score", "Sentence Quality"],
+        [
+            "Candidate",
+            "Status",
+            "Overall",
+            "Summary Length Score",
+            "Similarity",
+            "Sentence Length Score",
+            "Sentence Quality",
+        ],
         rows,
         alignments=["left", "left", "right", "right", "right", "right", "right"],
-    )
+    ) + rejection_reasons_section(summary_rejection_rows(results))
 
 
 def backstory_score_table_for_results(results: list[dict]) -> str:
     rows = [
-        score_row(result["name"], result["backstory_score"], result["backstory_writing_score"])
+        score_row(result["name"], result["backstory"], result["backstory_score"], result["backstory_writing_score"])
         for result in results
     ]
     return markdown_table(
-        ["Character", "Status", "Overall", "Similarity", "Sentence Length Score", "Sentence Quality"],
+        [
+            "Candidate",
+            "Status",
+            "Overall",
+            "Length Score",
+            "Similarity",
+            "Sentence Length Score",
+            "Sentence Quality",
+        ],
         rows,
-        alignments=["left", "left", "right", "right", "right", "right"],
-    )
+        alignments=["left", "left", "right", "right", "right", "right", "right"],
+    ) + rejection_reasons_section(backstory_rejection_rows(results))
 
 
 def character_output_section(result: dict) -> str:
@@ -157,26 +176,65 @@ def generated_candidate(generate) -> str:
         return getattr(exc, "candidate_text", "")
 
 def summary_score_row(character_name: str, summary: str, score, writing_score) -> list[str]:
+    length_score = summary_length_score(summary)
     return [
         character_name,
         status_for_score(score),
         f"{normalized_score(score.score):.2f}",
-        f"{summary_length_score(summary):.2f}",
+        f"{length_score:.2f}",
         f"{normalized_score(score.semantic_similarity):.2f}",
         f"{writing_score.sentence_length:.2f}",
         f"{normalized_score(score.concision):.2f}",
     ]
 
 
-def score_row(character_name: str, score, writing_score) -> list[str]:
+def score_row(character_name: str, backstory: str, score, writing_score) -> list[str]:
+    length_score = backstory_length_score(backstory)
     return [
         character_name,
         status_for_score(score),
         f"{normalized_score(score.score):.2f}",
+        f"{length_score:.2f}",
         f"{normalized_score(score.semantic_similarity):.2f}",
         f"{writing_score.sentence_length:.2f}",
         f"{normalized_score(score.concision):.2f}",
     ]
+
+
+def summary_rejection_rows(results: list[dict]):
+    return [
+        SimpleRejectionRow(
+            result["name"],
+            candidate_rejection_reason(
+                result["summary"],
+                "summary",
+                result["summary_score"],
+                summary_length_score(result["summary"]),
+            ),
+        )
+        for result in results
+    ]
+
+
+def backstory_rejection_rows(results: list[dict]):
+    return [
+        SimpleRejectionRow(
+            result["name"],
+            candidate_rejection_reason(
+                result["backstory"],
+                "backstory",
+                result["backstory_score"],
+                backstory_length_score(result["backstory"]),
+            ),
+        )
+        for result in results
+    ]
+
+
+class SimpleRejectionRow:
+    def __init__(self, label: str, rejection_reason: str) -> None:
+        self.label = label
+        self.rejection_reason = rejection_reason
 
 
 def summary_word_count(summary: str) -> int:

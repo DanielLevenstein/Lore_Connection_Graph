@@ -5,7 +5,31 @@
 The local rewrite model can produce malformed prose, repeated alternatives, prompt echoes, empty output, or runtime failures. The retry loop should improve the candidate before it reaches scoring, reports, or the user interface. It must never turn backend errors into candidate text and must never require reports to understand model failure internals.
 
 ## Retry Prompts
+
 In retry prompts, do not include raw backend errors, stack traces, stderr, or validator strings. Use neutral repair instructions that describe the desired output shape.
+
+## Reporting Interface
+
+Summary and Backstory evaluation should be kept separate from reporting.
+
+The reporting layer should receive structured data, not model-client exceptions or retry internals:
+
+1. A list of candidate summaries or backstories, with the original Markdown text as the first element.
+2. A score table for each rewrite kind using numerical values calculated by the rewrite quality code.
+3. A list of model rewrite quality messages or rejection reasons produced by the rewrite quality code.
+4. A sentence structure chart produced from sentence lengths in the candidate texts.
+
+Summary score tables must use these columns:
+
+| Candidate | Status | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality |
+| --------- | ------ | ------: | -------------------: | ---------: | --------------------: | ---------------: |
+
+Backstory score tables must use these columns:
+
+| Candidate | Status | Overall | Length Score | Similarity | Sentence Length Score | Sentence Quality |
+| --------- | ------ | ------: | -----------: | ---------: | --------------------: | ---------------: |
+
+`Status` is derived from the normalized overall score. Candidates with `Overall >= 70` are `Accepted`; candidates below `70` are `Rejected`; original source rows are `Source`. Rejection reasons are rendered as a Markdown list below the score table, not as table cells.
 
 ## Design Goals
 
@@ -46,7 +70,7 @@ class RewriteResult:
     metadata: dict[str, object]
 ```
 
-Only `RewriteResult.text` is allowed to flow into report candidate sections, Streamlit editable fields, and semantic scoring.
+Only sanitized prose from `RewriteResult.text` is allowed to flow into Streamlit editable fields and semantic scoring. Single-character tuning reports may also render sanitized prose from individual attempts, but they must never render raw model transcripts or diagnostic text.
 
 `RewriteAttempt.raw_text`, `validation_issues`, exception messages, stderr, and retry metadata are diagnostics. They may be used by unit tests, logs, or a developer-only debug artifact, but not by generated reports or normal UI.
 
@@ -127,13 +151,13 @@ Allowed diagnostic destinations:
 Forbidden diagnostic destinations:
 
 - `docs/reports/*.md` candidate sections.
-- Report score tables.
+- Report score tables, except for user-facing rejection reasons derived from rewrite quality categories.
 - Streamlit editable summary/backstory fields.
 - Saved character sheets.
 - User-facing markdown bodies.
 - Semantic scoring input.
 
-The report layer should receive plain candidate strings and scoring objects only. It should not know whether a candidate was produced on the first attempt or fifth attempt.
+The report layer should receive plain candidate strings, score rows, rewrite quality messages, and sentence-structure chart data. It should not parse exceptions or infer model failure state from generated prose.
 
 ## UI Behavior
 
@@ -159,15 +183,19 @@ Reports should:
 
 - Show the final candidate text.
 - Score the final candidate text.
+- Keep summary evaluation separate from backstory evaluation.
+- Put original Markdown source text first in candidate lists.
+- Include rejection reasons as a Markdown list below the score table when the final candidate is rejected.
 - Include model runtime metadata already intended for report readers.
 - Keep `Overall` as the acceptance source.
 
 Reports should not:
 
-- Show retry attempts.
 - Show model errors.
 - Mark candidates rejected because an earlier attempt failed.
-- Include raw validation issue text.
+- Include raw validation issue text, exception strings, stderr, or prompt text.
+
+Single-character tuning reports may show sanitized first-attempt and retry prose side by side so prompt changes can be evaluated. When a retry is performed, those reports should also grade the initial and retry generations as separate rows. Multi-character reports should show and score only the final candidate text.
 
 ## Testing Strategy
 
@@ -180,12 +208,13 @@ Fast unit tests should use fake rewrite clients:
 - Summary report scores the final summary text, not retry diagnostics or source backstory.
 - Streamlit handler leaves saved character fields unchanged when no candidate is available.
 
-Report tests should assert absence, not presence, of diagnostics:
+Report tests should assert absence of backend diagnostics and presence of intentional table explanations:
 
 - No `## Model Error`.
 - No `ERROR:`.
-- No raw validator issue strings.
 - No prompt echo text.
+- Rejected rows include human-readable rejection reasons below the score table.
+- Accepted and source rows do not appear in the rejection-reasons list.
 
 Integration tests with the real local model should remain opt-in because they depend on the downloaded GGUF artifact and local runtime performance.
 
