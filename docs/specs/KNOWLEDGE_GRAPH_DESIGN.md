@@ -21,6 +21,57 @@ The current implementation is an MVP with an offline, dependency-light pipeline:
 
 The implementation does not yet call a local language model for extraction, does not use Pydantic, and does not require sentence-transformers, FAISS, or Chroma. Those remain future upgrades.
 
+## Redesign Direction
+
+The current graph should evolve into two related but separate knowledge stores:
+
+- Entity-specific graphs keep character-local attributes, motivations, evidence, and rewrite context.
+- The combined campaign graph shows only global Character and Place nodes that are useful for navigation and relationship review.
+
+The redesign does not need to preserve old generated graph JSON. Authored lore remains the source of truth, and derived graph files may be rebuilt after parser or schema changes.
+
+### Character Connections Override
+
+Character sheets may include a manually authored `Character Connections` table. When present, this table overrides generated character-connection rows for the visible graph and rewrite context. This allows users to correct extraction mistakes without hand-editing derived JSON.
+
+Recommended normalized fields:
+
+- `id`
+- `edge_type`
+- `edge_item`
+- `edge_value`
+- `edge_description`
+- `edge_source`
+
+Attribute values should use readable names in UI tables, not underscore-heavy identifiers. IDs may still use compact normalized forms such as `mr_smith` or `john_adams_father` when part of a name is unknown.
+
+### Session Note And Place Attributes
+
+Session notes and places should gain entity-specific attribute sections instead of being forced through character-sheet assumptions. Extracted attributes must include an attribute type, source evidence, and a context-aware shortened description when raw evidence is too long for a review table.
+
+### Combined Graph Requirements
+
+The combined campaign graph must stay stricter than entity-specific graphs:
+
+- Forbid self-referencing graph nodes.
+- Hide nodes that have no connections.
+- Remove duplicate edges from the chart.
+- Show only true people, places, and explicitly meaningful family nodes.
+- Do not combine unrelated mother, father, or parent placeholders across characters.
+- Keep details removed from the chart available in a table below the graph.
+- Provide a node-focused detail table so a selected graph node can be reviewed without visually tracing every edge.
+
+### Redesign Testing
+
+Validation should cover both data shape and visual fidelity:
+
+- Every combined graph node is a Character, Place, or approved Family node.
+- Duplicate edges are not shown.
+- Attribute values do not display raw `_` separators.
+- Attribute value and description fields are separate and have reasonable maximum lengths.
+- Session-note imports are scanned for duplicate or low-confidence attribute generation.
+- Generated graph screenshots are visually reviewed for nodes that are not real entities.
+
 ## Module Layout
 
 ```text

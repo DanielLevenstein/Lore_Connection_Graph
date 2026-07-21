@@ -1,0 +1,30 @@
+{
+  "schema_version": "0.1.0",
+  "fixture_type": "knowledge_graph_view",
+  "graph_family": "Session Notes Graph",
+  "view": "Session Notes",
+  "top_level_tab": "Session Notes",
+  "screenshot": "Session_Notes_Graph_Place_Lore.png",
+  "columns": [
+    "Source Documents & Group Names",
+    "Markdown Heading 1",
+    "Markdown Heading 2",
+    "Markdown Heading 3",
+    "Character Connections & Places"
+  ],
+  "source_fixtures": [
+    "tests/fixtures/character_sheets",
+    "tests/fixtures/session_notes/Family_Tree.md"
+  ],
+  "connection_table": {
+    "only_connection_type": "Character",
+    "expected_names": [
+      "Jory",
+      "Neal Lovington"
+    ],
+    "disallowed_connection_types": [
+      "Source_Document",
+      "Group"
+    ]
+  }
+}

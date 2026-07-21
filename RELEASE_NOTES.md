@@ -1,5 +1,62 @@
 # Release Notes
 
+| Version | Summary |
+| --- | --- |
+| v1.1.1 | Enable knowledge graph feature and partial code cleanup |
+| v1.1.0 | Implemented distinct knowledge graph views for character, place and sesison tab|
+| v1.0.0 | This release adds a dedicated Knowledge Graph UI using graphviz.|
+| v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management. |
+
+## v1.1.1
+Enabled knowledge graph in UI without an env variable
+Removed the hidden full graph view from code as the name is no longer accurate. 
+Plan to consolidate views across all main tabs for a future release. 
+
+## Knowledge Graph Views
+Main Tab [Characters, Places, Session Notes]
+- Characters: [Character View, Party View]
+- Places: [Party View, Location View, Heading View, Directory File View]
+- Session Notes: [Party View, Location View, Directory File View]
+
+## v1.1.0 - Knowledge Graph Views
+
+In this release separate knowledge graph tabs were added for every main level tab for the app. 
+Places and Groups were given dedicated icons and given priority placement in the graph.
+
+## Knowledge Graph Views
+Main Tab [Characters, Places, Session Notes]
+- Characters: [Single Character, Party View]
+- Places: [Location View, Heading View]
+- Session Notes: [Location View, Directory File View]
+
+Detailed design notes are located below:
+- [Knowledge Graph Views](docs/specs/KNOWLEDGE_GRAPH_DESIGN4.md): Multi View Knowledge Graphs
+
+## v1.0.0 - Knowledge Graph Tab
+
+This release adds a dedicated Knowledge Graph tab (v1.0.0) that surfaces combined graph data from characters, places, and session notes directly in the Streamlit UI.
+
+Supported Views:
+**Character View**, **Party View**
+
+### Knowledge Graph Columns 
+Column 0: Family Names
+Column 1: Main Characters
+Column 2: Secondary Characters & places
+
+### Highlights
+
+- Added Knowledge Graph tab `v1.0.0` with an interactive graph view and node/edge detail panels.
+- Combined character/place/session knowledge graph aggregation and normalization.
+- Export graph as JSON and Graphviz-compatible formats for downstream tooling.
+- Evidence links in node/edge panels point back to source markdown files.
+- Stable UI selectors added to support Playwright end-to-end tests.
+
+### Notes
+
+- Design docs: see [docs/specs](docs/specs) for graph and UI specifications.
+- Backwards-compatible: generated graph JSON continues to be stored under `world_building/meta_data`.
+
 ## v0.1.0 - First Local Release
 
 This first release packages the local roleplaying character creator as a Streamlit app for managing private campaign lore on disk. The app treats markdown files in `world_building/lore` as the source of truth, stages raw imports under `world_building/import`, keeps runtime metadata under `world_building/meta_data`, and provides UI workflows for characters, places, session notes, and derived knowledge graphs.

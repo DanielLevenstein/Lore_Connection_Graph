@@ -76,7 +76,7 @@ def test_freeform_lore_import_preserves_undated_markdown_file(tmp_path, monkeypa
 
 Date and Time values in the days of yore are a fuzzy concept.
 
-## The Nighbloom Family
+## The Nightbloom Family
 
 Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College.
 """,
@@ -130,9 +130,9 @@ def test_freeform_lore_reimport_with_only_existing_last_section_preserves_prior_
     first = import_lore_document_text(
         """# Family Tree
 
-## The Nighbloom Family
+## The Nightbloom Family
 
-Original Nighbloom notes.
+Original Nightbloom notes.
 
 ## The Ravenmark Family
 
@@ -156,7 +156,7 @@ Copied last section text should not replace the original.
 
     assert first.path == second.path
     text = second.path.read_text(encoding="utf-8")
-    assert "## The Nighbloom Family\n\nOriginal Nighbloom notes." in text
+    assert "## The Nightbloom Family\n\nOriginal Nightbloom notes." in text
     assert "## The Ravenmark Family\n\nOriginal Ravenmark notes." in text
     assert "## The Lovington Family\n\nOriginal Lovington notes." in text
     assert "Copied last section text should not replace the original." not in text
@@ -168,7 +168,7 @@ def test_markdown_import_with_date_detection_preserves_undated_lore(tmp_path, mo
     imported = import_markdown_text(
         """# Atlantia Lore
 
-## The Nighbloom Family
+## The Nightbloom Family
 
 Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College.
 """,

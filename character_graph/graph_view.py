@@ -91,7 +91,7 @@ def evidence_rows(graph: CharacterGraph) -> list[dict[str, str]]:
 
 
 def limit_evidence(value: str, max_length: int = EVIDENCE_MAX_LENGTH) -> str:
-    cleaned = " ".join(value.split())
+    cleaned = re.sub(r"^\s*(?:[-*+]|[0-9]+[.)])\s+", "", " ".join(value.split()))
     if len(cleaned) <= max_length:
         return cleaned
     sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", cleaned) if sentence.strip()]

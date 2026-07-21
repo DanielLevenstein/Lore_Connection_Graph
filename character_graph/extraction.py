@@ -88,6 +88,7 @@ PLACE_SUFFIXES = {
     "University",
     "Village",
 }
+GENERIC_PLACE_NAMES = {suffix.lower() for suffix in PLACE_SUFFIXES}
 MOTIVATION_PATTERNS = [
     re.compile(r"\b(?:wants|seeks|hopes|needs|tries|trying|adventures)\s+to\s+([^.!?;]+)", re.IGNORECASE),
     re.compile(r"\b(?:goal|motivation)\s+(?:is|was)\s+to\s+([^.!?;]+)", re.IGNORECASE),
@@ -97,7 +98,7 @@ RELATIONSHIP_RULES = [
     ("former_mentor", "Former mentor", "complicated", ("former mentor", "trained", "teacher", "mentor")),
     ("family", "Family", "positive", ("sister", "brother", "mother", "father", "parent", "child", "family")),
     ("client", "Client", "positive", ("client", "customer", "patron", "regular")),
-    ("rival", "Rival", "hostile", ("rival", "competitor")),
+    ("rival", "Rivals", "hostile", ("rival", "competitor")),
     ("enemy", "Enemy", "hostile", ("enemy", "foe", "hates", "opposes", "against")),
     ("ally", "Ally", "positive", ("ally", "companion", "friend", "trusted")),
     ("lover", "Lover", "positive", ("lover", "beloved", "romance", "romantic")),
@@ -601,6 +602,7 @@ def character_relationships(
     relationship_columns = [
         ("client", "Client", ["clients", "client"]),
         ("ally", "Ally", ["allies", "alliances", "ally"]),
+        ("rival", "Rivals", ["rivals", "rival"]),
         ("enemy", "Enemy", ["enemies", "enemy"]),
         ("lover", "Lover", ["lovers", "lover"]),
     ]
@@ -748,6 +750,8 @@ def is_probable_place(value: str) -> bool:
     if not is_probable_name(value):
         return False
     lowered = value.lower()
+    if lowered in GENERIC_PLACE_NAMES:
+        return False
     if any(lowered.endswith(suffix.lower()) for suffix in PLACE_SUFFIXES):
         return True
     return bool(re.search(r"\b(?:academy|college|coast|halls?|sea|shores?|tower|village)\b", lowered))

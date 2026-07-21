@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -11,6 +12,7 @@ from playwright.sync_api import expect, sync_playwright
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 APP_URL = "http://127.0.0.1:8513"
+GRAPH_APP_URL = "http://127.0.0.1:8514"
 
 
 def streamlit_executable() -> Path:
@@ -56,7 +58,6 @@ def isolated_session_notes_app(tmp_path):
     env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(docs_lore_dir / "character_sheets")
     env["LOCAL_CHATBOT_PLACES_DIR"] = str(docs_lore_dir / "places")
     env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(docs_lore_dir / "session_notes")
-    env["LOCAL_CHATBOT_ENABLE_EXTERNAL_CHARACTER_IMPORT"] = "1"
     process = subprocess.Popen(
         [
             str(streamlit_executable()),
@@ -76,6 +77,76 @@ def isolated_session_notes_app(tmp_path):
     try:
         wait_for_streamlit(APP_URL, process)
         yield APP_URL, docs_lore_dir
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+
+
+@pytest.fixture()
+def isolated_session_notes_graph_app(tmp_path):
+    world_building_dir = tmp_path / "world_building"
+    docs_lore_dir = world_building_dir / "lore"
+    session_notes_dir = tmp_path / "external" / "session_notes"
+    characters_dir = docs_lore_dir / "character_sheets"
+    places_dir = docs_lore_dir / "places"
+    import_dir = world_building_dir / "import"
+    meta_data_dir = world_building_dir / "meta_data"
+    characters_dir.mkdir(parents=True)
+    places_dir.mkdir(parents=True)
+    session_notes_dir.mkdir(parents=True)
+    import_dir.mkdir(parents=True)
+    meta_data_dir.mkdir()
+    (characters_dir / "Neal_Lovington.md").write_text(
+        """# Neal Lovington
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Neal | Elf | Bard |
+
+## Character Backstory
+
+Neal listens for trouble.
+
+## Character Summary
+
+Neal is a bard.
+""",
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+    env["LOCAL_CHATBOT_WORLD_BUILDING_DIR"] = str(world_building_dir)
+    env["LOCAL_CHATBOT_WORLD_BUILDING_IMPORT_DIR"] = str(import_dir)
+    env["LOCAL_CHATBOT_LORE_DIR"] = str(docs_lore_dir)
+    env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(characters_dir)
+    env["LOCAL_CHATBOT_PLACES_DIR"] = str(places_dir)
+    env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(session_notes_dir)
+    env["LOCAL_CHATBOT_META_DATA_DIR"] = str(meta_data_dir)
+    process = subprocess.Popen(
+        [
+            str(streamlit_executable()),
+            "run",
+            "streamlit_app.py",
+            "--server.port",
+            "8514",
+            "--server.headless",
+            "true",
+        ],
+        cwd=ROOT_DIR,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        wait_for_streamlit(GRAPH_APP_URL, process)
+        yield GRAPH_APP_URL, docs_lore_dir, session_notes_dir
     finally:
         process.terminate()
         try:
@@ -133,27 +204,7 @@ def test_ui_imports_uploaded_session_notes_as_one_markdown_file(isolated_session
     app_url, docs_lore_dir = isolated_session_notes_app
     notes_dir = docs_lore_dir / "session_notes"
     import_file = docs_lore_dir / "discord_import.md"
-    import_file.write_text(
-        """John [OOZE], Server Tag: OOZEOOZE — 7/10/26, 11:36 PMFriday, July 10, 2026 at 11:36 PM
-Session 12:
-
-## Scene Notes
-
-- Found a **silver key**
-- Met `Jory`
-
-| Clue | Status |
-| ---- | ------ |
-| Door | Open |
-
-Session 13:
-
-## Second Scene
-
-- Preserved in the same note
-""",
-        encoding="utf-8",
-    )
+    shutil.copy2(ROOT_DIR / "tests" / "fixtures" / "session_notes" / "Session_Notes_Fixture.md", import_file)
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -243,6 +294,34 @@ def test_ui_imports_freeform_lore_markdown_without_requiring_dates(isolated_sess
     assert "## The Watch Tower" in text
 
 
+def test_ui_uploaded_session_note_updates_combined_graph_from_configured_notes_dir(isolated_session_notes_graph_app):
+    app_url, docs_lore_dir, session_notes_dir = isolated_session_notes_graph_app
+    import_file = docs_lore_dir / "graph_upload.md"
+    import_file.write_text(
+        """# Uploaded Graph Notes
+
+Neal Lovington warned the party about the Cult of Ignis.
+The Ignis cult later attacked the carnival.
+""",
+        encoding="utf-8",
+    )
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 1000})
+        page.goto(app_url, wait_until="networkidle")
+
+        import_session_note_file(page, import_file, imported_file_name="Uploaded Graph Notes.md")
+        graph_expander = page.locator("[data-testid=stExpander]").filter(has_text="Combined Knowledge Graph")
+        expect(graph_expander).to_be_visible(timeout=10000)
+        graph_expander.get_by_text("Combined Knowledge Graph").click()
+        graph_expander.get_by_role("tab", name="Location View", exact=True).click()
+        expect(graph_expander.get_by_text("Ignis Cult", exact=True).first).to_be_visible(timeout=10000)
+        browser.close()
+
+    assert (session_notes_dir / "Uploaded_Graph_Notes.md").exists()
+
+
 def test_ui_reimporting_fixture_adds_only_new_section_titles(isolated_session_notes_app):
     app_url, docs_lore_dir = isolated_session_notes_app
     notes_dir = docs_lore_dir / "session_notes"
@@ -306,7 +385,7 @@ Copied last section text should not replace the original or remove prior section
     imported = notes_dir / "Family_Tree.md"
     text = imported.read_text(encoding="utf-8")
     assert not (notes_dir / "Family_Tree_2.md").exists()
-    assert "## The Nighbloom Family" in text
+    assert "## The Nightbloom Family" in text
     assert "Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College." in text
     assert "## The Ravenmark Family" in text
     assert "Judeth's cousin Mary Ravenmark died at sea at a young age" in text

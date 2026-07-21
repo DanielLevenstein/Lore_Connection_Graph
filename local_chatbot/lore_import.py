@@ -83,8 +83,8 @@ def import_lore_directory(source_dir: Path, overwrite: bool = True) -> LoreImpor
             continue
         destination_subdir = destinations[bucket]
         destination_subdir.mkdir(parents=True, exist_ok=True)
-        for source_path in lore_markdown_files(source_subdir):
-            destination_path = destination_subdir / source_path.name
+        for source_path in lore_files_for_bucket(source_subdir, bucket):
+            destination_path = destination_subdir / imported_lore_filename(source_path, bucket)
             if source_path.resolve() == destination_path.resolve():
                 continue
             if destination_path.exists() and not overwrite:
@@ -362,6 +362,25 @@ def lore_markdown_files(source_dir: Path) -> list[Path]:
         for path in sorted(source_dir.glob("*.md"))
         if not path.name.startswith(".") and "TEMPLATE" not in path.name.upper()
     ]
+
+
+def lore_files_for_bucket(source_dir: Path, bucket: str) -> list[Path]:
+    patterns = ["*.md", "*.txt"] if bucket == "session_notes" else ["*.md"]
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for pattern in patterns:
+        for path in sorted(source_dir.glob(pattern)):
+            if path in seen or path.name.startswith(".") or "TEMPLATE" in path.name.upper():
+                continue
+            paths.append(path)
+            seen.add(path)
+    return sorted(paths)
+
+
+def imported_lore_filename(source_path: Path, bucket: str) -> str:
+    if bucket == "session_notes" and source_path.suffix.lower() == ".txt":
+        return f"{source_path.stem}.md"
+    return source_path.name
 
 
 def copy_directory_files(

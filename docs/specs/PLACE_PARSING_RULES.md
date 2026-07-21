@@ -15,7 +15,7 @@ Each place file should use this shape:
 
 | Name | Type |
 | ---- | ---- |
-| Royal Tittles | Tavern |
+| Royal Commons | Tavern |
 
 ## Place Summary
 

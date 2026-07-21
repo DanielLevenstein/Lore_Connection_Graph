@@ -1,0 +1,47 @@
+{
+  "schema_version": "0.1.0",
+  "config_scope": "knowledge_view",
+  "view_key": "party_view_fixture",
+  "label": "Party View",
+  "description": "Screenshot-era whole graph view built only from character sheet data.",
+  "inherits": "config/graphviz/global_graph_view.json",
+  "merge_order": [
+    "config/graphviz/global_graph_view.json",
+    "config/graphviz/party_view_fixture.json"
+  ],
+  "graph": {
+    "rankdir": "LR",
+    "vertical_rankdir": "TB"
+  },
+  "spacing": {
+    "small_graph": {
+      "max_nodes": 8,
+      "ranksep": 1.15,
+      "nodesep": 0.4
+    },
+    "column_layout": {
+      "ranksep": 0.65,
+      "nodesep": 0.35
+    },
+    "vertical_layout": {
+      "ranksep": 0.6,
+      "nodesep": 0.35
+    },
+    "default": {
+      "ranksep": 0.65,
+      "nodesep": 0.35
+    }
+  },
+  "columns": [
+    "family_names",
+    "main_characters",
+    "secondary_characters",
+    "places"
+  ],
+  "editing_notes": [
+    "This is the target renderer for docs/screenshots/Structured_Knowledge_Graph_Full.png.",
+    "Use character-sheet data only; exclude place and session-note lore even when those files exist in the active lore directory.",
+    "Override only values that should differ from config/graphviz/global_graph_view.json.",
+    "After changing spacing or routing, regenerate docs/screenshots/Structured_Knowledge_Graph_Full.png and run the simplified graph label-position UI regression."
+  ]
+}

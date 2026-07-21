@@ -2,6 +2,7 @@ from datetime import date
 
 import local_chatbot.session_notes as session_notes
 import local_chatbot.storage as storage
+from character_graph.storage import load_graph
 from local_chatbot.storage import (
     CharacterProfile,
     PlaceProfile,
@@ -12,6 +13,7 @@ from local_chatbot.storage import (
     delete_place_profile,
     import_external_character_sheet,
     list_external_character_sheets,
+    graph_path_for_lore_path,
     read_character_profile,
     read_place_profile,
     write_character_profile,
@@ -73,6 +75,44 @@ def test_character_file_save_round_trips_updated_fields(tmp_path, monkeypatch):
     assert reloaded.summary == "Della is a careful scout with brass lockpicks."
     assert reloaded.drives == ["Find the sunken archive", "Protect Brindle Hall"]
     assert "| Della | 6 | Gnome | Rogue | she/her |" in text
+
+
+def test_character_save_allows_missing_race_class_and_updates_display_name(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "CHARACTERS_DIR", tmp_path / "docs" / "lore" / "character_sheets")
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "character_metadata")
+    monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
+
+    character = create_character(
+        CharacterProfile(
+            name="Draft Walker",
+            pronouns="",
+            level="",
+            race="",
+            character_class="",
+            backstory="Draft Walker keeps moving until the map makes sense.",
+            summary="Draft Walker is still taking shape.",
+        )
+    )
+
+    write_character_profile(
+        character,
+        CharacterProfile(
+            name="Renamed Walker",
+            pronouns="",
+            level="",
+            race="",
+            character_class="",
+            backstory="Draft Walker keeps moving until the map makes sense.",
+            summary="Draft Walker is still taking shape.",
+        ),
+    )
+
+    profile = read_character_profile(character)
+    text = character.backstory_path.read_text(encoding="utf-8")
+    assert profile.name == "Renamed Walker"
+    assert profile.race == ""
+    assert profile.character_class == ""
+    assert text.startswith("# Renamed Walker")
 
 
 def test_character_delete_removes_sheet_metadata_and_graph(tmp_path, monkeypatch):
@@ -150,6 +190,7 @@ def test_place_file_save_round_trips_updated_fields(tmp_path, monkeypatch):
     assert reloaded.summary == "A crowded guildhall where maps are traded."
     assert reloaded.details == "Lanterns burn green after midnight."
     assert reloaded.connections == ["Della Moor: Stores maps", "Jory Ravenmark: Buys charts"]
+    assert graph_path_for_lore_path(place.path).exists()
 
 
 def test_place_markdown_save_round_trips_freeform_headings(tmp_path, monkeypatch):
@@ -163,7 +204,7 @@ def test_place_markdown_save_round_trips_freeform_headings(tmp_path, monkeypatch
 
 Date and Time values in the days of yore are a fuzzy concept.
 
-## The Nighbloom Family
+## The Nightbloom Family
 
 Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College.
 """,
@@ -174,6 +215,9 @@ Mrs. Judeth Nightbloom is a teacher at Sunstone Mage College.
     write_place_markdown(place, "# Atlantia\n\n## The Ravenmark Family\n\nJory still believes the sea took her father.")
 
     assert "## The Ravenmark Family" in place.path.read_text(encoding="utf-8")
+    graph = load_graph(graph_path_for_lore_path(place.path))
+    assert graph is not None
+    assert graph.primary_character.source_file == str(place.path)
 
 
 def test_place_markdown_create_replaces_stale_default_title(tmp_path, monkeypatch):
@@ -246,6 +290,7 @@ def test_session_note_file_save_overwrites_and_reloads_by_date(tmp_path, monkeyp
     )
     assert session_notes.read_session_note_title(second_save[0].path) == "Silver Key"
     assert session_notes.read_session_note_body(second_save[0].path) == "The party kept better notes."
+    assert graph_path_for_lore_path(second_save[0].path).exists()
 
 
 def test_markdown_section_save_updates_section_title(tmp_path, monkeypatch):
@@ -267,6 +312,7 @@ def test_markdown_section_save_updates_section_title(tmp_path, monkeypatch):
         (1, "Family Tree"),
         (2, "The Rapture Family"),
     ]
+    assert graph_path_for_lore_path(path).exists()
 
 
 def test_session_note_delete_removes_file(tmp_path, monkeypatch):
