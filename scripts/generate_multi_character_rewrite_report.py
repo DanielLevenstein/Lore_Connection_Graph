@@ -154,7 +154,10 @@ def source_label(profile: CharacterProfile) -> str:
 
 
 def generated_candidate(generate) -> str:
-    return generate()
+    try:
+        return generate()
+    except RuntimeError as exc:
+        return getattr(exc, "candidate_text", "")
 
 def summary_score_row(character_name: str, summary: str, score, writing_score) -> list[str]:
     return [

@@ -1,13 +1,17 @@
 import scripts.generate_semantic_improvement_report as report_script
 import scripts.generate_semantic_summary_improvement_report as summary_report_script
-from language_model.character_rewrites import rewrite_concision_score
+from character_graph.extraction import extract_character_graph
+from character_graph.ingest import load_backstory
+from language_model.character_rewrites import graph_generated_summary, model_rewrite_quality_issues, rewrite_concision_score
 from language_model.rewrite_quality import TARGET_SENTENCE_WORD_COUNT, sentence_length_distribution, writing_quality_score
+from language_model.storage import Character, read_character_profile
 from scripts.generate_semantic_improvement_report import (
     build_report,
     normalized_score,
     render_sentence_length_chart,
     sentence_length_chart_matrix,
     sentence_length_kde_values,
+    summary_length_score,
     status_for_score,
 )
 
@@ -222,6 +226,29 @@ def test_summary_report_uses_jory_and_summary_score_table(tmp_path):
     assert chart_path.exists()
 
 
+def test_summary_report_scores_existing_summary_not_backstory():
+    character_path = summary_report_script.DEFAULT_CHARACTER_PATH
+    character = Character(name=character_path.stem, path=character_path)
+    profile = read_character_profile(character)
+    report = summary_report_script.build_report(rewrite_client=FakeRewriteClient())
+    score_table = report.split("## Scores", 1)[1].split("## Sentence Lengths", 1)[0]
+    rows = {
+        cells[0]: cells
+        for cells in (
+            [cell.strip() for cell in line.strip("|").split("|")]
+            for line in score_table.splitlines()
+            if line.startswith("| ") and "---" not in line and "Candidate" not in line
+        )
+    }
+
+    existing_summary_length_score = f"{summary_length_score(profile.summary):.2f}"
+    source_backstory_length_score = f"{summary_length_score(profile.backstory):.2f}"
+
+    assert rows["Existing Summary"][2] == existing_summary_length_score
+    assert rows["Existing Summary"][2] != source_backstory_length_score
+    assert rows["Source Backstory"][2] == source_backstory_length_score
+
+
 def test_semantic_report_defaults_to_real_model_client(monkeypatch):
     calls = []
 
@@ -260,6 +287,19 @@ def test_summary_report_keeps_rejected_generated_text_outside_error_section():
     local_candidate = report.split("### Local Model Rewrite", 1)[1].split("### Existing Summary", 1)[0]
     assert "Jory Ravenmark keeps searching the sea" in local_candidate
     assert "Local model rewrite | Rejected" in report
+
+
+def test_jory_summary_tuning_metrics_without_generating_report():
+    character_path = summary_report_script.DEFAULT_CHARACTER_PATH
+    character = Character(name=character_path.stem, path=character_path)
+    profile = read_character_profile(character)
+    graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
+
+    rewrite = graph_generated_summary(graph, profile, rewrite_client=RepetitiveRewriteClient())
+
+    assert "Jory Ravenmark keeps searching the sea" in rewrite
+    assert summary_length_score(rewrite) > 0
+    assert model_rewrite_quality_issues(rewrite) == ["repeated sentence", "repetitive wording"]
 
 
 def test_rewrite_concision_score_penalizes_run_on_sentences():

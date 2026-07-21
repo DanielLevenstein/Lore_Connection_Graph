@@ -128,6 +128,9 @@ def test_summary_length_score_uses_target_word_count():
         "seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix "
         "twentyseven twentyeight twentynine thirty."
     )
+    short_summary = "One two three four five."
+    long_summary = " ".join(f"word{i}" for i in range(120))
 
     assert summary_length_score(in_range_summary) == 100.0
-    assert summary_length_score("One two three four five.") == 0.0
+    assert summary_length_score(short_summary) == 16.67
+    assert summary_length_score(long_summary) == 50.0

@@ -14,12 +14,6 @@ REWRITE_ENGINE_NAME = "deterministic-graph-rewrite"
 RewriteClient = Callable[[list[dict[str, str]]], str]
 
 
-class RejectedRewrite(RuntimeError):
-    def __init__(self, message: str, candidate_text: str = "") -> None:
-        super().__init__(message)
-        self.candidate_text = candidate_text
-
-
 @dataclass(frozen=True)
 class RewriteQualityScore:
     score: float
@@ -86,18 +80,11 @@ def run_graph_rewrite(
     ]
     response = rewrite_client(messages) if rewrite_client else deterministic_graph_rewrite(kind, graph, profile)
     cleaned = clean_model_rewrite(response)
-    engine_name = "local model rewrite" if rewrite_client else REWRITE_ENGINE_NAME
-    if not cleaned:
-        raise RejectedRewrite(f"{engine_name} returned an empty rewrite.", candidate_text=cleaned)
     rewritten = humanize_generated_text(cleaned)
+    if rewrite_client and kind == "summary":
+        rewritten = trim_summary_candidate(rewritten)
     if rewrite_client and kind == "backstory":
         rewritten = trim_backstory_candidate(rewritten)
-    quality_issues = model_rewrite_quality_issues(rewritten)
-    if quality_issues:
-        raise RejectedRewrite(
-            f"{engine_name} returned an unusable rewrite: {', '.join(quality_issues)}.",
-            candidate_text=rewritten,
-        )
     return rewritten
 
 
@@ -195,8 +182,9 @@ def primary_traits(graph: CharacterGraph) -> list[str]:
 def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) -> str:
     if kind == "summary":
         instruction = (
-            "Write three polished character summary sentence. "
-            "Use short sentences. Split long or comma-heavy sentences. "
+            "Write one polished character summary paragraph in 30 to 60 words. "
+            "Return exactly one summary, not alternatives or drafts. "
+            "Use one to three short sentences. Split long or comma-heavy sentences. "
             "Do not use ellipses or describe graph labels such as traits as labels."
         )
     elif kind == "backstory":
@@ -567,6 +555,21 @@ def trim_backstory_candidate(response: str, max_paragraphs: int = 2) -> str:
     else:
         trimmed = response.strip()
     return complete_sentence_prefix(trimmed)
+
+
+def trim_summary_candidate(response: str, max_words: int = 60) -> str:
+    paragraphs = [paragraph.strip() for paragraph in response.split("\n\n") if paragraph.strip()]
+    summary = paragraphs[0] if paragraphs else response.strip()
+    sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", summary) if sentence.strip()]
+    if not sentences:
+        return complete_sentence_prefix(summary)
+    selected: list[str] = []
+    for sentence in sentences:
+        candidate = " ".join([*selected, sentence])
+        if selected and len(candidate.split()) > max_words:
+            break
+        selected.append(sentence)
+    return complete_sentence_prefix(" ".join(selected))
 
 
 def complete_sentence_prefix(response: str) -> str:

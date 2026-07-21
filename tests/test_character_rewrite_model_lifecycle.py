@@ -14,7 +14,6 @@ from language_model.character_rewrites import (
     graph_generated_backstory,
     graph_generated_summary,
     model_rewrite_quality_issues,
-    RejectedRewrite,
     run_graph_rewrite,
     rewrite_prompt,
     rewrite_required_terms,
@@ -37,9 +36,6 @@ REPETITIVE_REWRITE_TEXT = (
     "Jory follows every storm track and every rumor she can find. "
     "Jory follows every storm track and every rumor she can find. "
     "Jory follows every storm track and every rumor she can find."
-)
-REPEATED_SENTENCE_REWRITE_ERROR = (
-    "local model rewrite returned an unusable rewrite: repeated sentence, repetitive wording."
 )
 
 
@@ -323,7 +319,7 @@ def test_model_rewrite_quality_flags_repetitive_wording():
     assert "repetitive wording" in issues
 
 
-def test_run_graph_rewrite_error_preserves_rejected_candidate_text():
+def test_run_graph_rewrite_returns_repetitive_candidate_for_tuning():
     graph = CharacterGraph(
         schema_version="0.3.0",
         primary_character=PrimaryCharacterRef(id="jory_ravenmark", name="Jory Ravenmark", source_file="Jory_Ravenmark.md"),
@@ -342,11 +338,10 @@ def test_run_graph_rewrite_error_preserves_rejected_candidate_text():
     def repetitive_client(_messages):
         return REPETITIVE_REWRITE_TEXT
 
-    with pytest.raises(RejectedRewrite) as exc_info:
-        run_graph_rewrite("rewrite", graph, profile, "summary", rewrite_client=repetitive_client)
+    rewrite = run_graph_rewrite("rewrite", graph, profile, "summary", rewrite_client=repetitive_client)
 
-    assert str(exc_info.value) == REPEATED_SENTENCE_REWRITE_ERROR
-    assert "Jory follows every storm track" in exc_info.value.candidate_text
+    assert "Jory follows every storm track" in rewrite
+    assert model_rewrite_quality_issues(rewrite) == ["repeated sentence", "repetitive wording"]
 
 
 def test_worker_process_returns_cli_output_and_timing_metadata(tmp_path, monkeypatch):

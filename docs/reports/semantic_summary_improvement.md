@@ -24,7 +24,7 @@
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
 | Prompt hash       | c83f5e9d0e140a00                                     |
-| Prompt eval time  | 13586.58 ms                                          |
+| Prompt eval time  | 9683.40 ms                                           |
 | Prompt tokens     | 437                                                  |
 | Completion tokens | 242                                                  |
 | Total tokens      | 679                                                  |
@@ -55,9 +55,9 @@ Jory Ravenmark directed her grief to become a beacon of light to her community h
 
 | Candidate           | Status   | Summary Length Score | Overall | Similarity | Sentence Length Score | Sentence Quality |
 | ------------------- | -------- | -------------------: | ------: | ---------: | --------------------: | ---------------: |
-| Local model rewrite | Rejected | 0.00                 | 56.48   | 71.64      | 50.67                 | 60.58            |
+| Local model rewrite | Rejected | 31.25                | 56.48   | 71.64      | 50.67                 | 60.58            |
 | Existing Summary    | Rejected | 100.00               | 44.21   | 72.24      | 48.00                 | 62.50            |
-| Source Backstory    | Source   | 0.00                 | 54.87   | 90.26      | 72.89                 | 84.26            |
+| Source Backstory    | Source   | 31.75                | 54.87   | 90.26      | 72.89                 | 84.26            |
 
 ## Sentence Lengths
 

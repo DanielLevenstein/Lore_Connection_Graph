@@ -19,7 +19,7 @@ from language_model.character_rewrites import (
     semantic_rewrite_score,
 )
 from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_language_model_config
-from language_model.rewrite_quality import SENTENCE_LENGTH_PENALTY_PER_WORD, writing_quality_score
+from language_model.rewrite_quality import writing_quality_score
 from language_model.storage import Character, read_character_profile
 
 
@@ -73,12 +73,10 @@ def build_character_rewrite_report(
     profile = read_character_profile(character)
     graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
     rewrite_client = rewrite_client or real_model_rewrite_client()
-    model_rejected = False
     try:
         model_story = generate_model_text(graph, profile, rewrite_client=rewrite_client)
     except RuntimeError as exc:
         model_story = getattr(exc, "candidate_text", "")
-        model_rejected = True
     model_metadata = getattr(rewrite_client, "last_metadata", {})
     existing_text = existing_candidate_text(profile, rewrite_kind)
     original_text = original_candidate_text(profile, rewrite_kind)
@@ -97,7 +95,7 @@ def build_character_rewrite_report(
             model_story,
             model_semantic_score,
             model_writing_score,
-            "Rejected" if model_rejected else status_for_score(model_semantic_score),
+            status_for_score(model_semantic_score),
         ),
         CandidateScore(
             existing_label,
@@ -241,13 +239,13 @@ def summary_word_count(summary: str) -> int:
 
 def summary_length_score(summary: str) -> float:
     word_count = summary_word_count(summary)
+    if word_count == 0:
+        return 0.0
     if SUMMARY_LENGTH_TARGET_MIN_WORDS <= word_count <= SUMMARY_LENGTH_TARGET_MAX_WORDS:
         return 100.0
-    difference = min(
-        abs(word_count - SUMMARY_LENGTH_TARGET_MIN_WORDS),
-        abs(word_count - SUMMARY_LENGTH_TARGET_MAX_WORDS),
-    )
-    return max(0.0, 100.0 - (difference * SENTENCE_LENGTH_PENALTY_PER_WORD))
+    if word_count < SUMMARY_LENGTH_TARGET_MIN_WORDS:
+        return round((word_count / SUMMARY_LENGTH_TARGET_MIN_WORDS) * 100, 2)
+    return round((SUMMARY_LENGTH_TARGET_MAX_WORDS / word_count) * 100, 2)
 
 
 def sentence_length_rows(candidates: list[tuple[str, object]]) -> list[list[str]]:

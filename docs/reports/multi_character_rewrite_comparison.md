@@ -19,7 +19,7 @@
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
 | Prompt hash       | 9f1d57257b232b81                                     |
-| Prompt eval time  | 12666.18 ms                                          |
+| Prompt eval time  | 11846.12 ms                                          |
 | Prompt tokens     | 665                                                  |
 | Completion tokens | 269                                                  |
 | Total tokens      | 934                                                  |
@@ -35,7 +35,7 @@
 | Character       | Status   | Summary Length Score | Overall | Similarity | Sentence Length Score | Sentence Quality |
 | --------------- | -------- | -------------------: | ------: | ---------: | --------------------: | ---------------: |
 | Orin Nightbloom | Rejected | 100.00               | 61.87   | 66.05      | 66.00                 | 81.25            |
-| Jory Ravenmark  | Rejected | 0.00                 | 56.48   | 71.64      | 50.67                 | 60.58            |
+| Jory Ravenmark  | Rejected | 31.25                | 56.48   | 71.64      | 50.67                 | 60.58            |
 | Neal Lovington  | Accepted | 100.00               | 71.56   | 56.18      | 84.00                 | 95.83            |
 
 ## Generated Backstory Scores
