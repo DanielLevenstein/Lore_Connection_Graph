@@ -19,6 +19,20 @@ from tests.e2e.test_character_sheet_roundtrip_ui import (
 
 @pytest.fixture()
 def graph_rewrite_app(tmp_path):
+    process, app_state = launch_graph_rewrite_app(
+        tmp_path,
+        extra_env={
+            "LOCAL_CHATBOT_MODEL_CACHE_DIR": str(tmp_path / "missing_models"),
+            "PATH": "/usr/bin:/bin",
+        },
+    )
+    try:
+        yield app_state
+    finally:
+        stop_streamlit(process)
+
+
+def launch_graph_rewrite_app(tmp_path, extra_env: dict[str, str] | None = None):
     world_building_dir = tmp_path / "world_building"
     docs_lore_dir = world_building_dir / "lore"
     characters_dir = docs_lore_dir / "character_sheets"
@@ -36,6 +50,7 @@ def graph_rewrite_app(tmp_path):
     env["LOCAL_CHATBOT_PLACES_DIR"] = str(places_dir)
     env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(session_notes_dir)
     env["LOCAL_CHATBOT_META_DATA_DIR"] = str(meta_data_dir)
+    env.update(extra_env or {})
     process = subprocess.Popen(
         [
             str(streamlit_executable()),
@@ -52,15 +67,16 @@ def graph_rewrite_app(tmp_path):
         stderr=subprocess.STDOUT,
         text=True,
     )
+    wait_for_streamlit(APP_URL, process)
+    return process, (APP_URL, characters_dir, meta_data_dir)
+
+
+def stop_streamlit(process: subprocess.Popen) -> None:
+    process.terminate()
     try:
-        wait_for_streamlit(APP_URL, process)
-        yield APP_URL, characters_dir, meta_data_dir
-    finally:
-        process.terminate()
-        try:
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            process.kill()
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        process.kill()
 
 
 def test_rewrite_backstory_button_saves_graph_backed_backstory(graph_rewrite_app):
@@ -81,6 +97,9 @@ def test_rewrite_backstory_button_saves_graph_backed_backstory(graph_rewrite_app
         rewrite_button.click()
 
         expect(page.get_by_text("Character Saved.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Edit Character")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("textbox", name="Backstory", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("textbox", name="Original Backstory", exact=True)).to_be_visible(timeout=10000)
         wait_for_profile_write(data_dir, character_file)
         profile = read_character_profile(Character(name=character_file.stem, path=character_file))
 
@@ -88,4 +107,34 @@ def test_rewrite_backstory_button_saves_graph_backed_backstory(graph_rewrite_app
         assert profile.original_backstory.strip()
         assert "Sunstone Mage College" in profile.backstory
         assert profile.backstory != profile.original_backstory
+        browser.close()
+
+
+def test_repopulate_summary_button_keeps_character_editor_open(graph_rewrite_app):
+    app_url, characters_dir, data_dir = graph_rewrite_app
+    character_file = characters_dir / "Orin_Nightbloom.md"
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        page.goto(app_url, wait_until="networkidle")
+        expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
+        select_character(page, "Orin Nightbloom", 0)
+
+        if not page.get_by_role("button", name="sync Repopulate Summary").is_visible():
+            page.get_by_text("Edit Character", exact=True).click()
+        rewrite_button = page.get_by_role("button", name="sync Repopulate Summary")
+        expect(rewrite_button).to_be_visible(timeout=10000)
+        rewrite_button.click()
+
+        expect(page.get_by_text("Character Saved.")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Edit Character")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("textbox", name="Summary", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("textbox", name="Original Summary", exact=True)).to_be_visible(timeout=10000)
+        wait_for_profile_write(data_dir, character_file)
+        profile = read_character_profile(Character(name=character_file.stem, path=character_file))
+
+        assert "Character Summary" in profile.auto_generated_sections
+        assert profile.original_summary.strip()
+        assert profile.summary != profile.original_summary
         browser.close()

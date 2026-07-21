@@ -83,10 +83,9 @@ Advanced users can change the model, quantization, download URL, and runtime set
 config/model/local_language_model.json
 ```
 
-To use the local model for rewrite generation and allow first-run model download:
+To allow first-run local model download for rewrite generation:
 
 ```bash
-LOCAL_CHATBOT_ENABLE_LOCAL_REWRITE_MODEL=1 \
 LOCAL_CHATBOT_ALLOW_MODEL_DOWNLOAD=1 \
 ./run_streamlit.sh
 ```

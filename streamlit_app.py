@@ -23,7 +23,7 @@ from character_graph.storage import load_graph
 from graphviz_rendering import render_knowledge_graph_tabs
 
 
-from local_chatbot.storage import (
+from language_model.storage import (
     Character,
     CharacterProfile,
     Place,
@@ -46,17 +46,18 @@ from local_chatbot.storage import (
     write_character_profile,
     write_place_markdown,
 )
-from local_chatbot.character_rewrites import (
+
+from language_model.character_rewrites import (
     graph_generated_backstory as build_graph_generated_backstory,
     graph_generated_summary as build_graph_generated_summary,
 )
-from local_chatbot.rewrite_model import (
+from language_model.rewrite_model import (
     LocalRewriteModelClient,
     LocalRewriteModelError,
     LocalRewriteModelLifecycle,
     load_local_language_model_config,
 )
-from local_chatbot.session_notes import (
+from language_model.session_notes import (
     child_markdown_sections,
     combine_markdown_section,
     hide_markdown_section_heading,
@@ -79,7 +80,7 @@ from local_chatbot.session_notes import (
     write_markdown_section,
     write_session_note,
 )
-from local_chatbot.lore_import import (
+from language_model.lore_import import (
     BACKUP_KIND_SNAPSHOT,
     backup_lore_files,
     clear_local_lore,
@@ -88,7 +89,7 @@ from local_chatbot.lore_import import (
     read_lore_backup_date,
     restore_lore_backup,
 )
-from local_chatbot.paths import (
+from language_model.paths import (
     CHARACTERS_DIR,
     LORE_DIR,
     PLACES_DIR,
@@ -97,7 +98,6 @@ from local_chatbot.paths import (
     WORLD_BUILDING_BACKUP_DIR,
 )
 
-ENABLE_LOCAL_REWRITE_MODEL = "LOCAL_CHATBOT_ENABLE_LOCAL_REWRITE_MODEL"
 ALLOW_LOCAL_REWRITE_MODEL_DOWNLOAD = "LOCAL_CHATBOT_ALLOW_MODEL_DOWNLOAD"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 DISABLE_LORE_BACKUPS = "LOCAL_CHATBOT_DISABLE_LORE_BACKUPS"
@@ -260,10 +260,6 @@ def clean_display_name(name: str) -> str:
     return cleaned.rstrip(" -:|")
 
 
-def local_model_rewrites_enabled() -> bool:
-    return os.environ.get(ENABLE_LOCAL_REWRITE_MODEL) == "1"
-
-
 def local_model_downloads_enabled() -> bool:
     return os.environ.get(ALLOW_LOCAL_REWRITE_MODEL_DOWNLOAD) == "1"
 
@@ -352,8 +348,6 @@ def graph_generated_backstory(character: Character, profile: CharacterProfile) -
 
 
 def local_rewrite_client_or_none() -> LocalRewriteModelClient | None:
-    if not local_model_rewrites_enabled():
-        return None
     config = load_local_language_model_config(allow_download=local_model_downloads_enabled())
     lifecycle = LocalRewriteModelLifecycle(config)
     if not lifecycle.is_runtime_available():
@@ -1818,7 +1812,9 @@ def render_character_panel() -> None:
 
 def render_character_editor(character: Character) -> None:
     profile = read_character_profile(character)
-    with st.expander("Edit Character", expanded=bool(st.session_state.get(f"character_status_{character.name}", ""))):
+    st.markdown("#### Edit Character")
+    editor_context = st.container()
+    with editor_context:
         with st.form(f"edit_character_{character.name}"):
             st.text_input("Name", value=profile.name, disabled=True)
             name_cols = st.columns(2)

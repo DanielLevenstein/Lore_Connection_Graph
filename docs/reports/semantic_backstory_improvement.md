@@ -13,20 +13,16 @@
 | Model             | JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF |
 | Quantization      | Q4_K_M                                     |
 | Prompt version    | character-rewrite-v6-local-qwen-1.5b       |
-| Prompt eval time  | 8982.46 ms                                 |
+| Prompt eval time  | 8934.12 ms                                 |
 | Prompt tokens     | 615                                        |
-| Completion tokens | 128                                        |
-| Total tokens      | 743                                        |
+| Completion tokens | 159                                        |
+| Total tokens      | 774                                        |
 
 ## Candidate
 
 ### Local Model Rewrite
 
-Orin Nightbloom, a Half-Orc Bard, was born to a mother who instilled a deep sense of duty into him. 
-He excelled at Sunstone Mage College, a place that sharpened his talent and awareness of the weight of his half-Orc heritage. 
-The loss of his mother left a void that forced Orin to understand the curse shadowing his family and to break it. 
-Orin's drives are to stop a younger relative from repeating their worst choice and to break a curse that only worsens when ignored. 
-Orin's goal is to avoid repeating history and to maintain a balance between tradition and individuality.
+Orin Nightbloom, Half-Orc Bard, was born into the weight of his half-orc heritage and the refined air of Sunstone Mage College, a coastal campus nestled on the frosted coast of his life. The loss of his mother left behind more than just grief; it gave him a reason to understand the curse shadowing his family and to stop a younger relative from repeating their worst choice. Orin, with the strength of a lineage elder, excelled in magic, a beacon in the world. His drive to break a curse that only worsens when ignored compelled him to avoid repeating history. His mother’s legacy as a revered elven mage instilled in him the strength to shoulder his lineage, a duty he carried with him into the halls of Sunstone Mage College.
 
 ### Existing Generated Section
 
@@ -48,10 +44,10 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 | Candidate                  | Status   | Overall | Similarity | Coverage | Sentence Quality |
 | -------------------------- | -------- | ------: | ---------: | -------: | ---------------: |
-| Local model rewrite        | Accepted | 0.7650  | 0.6672     | 0.7500   | 0.9700           |
+| Local model rewrite        | Accepted | 0.8255  | 0.8249     | 0.8750   | 0.7150           |
 | Existing generated section | Accepted | 0.7588  | 0.7334     | 0.7500   | 0.8229           |
 | Original section           | Source   | 0.5470  | 0.7875     | 0.3750   | 0.5129           |
 
 ## Result
 
-The local model rewrite improves the overall quality score over the original section by `0.2180`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
+The local model rewrite improves the overall quality score over the original section by `0.2785`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
