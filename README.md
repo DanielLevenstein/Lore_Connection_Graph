@@ -15,7 +15,7 @@ A manual backup button has been added in the `Lore Import` Section for your conv
 ## Dependencies
 
 - [Python 3.11](https://www.python.org/downloads/): Streamlit App
-- [llama.cpp](https://github.com/ggml-org/llama.cpp): For Backstory Wrties
+- [llama.cpp](https://github.com/ggml-org/llama.cpp): For Backstory Rewrites
 
 ## Running App
 
