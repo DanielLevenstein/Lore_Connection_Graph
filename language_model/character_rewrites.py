@@ -186,8 +186,9 @@ def primary_traits(graph: CharacterGraph) -> list[str]:
 def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) -> str:
     if kind == "summary":
         instruction = (
-            "Write one polished character summary sentence. Keep it under 70 words. "
-            "Include the character's race, class, key place, important relationship, and main drive when present."
+            "Write three polished character summary sentence. "
+            "Use short sentences. Split long or comma-heavy sentences. "
+            "Do not use ellipses or describe graph labels such as traits as labels."
         )
     elif kind == "backstory":
         instruction = (

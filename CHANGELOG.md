@@ -87,3 +87,15 @@
 ## 2026-07-20
 - Remove duplicate Family Tree nodes from the place graph.
 - Move lore_graph_fixture.json to a hidden directory until node deduplication is implemented.
+
+# feature/character_rewrite
+## 2026-07-20
+
+### Local Character Rewrite Evaluation
+- Switched character rewrites to the local `llama` CLI model path, compared generated backstories against existing generated and original prose, and updated semantic scoring to include sentence-quality penalties for run-on, comma-heavy, repeated, and truncated output.
+
+### Streamlit Rewrite Review UI
+- Removed the local rewrite feature gate, kept the character editor visible after summary and backstory rewrite actions, and added focused Streamlit e2e coverage so generated text remains reviewable after save/rerun.
+
+### Multi-Character Rewrite Comparison
+- Added a second rewrite report generator for Orin Nightbloom, Jory Ravenmark, and Neal Lovington that scores source material, generated summaries, and generated backstories; Orin uses the generation 1 auto-generated backstory as the report source material.
