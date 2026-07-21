@@ -18,8 +18,9 @@ from language_model.character_rewrites import (
     semantic_rewrite_score,
 )
 from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_language_model_config
+from language_model.rewrite_quality import SENTENCE_LENGTH_PENALTY_PER_WORD, writing_quality_score
 from language_model.storage import Character, CharacterProfile, read_character_profile
-from scripts.generate_semantic_improvement_report import markdown_table, model_runtime_section
+from scripts.generate_semantic_improvement_report import markdown_table, model_runtime_section, normalized_score, status_for_score
 
 
 CHARACTER_SHEETS_DIR = ROOT_DIR / "tests" / "fixtures" / "character_sheets"
@@ -29,6 +30,8 @@ DEFAULT_CHARACTER_PATHS = [
     CHARACTER_SHEETS_DIR / "Neal_Lovington.md",
 ]
 DEFAULT_REPORT_PATH = ROOT_DIR / "docs" / "reports" / "multi_character_rewrite_comparison.md"
+SUMMARY_LENGTH_TARGET_MIN_WORDS = 30
+SUMMARY_LENGTH_TARGET_MAX_WORDS = 60
 
 
 def build_report(
@@ -71,25 +74,25 @@ def build_report(
 
 def summary_score_table_for_results(results: list[dict]) -> str:
     rows = [
-        summary_score_row(result["name"], result["summary"], result["summary_score"])
+        summary_score_row(result["name"], result["summary"], result["summary_score"], result["summary_writing_score"])
         for result in results
     ]
     return markdown_table(
-        ["Character", "Summary Length", "Overall", "Similarity", "Coverage", "Sentence Quality"],
+        ["Character", "Status", "Summary Length Score", "Overall", "Similarity", "Sentence Length Score", "Sentence Quality"],
         rows,
-        alignments=["left", "right", "right", "right", "right", "right"],
+        alignments=["left", "left", "right", "right", "right", "right", "right"],
     )
 
 
 def backstory_score_table_for_results(results: list[dict]) -> str:
     rows = [
-        score_row(result["name"], result["backstory_score"])
+        score_row(result["name"], result["backstory_score"], result["backstory_writing_score"])
         for result in results
     ]
     return markdown_table(
-        ["Character", "Overall", "Similarity", "Coverage", "Sentence Quality"],
+        ["Character", "Status", "Overall", "Similarity", "Sentence Length Score", "Sentence Quality"],
         rows,
-        alignments=["left", "right", "right", "right", "right"],
+        alignments=["left", "left", "right", "right", "right", "right"],
     )
 
 
@@ -122,7 +125,9 @@ def generate_character_outputs(path: Path, rewrite_client: RewriteClient) -> dic
         "backstory": backstory,
         "source_score": semantic_rewrite_score(source_text, source_context, required_terms),
         "summary_score": semantic_rewrite_score(summary, source_context, required_terms),
+        "summary_writing_score": writing_quality_score(summary),
         "backstory_score": semantic_rewrite_score(backstory, source_context, required_terms),
+        "backstory_writing_score": writing_quality_score(backstory),
     }
 
 
@@ -149,29 +154,42 @@ def generated_candidate(generate) -> str:
         return f"Exception thrown on candidate generation {exc}_"
 
 
-def summary_score_row(character_name: str, summary: str, score) -> list[str]:
+def summary_score_row(character_name: str, summary: str, score, writing_score) -> list[str]:
     return [
         character_name,
-        str(summary_word_count(summary)),
-        f"{score.score:.4f}",
-        f"{score.semantic_similarity:.4f}",
-        f"{score.concept_coverage:.4f}",
-        f"{score.concision:.4f}",
+        status_for_score(score),
+        f"{summary_length_score(summary):.2f}",
+        f"{normalized_score(score.score):.2f}",
+        f"{normalized_score(score.semantic_similarity):.2f}",
+        f"{writing_score.sentence_length:.2f}",
+        f"{normalized_score(score.concision):.2f}",
     ]
 
 
-def score_row(character_name: str, score) -> list[str]:
+def score_row(character_name: str, score, writing_score) -> list[str]:
     return [
         character_name,
-        f"{score.score:.4f}",
-        f"{score.semantic_similarity:.4f}",
-        f"{score.concept_coverage:.4f}",
-        f"{score.concision:.4f}",
+        status_for_score(score),
+        f"{normalized_score(score.score):.2f}",
+        f"{normalized_score(score.semantic_similarity):.2f}",
+        f"{writing_score.sentence_length:.2f}",
+        f"{normalized_score(score.concision):.2f}",
     ]
 
 
 def summary_word_count(summary: str) -> int:
     return len(summary.split())
+
+
+def summary_length_score(summary: str) -> float:
+    word_count = summary_word_count(summary)
+    if SUMMARY_LENGTH_TARGET_MIN_WORDS <= word_count <= SUMMARY_LENGTH_TARGET_MAX_WORDS:
+        return 100.0
+    difference = min(
+        abs(word_count - SUMMARY_LENGTH_TARGET_MIN_WORDS),
+        abs(word_count - SUMMARY_LENGTH_TARGET_MAX_WORDS),
+    )
+    return max(0.0, 100.0 - (difference * SENTENCE_LENGTH_PENALTY_PER_WORD))
 
 
 def real_model_rewrite_client() -> RewriteClient:

@@ -3,40 +3,39 @@
 ## Rewrite Engine
 
 - Rewrite engine: `local-language-model-llama-cli`
-- Evaluation: local hash-embedding source-context similarity, required concept coverage, and concision.
-- Source context similarity compares each candidate against the assembled character profile and graph evidence.
+- Evaluation: semantic similarity, sentence length fit, and sentence quality.
 
 ## Model Runtime
 
-| Metric            | Value                                      |
-| ----------------- | ------------------------------------------ |
-| Model             | JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF |
-| Quantization      | Q4_K_M                                     |
-| Prompt version    | character-rewrite-v6-local-qwen-1.5b       |
-| Max tokens        | 640                                        |
-| Temperature       | 0.75                                       |
-| Top P             | 0.85                                       |
-| Repeat penalty    | 1.15                                       |
-| Seed              | 2310                                       |
-| Context size      | 8192                                       |
-| Batch size        | 64                                         |
-| Threads           | 2                                          |
-| GPU layers        | 0                                          |
-| Device            | none                                       |
-| Timeout seconds   | 180                                        |
-| Prompt hash       | 363508d65f2866c4                           |
-| Prompt eval time  | 8924.35 ms                                 |
-| Prompt tokens     | 615                                        |
-| Completion tokens | 330                                        |
-| Total tokens      | 945                                        |
+| Metric            | Value                                                |
+| ----------------- | ---------------------------------------------------- |
+| Model             | JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF           |
+| Quantization      | Q4_K_M                                               |
+| Prompt version    | character-rewrite-v7-local-qwen-1.5b-writing-quality |
+| Max tokens        | 640                                                  |
+| Temperature       | 0.75                                                 |
+| Top P             | 0.85                                                 |
+| Repeat penalty    | 1.15                                                 |
+| Seed              | 2310                                                 |
+| Context size      | 8192                                                 |
+| Batch size        | 64                                                   |
+| Threads           | 2                                                    |
+| GPU layers        | 0                                                    |
+| Device            | none                                                 |
+| Timeout seconds   | 180                                                  |
+| Prompt hash       | 02f0e87e27d4b079                                     |
+| Prompt eval time  | 15056.71 ms                                          |
+| Prompt tokens     | 679                                                  |
+| Completion tokens | 477                                                  |
+| Total tokens      | 1156                                                 |
 
 ## Candidate
 
 ### Local Model Rewrite
 
-Orin Nightbloom was born into an era where identity is shaped by tradition and circumstance. Born with a weight he could barely comprehend—the legacy of his half-orc heritage clashing with the refined air of Sunstone Mage College on the frosted coast. He came to understand that this tension, left unaddressed, would only grow heavier.
+Orin Nightbloom is a Half-Orc Bard who excelled at Sunstone Mage College but came of age grappling with the weight of his heritage and the isolation it often leaves behind. His mother, an esteemed elven mage revered for her arcane knowledge, instilled in him a sense of responsibility to understand and prevent the curse shadowing their family history—a duty that became Orin's driving force. He sought not just mastery over magic but also redemption from the weight of his past choices and responsibilities.
 
-Orin’s life was defined by two opposing forces: the weight of lineage and the pressure from his surroundings. His mother, a revered elven mage, instilled in him the responsibility of understanding and breaking the curse shadowing their family history. This duty became more than just an inheritance; it became Orin's drive.
+Orin's drive is rooted deeply into breaking the curse that only worsens when ignored, stemming from a desire to avoid repeating generations' mistakes and honor her legacy in ways she could never have foreseen or understood. The lessons he learned at Sunstone Mage College sharpened not just as an individual but also as part of his community’s struggle against these ancient, unseen forces.
 
 ### Existing Generated Section
 
@@ -56,12 +55,16 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 ## Scores
 
-| Candidate                  | Status   | Overall | Similarity | Coverage | Sentence Quality |
-| -------------------------- | -------- | ------: | ---------: | -------: | ---------------: |
-| Local model rewrite        | Accepted | 0.6268  | 0.7675     | 0.3750   | 0.9472           |
-| Existing generated section | Accepted | 0.7588  | 0.7334     | 0.7500   | 0.8229           |
-| Original section           | Source   | 0.5470  | 0.7875     | 0.3750   | 0.5129           |
+| Candidate                  | Status   | Overall | Similarity | Sentence Length Score | Sentence Quality |
+| -------------------------- | -------- | ------: | ---------: | --------------------: | ---------------: |
+| Local model rewrite        | Rejected | 59.71   | 67.07      | 59.20                 | 68.67            |
+| Existing generated section | Accepted | 75.88   | 73.34      | 75.00                 | 82.29            |
+| Original section           | Source   | 54.70   | 78.75      | 56.53                 | 51.29            |
+
+## Sentence Lengths
+
+![Sentence length distribution](semantic_sentence_lengths.png)
 
 ## Result
 
-The local model rewrite improves the overall quality score over the original section by `0.0798`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
+The local model rewrite changes the writing quality score versus the original section by `0.0501`.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR))
@@ -16,14 +17,21 @@ from language_model.character_rewrites import (
     semantic_rewrite_score,
 )
 from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_language_model_config
+from language_model.rewrite_quality import writing_quality_score
 from language_model.storage import Character, read_character_profile
 
 
 DEFAULT_CHARACTER_PATH = ROOT_DIR / "tests" / "fixtures" / "character_sheets" / "Orin_Nightbloom.md"
 DEFAULT_REPORT_PATH = ROOT_DIR / "docs" / "reports" / "semantic_backstory_improvement.md"
+DEFAULT_SENTENCE_LENGTH_CHART_PATH = ROOT_DIR / "docs" / "reports" / "semantic_sentence_lengths.png"
+ACCEPTANCE_SCORE_THRESHOLD = 70.0
 
 
-def build_report(character_path: Path = DEFAULT_CHARACTER_PATH, rewrite_client: RewriteClient | None = None) -> str:
+def build_report(
+    character_path: Path = DEFAULT_CHARACTER_PATH,
+    rewrite_client: RewriteClient | None = None,
+    sentence_length_chart_path: Path | None = None,
+) -> str:
     character = Character(name=character_path.stem, path=character_path)
     profile = read_character_profile(character)
     graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
@@ -35,31 +43,49 @@ def build_report(character_path: Path = DEFAULT_CHARACTER_PATH, rewrite_client: 
         model_story = ""
         model_error = str(exc)
     model_metadata = getattr(rewrite_client, "last_metadata", {})
-    source_context = rewrite_quality_context(graph, profile)
-    required_terms = rewrite_required_terms(graph, profile)
     existing_generated_backstory = profile.backstory
     original_backstory = profile.original_backstory or profile.backstory
-    model_score = semantic_rewrite_score(model_story, source_context, required_terms)
-    existing_generated_score = semantic_rewrite_score(existing_generated_backstory, source_context, required_terms)
-    original_score = semantic_rewrite_score(original_backstory, source_context, required_terms)
-    delta = round(model_score.score - original_score.score, 4)
-    score_rows = [
-        score_row("Local model rewrite", model_score, "Rejected" if not model_story.strip() else "Accepted"),
-        score_row("Existing generated section", existing_generated_score, "Accepted"),
+    source_context = rewrite_quality_context(graph, profile)
+    required_terms = rewrite_required_terms(graph, profile)
+    model_semantic_score = semantic_rewrite_score(model_story, source_context, required_terms)
+    existing_generated_semantic_score = semantic_rewrite_score(existing_generated_backstory, source_context, required_terms)
+    original_semantic_score = semantic_rewrite_score(original_backstory, source_context, required_terms)
+    model_writing_score = writing_quality_score(model_story)
+    existing_generated_writing_score = writing_quality_score(existing_generated_backstory)
+    original_writing_score = writing_quality_score(original_backstory)
+    delta = round(model_semantic_score.score - original_semantic_score.score, 4)
+    candidate_scores = [
+        ("Local model rewrite", model_semantic_score, model_writing_score, status_for_score(model_semantic_score)),
+        (
+            "Existing generated section",
+            existing_generated_semantic_score,
+            existing_generated_writing_score,
+            status_for_score(existing_generated_semantic_score),
+        ),
     ]
     if original_backstory.strip() != existing_generated_backstory.strip():
-        score_rows.append(score_row("Original section", original_score, "Source"))
+        candidate_scores.append(("Original section", original_semantic_score, original_writing_score, "Source"))
+    if sentence_length_chart_path:
+        render_sentence_length_chart(
+            [(label, writing_score) for label, _semantic_score, writing_score, _status in candidate_scores],
+            sentence_length_chart_path,
+        )
+    score_rows = [
+        score_row(label, semantic_score, writing_score, status)
+        for label, semantic_score, writing_score, status in candidate_scores
+    ]
     score_table = markdown_table(
-        ["Candidate", "Status", "Overall", "Similarity", "Coverage", "Sentence Quality"],
+        ["Candidate", "Status", "Overall", "Similarity", "Sentence Length Score", "Sentence Quality"],
         score_rows,
         alignments=["left", "left", "right", "right", "right", "right"],
     )
+
+    chart_markdown = sentence_length_chart_markdown(sentence_length_chart_path)
     return (
         "# Semantic Improvement Report: Orin Nightbloom\n\n"
         "## Rewrite Engine\n\n"
         f"- Rewrite engine: `{LOCAL_REWRITE_MODEL_ENGINE}`\n"
-        "- Evaluation: local hash-embedding source-context similarity, required concept coverage, and concision.\n"
-        "- Source context similarity compares each candidate against the assembled character profile and graph evidence.\n\n"
+        "- Evaluation: semantic similarity, sentence length fit, and sentence quality.\n\n"
         "## Model Runtime\n\n"
         f"{model_runtime_section(model_metadata)}\n\n"
         f"{model_error_section(model_error)}"
@@ -73,6 +99,8 @@ def build_report(character_path: Path = DEFAULT_CHARACTER_PATH, rewrite_client: 
         f"{original_backstory}\n\n"
         "## Scores\n\n"
         f"{score_table}\n\n"
+        "## Sentence Lengths\n\n"
+        f"{chart_markdown}"
         "## Result\n\n"
         f"{result_summary(model_story, delta)}\n"
     )
@@ -117,8 +145,7 @@ def result_summary(model_story: str, delta: float) -> str:
             "The existing generated section remains the better candidate for this fixture."
         )
     return (
-        f"The local model rewrite improves the overall quality score over the original section by `{delta:.4f}`. "
-        "It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc."
+        f"The local model rewrite changes the writing quality score versus the original section by `{delta:.4f}`."
     )
 
 
@@ -129,15 +156,142 @@ def real_model_rewrite_client() -> RewriteClient:
     )
 
 
-def score_row(label: str, score, status: str) -> list[str]:
+def score_row(label: str, semantic_score, writing_score, status: str) -> list[str]:
     return [
         label,
         status,
-        f"{score.score:.4f}",
-        f"{score.semantic_similarity:.4f}",
-        f"{score.concept_coverage:.4f}",
-        f"{score.concision:.4f}",
+        f"{normalized_score(semantic_score.score):.2f}",
+        f"{normalized_score(semantic_score.semantic_similarity):.2f}",
+        f"{writing_score.sentence_length:.2f}",
+        f"{normalized_score(semantic_score.concision):.2f}",
     ]
+
+
+def normalized_score(score: float) -> float:
+    return score * 100
+
+
+def status_for_score(score) -> str:
+    return "Accepted" if normalized_score(score.score) >= ACCEPTANCE_SCORE_THRESHOLD else "Rejected"
+
+
+def sentence_length_rows(candidates: list[tuple[str, object]]) -> list[list[str]]:
+    rows = []
+    for label, score in candidates:
+        for bucket in score.sentence_length_buckets:
+            rows.append(
+                [
+                    label,
+                    bucket.category,
+                    bucket.word_range,
+                    str(bucket.count),
+                    f"{bucket.percentage:.2f}%",
+                    f"{score.avg_sentence_length:.2f}",
+                ]
+            )
+    return rows
+
+
+def sentence_length_chart_markdown(chart_path: Path | None) -> str:
+    if not chart_path:
+        return ""
+    try:
+        display_path = chart_path.relative_to(DEFAULT_REPORT_PATH.parent)
+    except ValueError:
+        display_path = chart_path
+    return f"![Sentence length distribution]({display_path.as_posix()})\n\n"
+
+
+def sentence_length_chart_matrix(candidates: list[tuple[str, Any]]) -> tuple[list[str], list[str], list[list[float]]]:
+    from sklearn.feature_extraction import DictVectorizer
+
+    categories = ["Fragment", "Short", "Medium", "Long", "Run-on"]
+    labels = [label for label, _score in candidates]
+    records = []
+    for _label, score in candidates:
+        record = {category: 0.0 for category in categories}
+        record.update({bucket.category: bucket.percentage for bucket in score.sentence_length_buckets})
+        records.append(record)
+    vectorizer = DictVectorizer(sparse=False)
+    matrix = vectorizer.fit_transform(records)
+    feature_names = list(vectorizer.get_feature_names_out())
+    ordered_indexes = [feature_names.index(category) for category in categories]
+    ordered_matrix = matrix[:, ordered_indexes]
+    return labels, categories, ordered_matrix.tolist()
+
+
+def render_sentence_length_chart(candidates: list[tuple[str, Any]], chart_path: Path) -> Path:
+    import os
+    import tempfile
+
+    matplotlib_cache_dir = Path(tempfile.gettempdir()) / "lore_connection_graph_matplotlib"
+    matplotlib_cache_dir.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("MPLCONFIGDIR", str(matplotlib_cache_dir))
+    os.environ.setdefault("XDG_CACHE_HOME", str(matplotlib_cache_dir))
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from sklearn.neighbors import KernelDensity
+
+    labels, categories, matrix = sentence_length_chart_matrix(candidates)
+    bucket_centers = np.array([2.5, 10.5, 20.5, 30.5, 40.5])
+    chart_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, axes = plt.subplots(1, len(labels), figsize=(12, 3.8), sharey=True)
+    if len(labels) == 1:
+        axes = [axes]
+    colors = ["#7c8da6", "#4c9a72", "#d6a03d", "#c66b45", "#b54848"]
+    for axis, (label, score), percentages in zip(axes, candidates, matrix):
+        bars = axis.bar(categories, percentages, color=colors)
+        kde_values = sentence_length_kde_values(score.sentence_word_counts, bucket_centers, KernelDensity)
+        if kde_values:
+            axis.plot(
+                categories,
+                kde_values,
+                color="#222222",
+                marker="o",
+                linewidth=2,
+                label="KDE",
+            )
+        axis.set_title(label)
+        axis.set_ylim(0, 100)
+        axis.set_ylabel("Sentences (%)")
+        axis.tick_params(axis="x", rotation=35)
+        axis.grid(axis="y", linestyle=":", linewidth=0.8, alpha=0.6)
+        for bar, percentage in zip(bars, percentages):
+            axis.text(
+                bar.get_x() + bar.get_width() / 2,
+                min(percentage + 2, 96),
+                f"{percentage:.0f}%",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+        if kde_values:
+            axis.legend(loc="upper left", frameon=False, fontsize=8)
+    fig.tight_layout()
+    fig.savefig(chart_path, dpi=160)
+    plt.close(fig)
+    return chart_path
+
+
+def sentence_length_kde_values(
+    sentence_word_counts: tuple[int, ...],
+    bucket_centers,
+    kernel_density_cls,
+) -> list[float]:
+    if not sentence_word_counts:
+        return []
+    samples = [[count] for count in sentence_word_counts]
+    kde = kernel_density_cls(kernel="gaussian", bandwidth=6.0).fit(samples)
+    densities = [float(value) for value in kde.score_samples([[center] for center in bucket_centers])]
+    density_values = [2.718281828459045 ** value for value in densities]
+    max_density = max(density_values)
+    if max_density <= 0:
+        return [0.0 for _center in bucket_centers]
+    return [(density / max_density) * 100 for density in density_values]
 
 
 def markdown_table(headers: list[str], rows: list[list[str]], alignments: list[str] | None = None) -> str:
@@ -170,9 +324,12 @@ def markdown_separator(width: int, alignment: str) -> str:
     return dashes
 
 
-def write_report(report_path: Path = DEFAULT_REPORT_PATH) -> Path:
+def write_report(
+    report_path: Path = DEFAULT_REPORT_PATH,
+    sentence_length_chart_path: Path = DEFAULT_SENTENCE_LENGTH_CHART_PATH,
+) -> Path:
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(build_report(), encoding="utf-8")
+    report_path.write_text(build_report(sentence_length_chart_path=sentence_length_chart_path), encoding="utf-8")
     return report_path
 
 

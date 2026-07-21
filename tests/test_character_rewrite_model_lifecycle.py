@@ -120,6 +120,21 @@ def test_rewrite_prompt_uses_compact_graph_segments_instead_of_full_graph_dump()
     assert len(prompt) < len(profile.backstory) + len(profile.original_backstory)
 
 
+def test_backstory_prompt_lists_required_coverage_phrases():
+    character_path = FIXTURE_CHARACTER_SHEETS_DIR / "Orin_Nightbloom.md"
+    character = Character(name=character_path.stem, path=character_path)
+    profile = read_character_profile(character)
+    graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
+
+    prompt = rewrite_prompt("backstory", graph, profile)
+
+    assert "Coverage phrases to include naturally:" in prompt
+    assert "- Bard" in prompt
+    assert "- stop a younger relative from repeating their worst choice" in prompt
+    assert "- break a curse that only worsens when ignored" in prompt
+    assert "- Orin Nightbloom's Mother" in prompt
+
+
 def test_external_model_generation_is_disabled():
     generator = RandomCharacterGenerator(seed=7)
 

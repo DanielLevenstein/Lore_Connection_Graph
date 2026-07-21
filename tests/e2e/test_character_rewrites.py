@@ -33,7 +33,7 @@ MODEL_BACKSTORY = (
 def rewrite_client_with(summary: str = MODEL_SUMMARY, backstory: str = MODEL_BACKSTORY):
     def rewrite_client(messages: list[dict[str, str]]) -> str:
         prompt = messages[-1]["content"]
-        if "Write one polished character summary sentence" in prompt:
+        if "character summary" in prompt:
             return summary
         if "Rewrite the character backstory" in prompt:
             return backstory
@@ -130,8 +130,11 @@ def test_semantic_improvement_report_includes_scores_and_result():
     report = build_report(rewrite_client=rewrite_client_with())
 
     assert "# Semantic Improvement Report: Orin Nightbloom" in report
-    assert "Source context similarity compares each candidate" in report
+    assert "semantic similarity, sentence length fit, and sentence quality" in report
     assert "Local model rewrite" in report
     assert "Existing generated section" in report
     assert "Original section" in report
-    assert "improves the overall quality score over the original section" in report
+    assert "## Sentence Lengths" in report
+    assert "Sentence Length Score" in report
+    assert "Coverage" not in report.split("## Scores", 1)[1].split("## Sentence Lengths", 1)[0]
+    assert "changes the writing quality score versus the original section" in report

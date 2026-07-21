@@ -1,6 +1,14 @@
 import scripts.generate_semantic_improvement_report as report_script
 from language_model.character_rewrites import rewrite_concision_score
-from scripts.generate_semantic_improvement_report import build_report
+from language_model.rewrite_quality import TARGET_SENTENCE_WORD_COUNT, sentence_length_distribution, writing_quality_score
+from scripts.generate_semantic_improvement_report import (
+    build_report,
+    normalized_score,
+    render_sentence_length_chart,
+    sentence_length_chart_matrix,
+    sentence_length_kde_values,
+    status_for_score,
+)
 
 
 MODEL_BACKSTORY = (
@@ -46,7 +54,7 @@ class FailingRewriteClient(FakeRewriteClient):
 
 def test_semantic_report_formats_three_version_score_table():
     report = build_report(rewrite_client=FakeRewriteClient())
-    score_table = report.split("## Scores", 1)[1].split("## Result", 1)[0]
+    score_table = report.split("## Scores", 1)[1].split("## Sentence Lengths", 1)[0]
     table_lines = [
         line
         for line in score_table.splitlines()
@@ -60,7 +68,7 @@ def test_semantic_report_formats_three_version_score_table():
         )
     ]
 
-    assert "Source context similarity compares each candidate" in report
+    assert "semantic similarity, sentence length fit, and sentence quality" in report
     assert "Prompt eval time" in report
     assert "12.34 ms" in report
     assert "Temperature" in report
@@ -74,11 +82,115 @@ def test_semantic_report_formats_three_version_score_table():
     assert "Prompt hash" in report
     assert "abc123def4567890" in report
     assert "Status" in report
+    assert "Similarity" in score_table
+    assert "Coverage" not in score_table
+    assert "Formatting" not in score_table
+    assert "Sentence Length Score" in score_table
     assert "Sentence Quality" in report
+    assert "## Sentence Lengths" in report
     assert any("Local model rewrite" in line for line in table_lines)
     assert any("Existing generated section" in line for line in table_lines)
     assert any("Original section" in line for line in table_lines)
     assert len({len(line) for line in table_lines}) == 1
+
+
+def test_sentence_length_distribution_reports_percentages_by_category():
+    distribution = sentence_length_distribution(
+        "One two three. "
+        "One two three four five six. "
+        "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen. "
+        "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+        "seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix. "
+        "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+        "seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix "
+        "twentyseven twentyeight twentynine thirty thirtyone thirtytwo thirtythree thirtyfour thirtyfive thirtysix."
+    )
+
+    assert TARGET_SENTENCE_WORD_COUNT == 15
+    assert [(bucket.category, bucket.word_range, bucket.count, bucket.percentage) for bucket in distribution] == [
+        ("Fragment", "0-5", 1, 20.0),
+        ("Short", "6-15", 1, 20.0),
+        ("Medium", "16-25", 1, 20.0),
+        ("Long", "26-35", 1, 20.0),
+        ("Run-on", "36+", 1, 20.0),
+    ]
+
+
+def test_normalized_score_converts_ratio_to_zero_to_one_hundred_scale():
+    assert normalized_score(0.8125) == 81.25
+
+
+def test_status_for_score_uses_seventy_point_threshold():
+    class Score:
+        def __init__(self, score: float) -> None:
+            self.score = score
+
+    assert status_for_score(Score(0.70)) == "Accepted"
+    assert status_for_score(Score(0.6999)) == "Rejected"
+
+
+def test_semantic_report_has_sentence_length_section_for_chart():
+    report = build_report(rewrite_client=FakeRewriteClient())
+    sentence_table = report.split("## Sentence Lengths", 1)[1].split("## Result", 1)[0]
+
+    assert "Sentence Length" not in sentence_table
+    assert "Sentence Quality" not in sentence_table
+
+
+def test_sentence_length_chart_matrix_uses_fixed_category_order():
+    labels, categories, matrix = sentence_length_chart_matrix(
+        [
+            ("Fixture", writing_quality_score("One two three. One two three four five six.")),
+        ]
+    )
+
+    assert labels == ["Fixture"]
+    assert categories == ["Fragment", "Short", "Medium", "Long", "Run-on"]
+    assert matrix == [[50.0, 50.0, 0.0, 0.0, 0.0]]
+
+
+def test_sentence_length_kde_values_scales_to_chart_percentages():
+    class FakeKernelDensity:
+        def __init__(self, kernel: str, bandwidth: float) -> None:
+            self.kernel = kernel
+            self.bandwidth = bandwidth
+
+        def fit(self, samples):
+            self.samples = samples
+            return self
+
+        def score_samples(self, samples):
+            return [0.0, -1.0, -2.0, -3.0, -4.0]
+
+    values = sentence_length_kde_values((4, 12, 28), [2.5, 10.5, 20.5, 30.5, 40.5], FakeKernelDensity)
+
+    assert values[0] == 100.0
+    assert values[-1] < values[0]
+
+
+def test_sentence_length_chart_renders_png(tmp_path):
+    chart_path = tmp_path / "sentence-lengths.png"
+
+    render_sentence_length_chart(
+        [
+            ("Fixture", writing_quality_score("One two three. One two three four five six.")),
+            ("Generated", writing_quality_score(MODEL_BACKSTORY)),
+            ("Original", writing_quality_score("One two three four five six seven eight nine ten.")),
+        ],
+        chart_path,
+    )
+
+    assert chart_path.exists()
+    assert chart_path.stat().st_size > 0
+
+
+def test_semantic_report_embeds_sentence_length_chart_when_path_is_provided(tmp_path):
+    chart_path = tmp_path / "sentence-lengths.png"
+
+    report = build_report(rewrite_client=FakeRewriteClient(), sentence_length_chart_path=chart_path)
+
+    assert f"![Sentence length distribution]({chart_path.as_posix()})" in report
+    assert chart_path.exists()
 
 
 def test_semantic_report_defaults_to_real_model_client(monkeypatch):
@@ -99,7 +211,7 @@ def test_semantic_report_defaults_to_real_model_client(monkeypatch):
 def test_semantic_report_records_rejected_model_candidate():
     report = build_report(rewrite_client=FailingRewriteClient())
 
-    assert "No acceptable local model rewrite was produced" in report
+    assert "ERROR:" in report
     assert "fixture model echoed the prompt" in report
     assert "Local model rewrite        | Rejected" in report
     assert "existing generated section remains the better candidate" in report

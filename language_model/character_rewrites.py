@@ -202,6 +202,7 @@ def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) 
         raise ValueError(f"Unknown rewrite kind: {kind}")
     profile_context = character_profile_context(profile, kind)
     graph_details = graph_segment_context(graph, profile)
+    required_terms = rewrite_required_terms(graph, profile)
     prompt_parts = [
         instruction,
         "Use the graph segments as the rewrite outline. Prefer graph segment wording over unsupported invention.",
@@ -214,12 +215,14 @@ def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) 
         )
     prompt_parts.extend(
         [
+            "Coverage phrases to include naturally:",
+            "\n".join(f"- {term}" for term in required_terms),
             "Facts to preserve:",
             profile_context,
             graph_details,
-            "Return only the rewritten prose. Do not include headings, labels, diagnostics, or the prompt.",
         ]
     )
+    prompt_parts.append("Return only the rewritten prose. Do not include headings, labels, diagnostics, or the prompt.")
     return "\n\n".join(prompt_parts)
 
 

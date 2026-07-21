@@ -1,5 +1,10 @@
 import scripts.generate_multi_character_rewrite_report as report_script
-from scripts.generate_multi_character_rewrite_report import build_report, generate_character_outputs, summary_word_count
+from scripts.generate_multi_character_rewrite_report import (
+    build_report,
+    generate_character_outputs,
+    summary_length_score,
+    summary_word_count,
+)
 
 
 class CapturingRewriteClient:
@@ -64,8 +69,18 @@ def test_multi_character_report_compares_three_characters():
     assert "## Generated Backstory Scores" in report
     summary_table = report.split("## Generated Summary Scores", 1)[1].split("## Generated Backstory Scores", 1)[0]
     backstory_table = report.split("## Generated Backstory Scores", 1)[1].split("## Character Outputs", 1)[0]
-    assert "Summary Length" in summary_table
+    assert "Status" in summary_table
+    assert "Status" in backstory_table
+    assert "Summary Length Score" in summary_table
+    assert "Coverage" not in summary_table
+    assert "Coverage" not in backstory_table
+    assert "Sentence Length Score" in summary_table
+    assert "Sentence Length Score" in backstory_table
+    assert "Sentence Quality" in summary_table
+    assert "Sentence Quality" in backstory_table
     assert "Summary Length" not in backstory_table
+    assert "Sentence length distribution" not in report
+    assert "semantic_sentence_lengths.png" not in report
     assert report.count("#### Generated Summary") >= 3
     assert report.count("#### Generated Backstory") >= 3
     assert "| Character" in report
@@ -105,3 +120,14 @@ def test_multi_character_report_defaults_to_real_model_client(monkeypatch):
 
 def test_summary_word_count_reports_generated_summary_length():
     assert summary_word_count("One two three.") == 3
+
+
+def test_summary_length_score_uses_target_word_count():
+    in_range_summary = (
+        "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+        "seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix "
+        "twentyseven twentyeight twentynine thirty."
+    )
+
+    assert summary_length_score(in_range_summary) == 100.0
+    assert summary_length_score("One two three four five.") == 0.0
