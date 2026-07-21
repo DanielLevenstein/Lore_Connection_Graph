@@ -50,6 +50,12 @@ from local_chatbot.character_rewrites import (
     graph_generated_backstory as build_graph_generated_backstory,
     graph_generated_summary as build_graph_generated_summary,
 )
+from local_chatbot.rewrite_model import (
+    LocalRewriteModelClient,
+    LocalRewriteModelError,
+    LocalRewriteModelLifecycle,
+    load_local_language_model_config,
+)
 from local_chatbot.session_notes import (
     child_markdown_sections,
     combine_markdown_section,
@@ -92,6 +98,8 @@ from local_chatbot.paths import (
 )
 
 ENABLE_CHARACTER_REWRITE = "LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES"
+ENABLE_LOCAL_REWRITE_MODEL = "LOCAL_CHATBOT_ENABLE_LOCAL_REWRITE_MODEL"
+ALLOW_LOCAL_REWRITE_MODEL_DOWNLOAD = "LOCAL_CHATBOT_ALLOW_MODEL_DOWNLOAD"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 DISABLE_LORE_BACKUPS = "LOCAL_CHATBOT_DISABLE_LORE_BACKUPS"
 MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
@@ -257,6 +265,14 @@ def graph_rewrites_enabled() -> bool:
     return os.environ.get(ENABLE_CHARACTER_REWRITE) == "1"
 
 
+def local_model_rewrites_enabled() -> bool:
+    return os.environ.get(ENABLE_LOCAL_REWRITE_MODEL) == "1"
+
+
+def local_model_downloads_enabled() -> bool:
+    return os.environ.get(ALLOW_LOCAL_REWRITE_MODEL_DOWNLOAD) == "1"
+
+
 def attribute_graph_override_enabled() -> bool:
     return os.environ.get(ENABLE_ATTRIBUTE_GRAPH_OVERRIDE) == "1"
 
@@ -310,6 +326,12 @@ def accept_current_character_text(profile: CharacterProfile) -> CharacterProfile
 
 def graph_generated_summary(character: Character, profile: CharacterProfile) -> str:
     graph = character_graph_or_regenerate(character)
+    rewrite_client = local_rewrite_client_or_none()
+    if rewrite_client:
+        try:
+            return build_graph_generated_summary(graph, profile, rewrite_client=rewrite_client)
+        except LocalRewriteModelError as exc:
+            st.warning(f"Model-backed summary failed; using deterministic graph rewrite. {exc}")
     return build_graph_generated_summary(graph, profile)
 
 
@@ -325,7 +347,44 @@ def character_graph_or_regenerate(character: Character):
 
 def graph_generated_backstory(character: Character, profile: CharacterProfile) -> str:
     graph = character_graph_or_regenerate(character)
+    rewrite_client = local_rewrite_client_or_none()
+    if rewrite_client:
+        try:
+            return build_graph_generated_backstory(graph, profile, rewrite_client=rewrite_client)
+        except LocalRewriteModelError as exc:
+            st.warning(f"Model-backed backstory failed; using deterministic graph rewrite. {exc}")
     return build_graph_generated_backstory(graph, profile)
+
+
+def local_rewrite_client_or_none() -> LocalRewriteModelClient | None:
+    if not local_model_rewrites_enabled():
+        return None
+    config = load_local_language_model_config(allow_download=local_model_downloads_enabled())
+    lifecycle = LocalRewriteModelLifecycle(config)
+    if not lifecycle.is_runtime_available():
+        st.warning("llama CLI is not installed; using deterministic graph rewrite.")
+        return None
+    if not lifecycle.is_model_available() and not config.allow_download:
+        st.warning("Local rewrite model is not downloaded; using deterministic graph rewrite.")
+        return None
+    return LocalRewriteModelClient(config=config, status_callback=local_model_status_callback())
+
+
+def local_model_status_callback():
+    status_message = st.empty()
+    progress_message = st.empty()
+
+    def update(message: str) -> None:
+        download_match = re.search(r"Downloading local rewrite model:\s*(\d+)%", message)
+        if download_match:
+            percent = max(0, min(100, int(download_match.group(1))))
+            status_message.info(f"Downloading local rewrite model: {percent}%")
+            progress_message.progress(percent)
+            return
+        progress_message.empty()
+        status_message.info(message)
+
+    return update
 
 
 def mark_auto_generated(profile: CharacterProfile, section: str) -> list[str]:

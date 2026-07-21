@@ -27,13 +27,13 @@ Use a small local model through a narrow adapter, with the deterministic graph r
 
 Release behavior:
 
-- Preferred model: `Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M`.
-- Preferred runner: app-managed Python worker process using `llama_cpp` bindings installed by `pip install -r requirements.txt`.
+- Preferred model: `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF:Q4_K_M`.
+- Preferred runner: app-managed `llama cli` subprocess.
 - Fallback engine: `deterministic-graph-rewrite`.
-- Inputs: authored character profile fields plus knowledge graph characters, places, attributes, relationships, and evidence.
+- Inputs: authored character profile fields plus compact knowledge graph segments for the character's identity, places, relationships, drives, alliances, enemies, traits, and evidence.
 - Role: generate compact summaries and backstory drafts from source-backed graph facts.
 
-The selected model is intentionally the smallest practical instruction-tuned candidate for this workflow. The official Qwen GGUF model card lists Qwen2.5 0.5B Instruct as an instruction-tuned GGUF model with `Q4_K_M` support. That keeps download size and RAM requirements low while preserving enough instruction-following behavior for short source-grounded rewrites.
+The selected model is TinyLlama 1.1B Chat Q4_K_M because prior local-model experiments with TinyLlama were successful, while the current Qwen and SmolLM2 attempts were not stable enough for this rewrite path. SmolLM2 135M and 360M made prompt evaluation much faster, but both cut off prose mid-sentence or repeated themselves on the Orin fixture. Qwen2.5 0.5B produced complete prose in an earlier prompt shape, but with the compact graph-segment prompt it returned the stop marker instead of usable lore. TinyLlama should therefore be the active candidate while the compact graph-segment prompt and stricter output rejection checks remain in place.
 
 This model must be treated as optional runtime data, not committed repository content. The app should report missing artifact/download status visibly and keep the current character fields unchanged until a clean candidate is produced and accepted.
 
@@ -43,20 +43,22 @@ The model rewrite output should be labeled as graph-backed generated text and sh
 
 References:
 
-- Qwen model card: <https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF>
-- llama-cpp-python package: <https://github.com/abetlen/llama-cpp-python>
+- TinyLlama 1.1B Chat GGUF model card: <https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF>
+- Qwen 0.5B GGUF model card, rejected for the compact prompt path: <https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF>
+- SmolLM2 360M GGUF model card, rejected for truncated prose: <https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF>
+- SmolLM2 135M GGUF model card, rejected for repetition and truncated prose: <https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF>
+- llama.cpp install docs: <https://llama.cpp/>
 
 ## Rewrite Context
 
-Every rewrite request should combine authored prose and derived graph fields. The rewrite context should include:
+Every rewrite request should combine authored prose and derived graph fields, but the model prompt should stay small. The prompt should not dump the full graph or the full character sheet when a compact source packet will do the job. The rewrite context should include:
 
 - Character name, first name, family name, race, class, level, pronouns.
-- Current summary and current backstory.
-- Preserved original summary or backstory when the current section is already auto-generated.
+- Current target section in truncated form.
+- Preserved original target section in truncated form when the current section is already auto-generated.
 - Character details: drives, alliances, enemies, home/origin, gender, custom stat fields.
-- Knowledge graph attributes, places, and relationships.
-- Combined graph connections when available.
-- Source evidence for graph facts.
+- Knowledge graph segments associated with the character: identity, origin, places, drives, alliances, enemies, traits, and story relationships.
+- Short source evidence for each graph segment when available.
 - The requested operation: populate blank summary, repopulate summary, or rewrite backstory.
 
 The prompt should clearly rank source authority:
@@ -75,23 +77,23 @@ Model invocation should live behind a small adapter with this behavioral contrac
 - Accept structured chat messages from `rewrite_prompt`.
 - Ensure the configured model artifact is present, downloading it only through the approved model-download path.
 - Surface download and generation status to Streamlit without mixing status text into editable character fields.
-- Run inference through an app-managed worker that initializes `llama_cpp.Llama`.
+- Run inference through an app-managed `llama cli` subprocess.
 - Return only the model's candidate prose to the rewrite pipeline.
 - Raise a clear `RuntimeError` when the Python runtime dependency, model artifact, runner initialization, or output contract fails.
 
-The adapter must not expose LangChain, LangGraph, raw `llama_cpp` runtime details, or download implementation details to the Streamlit form handler. Streamlit should call the same high-level `graph_generated_summary` and `graph_generated_backstory` functions with a configured local rewrite client.
+The adapter must not expose LangChain, LangGraph, raw subprocess details, or download implementation details to the Streamlit form handler. Streamlit should call the same high-level `graph_generated_summary` and `graph_generated_backstory` functions with a configured local rewrite client.
 
 The first implementation should prefer explicit configuration constants over broad settings machinery:
 
-- Model id: `Qwen/Qwen2.5-0.5B-Instruct-GGUF`.
+- Model id: `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF`.
 - Quantization: `Q4_K_M`.
-- Prompt version: `character-rewrite-v2-local-qwen-0.5b`.
+- Prompt version: `character-rewrite-v5-local-tinyllama-1.1b`.
 - Output mode: summary or backstory.
 - Max generated tokens: short bounded values appropriate to each mode.
 - Temperature: low, deterministic prose generation.
 - Context window, batch size, and thread count: conservative defaults chosen to avoid container memory spikes.
 
-If the selected 0.5B model fails semantic gates on the fixture set after prompt cleanup, the next design review should evaluate `Qwen/Qwen2.5-1.5B-Instruct-GGUF:Q4_K_M`. The implementation should not silently promote to a larger model.
+If the selected TinyLlama model still fails semantic gates on the fixture set after graph-segment prompt cleanup, the next design review should compare a larger Qwen 1.5B candidate with the same compact prompt. The implementation should not silently promote to a larger model.
 
 ## Service-Free Model Execution
 
@@ -99,15 +101,14 @@ The character rewrite feature must run without requiring the user to start, moni
 
 ### Runner options:
 
-1. App-managed Python worker process using `llama_cpp`.
-2. In-process `llama_cpp` generation inside Streamlit.
+1. App-managed `llama cli` subprocess.
+2. App-managed Python worker process using `llama_cpp`.
 3. LangChain/LangGraph orchestration around a local model.
-4. Direct `llama cli` subprocess.
+4. In-process `llama_cpp` generation inside Streamlit.
 
-The preferred implementation is option 1. It keeps the dependency model simple because `llama-cpp-python` is installed from `requirements.txt`, but it avoids loading GGUF weights into the long-running Streamlit process. The app starts the worker for a rewrite request, sends structured JSON input, receives structured JSON output, and then lets the worker exit. This is not an external service because the user never starts, stops, monitors, or configures a background model server.
+The preferred implementation is option 1. It avoids the `llama-cpp-python` crashes seen during local validation, avoids loading GGUF weights into the long-running Streamlit process, and still does not require a user-managed model service. The app starts `llama cli` for a rewrite request, captures stdout and stderr, parses timing metadata, and lets the process exit.
 
-Option 2 is simpler but riskier for Docker and Streamlit reruns because the app process can retain model memory after generation. 
-Option 3 is rejected for this pass because the previous LangChain/LangGraph rewrite version performed worse than the earlier graph-backed path while adding orchestration complexity that the app does not need. A direct `llama cli` subprocess is also not a preferred fallback because it adds an external CLI dependency that `pip install -r requirements.txt` does not provide.
+Option 2 was tested and rejected for this pass because `llama-cpp-python` crashed the Python process while loading the selected GGUF model. Option 3 is rejected because the previous LangChain/LangGraph rewrite version performed worse than the earlier graph-backed path while adding orchestration complexity that the app does not need. Option 4 is rejected because the app process can retain model memory after generation or crash with the Python binding.
 Option 4 is rejected because it would require the user to install a separate dependency and would we would have to manage the session starting and stopping code.
 
 ### Execution model:
@@ -115,38 +116,38 @@ Option 4 is rejected because it would require the user to install a separate dep
 - Build the prompt and model invocation arguments in the Streamlit app process.
 - Check whether the configured GGUF artifact is available in the local model cache.
 - If the artifact is missing, display a Streamlit status area that explains the first-run download and streams coarse progress when available.
-- Start a short-lived project Python worker process for the rewrite request.
-- Send the worker a JSON payload containing model path, model settings, prompt version, output mode, and chat messages.
-- In the worker, lazily initialize `llama_cpp.Llama` from the local GGUF path.
-- Generate through `create_chat_completion` or the closest stable chat-completion API exposed by the installed binding.
+- Start a short-lived `llama cli` process for the rewrite request.
+- Pass the local GGUF path and prompt with explicit command arguments.
+- Capture stdout as untrusted candidate prose.
+- Capture stderr as diagnostics and timing metadata.
 - Use explicit arguments: bounded context, bounded generation tokens, low temperature, conservative batch size, and conservative thread count.
 - Return structured JSON containing either candidate text plus metadata or a typed error.
 - Treat the returned candidate text as untrusted model output until it passes cleanup and validation.
 - Return the cleaned candidate to the rewrite pipeline, or raise a user-visible error while leaving character fields unchanged.
 
-This is an app-owned worker adapter, not a server adapter. The implementation should not call `llama serve`, should not require an OpenAI-compatible localhost endpoint, and should not ask the user to install or manage anything beyond the project Python requirements and the model artifact.
+This is an app-owned CLI adapter, not a server adapter. The implementation should not call `llama serve` and should not require an OpenAI-compatible localhost endpoint. It does require the user to install the `llama` CLI once; README should document that dependency.
 
 ### Runtime and lifecycle rules:
 
-- Add `llama-cpp-python` to `requirements.txt` during implementation and pin it tightly enough to keep local and Docker installs reproducible.
+- Detect `llama` with a lightweight runtime check before model-backed rewrites.
 - Use a per-model lock so two rewrite clicks cannot download or initialize the same model artifact at the same time.
 - Disable or ignore duplicate rewrite submissions while a generation is in progress for the active character.
-- Do not load the GGUF model in the Streamlit process for the default path.
-- Kill the worker on timeout or cancellation.
-- Do not read candidate prose from worker stderr. Worker stderr is diagnostics only.
+- Do not load the GGUF model in the Streamlit process.
+- Kill the CLI process on timeout or cancellation.
+- Do not read candidate prose from stderr. stderr is diagnostics only.
 - Use conservative memory settings first: small context window, small batch size, no memory locking by default, and no GPU offload unless explicitly added later.
 - Do not persist partial output from interrupted, failed, or timed-out generation.
 - Record non-sensitive metadata for accepted rewrites: model id, quantization, prompt version, source hash, and generation timestamp.
 
-The app needs readiness checks that can distinguish "Python binding missing", "model artifact not downloaded yet", "worker failed to start", "model failed to initialize", and "generation failed." Add a small model-lifecycle helper whose public contract is limited to `is_runtime_available`, `is_model_available`, `ensure_model_available`, and `generate`.
+The app needs readiness checks that can distinguish "llama CLI missing", "model artifact not downloaded yet", "CLI failed to start", "model failed to initialize", and "generation failed." Add a small model-lifecycle helper whose public contract is limited to `is_runtime_available`, `is_model_available`, `ensure_model_available`, and `generate`.
 
 ### Docker safety rules:
 
 - Do not load the model at app import time.
-- Prefer the short-lived worker process so model memory is released when generation ends.
+- Prefer the short-lived CLI process so model memory is released when generation ends.
 - Keep model-backed rewrite tests fake-client based by default so CI and Docker smoke tests do not load GGUF weights.
 - Add one opt-in integration test for local machines that have the model artifact and enough memory.
-- If `llama_cpp` install or initialization fails in Docker, the app should continue to run with deterministic graph rewrites and show model-backed rewrites as unavailable.
+- If `llama` is unavailable, the app should continue to run with deterministic graph rewrites and show model-backed rewrites as unavailable.
 
 ## Attribute Graph Overrides
 
@@ -269,7 +270,7 @@ Unit tests should cover:
 - Rewrite save semantics.
 - Repeated undo stack behavior through storage-independent helpers.
 - Rewrite/context construction for graph-backed summaries and backstories.
-- Local model adapter lifecycle with missing Python binding, missing artifact, available artifact, failed initialization, failed generation, and empty output.
+- Local model adapter lifecycle with missing `llama` CLI, missing artifact, available artifact, failed initialization, failed generation, and empty output.
 - Model output cleanup for leaked diagnostics, prompt echoes, performance lines, Markdown fences, and valid prose.
 - Semantic report formatting for local model, existing generated, and original backstory candidates.
 

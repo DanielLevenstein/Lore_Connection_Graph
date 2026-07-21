@@ -56,6 +56,48 @@ pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
 
+### Optional Local Language Model Rewrites
+
+Graph-backed deterministic rewrites work without any model runner. To enable model-backed character rewrites and the real semantic improvement report, install the `llama` CLI from llama.cpp.
+
+On macOS or Linux:
+
+```bash
+curl -LsSf https://llama.cpp/install.sh | sh
+llama --version
+```
+
+The app stores downloaded local language model files in:
+
+```text
+models/local_language_model/
+```
+
+That directory is ignored by git so the model is visible for local disk cleanup without being committed.
+
+The default rewrite model is `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF:Q4_K_M`. Advanced users can switch the JSON config to a smaller or larger GGUF model when they want to tune the speed/quality tradeoff.
+
+Advanced users can change the model, quantization, download URL, and runtime settings in:
+
+```text
+config/model/local_language_model.json
+```
+
+To show rewrite buttons and allow first-run model download:
+
+```bash
+LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES=1 \
+LOCAL_CHATBOT_ENABLE_LOCAL_REWRITE_MODEL=1 \
+LOCAL_CHATBOT_ALLOW_MODEL_DOWNLOAD=1 \
+./run_streamlit.sh
+```
+
+To regenerate the semantic improvement report with the real local model:
+
+```bash
+.venv/bin/python scripts/generate_semantic_improvement_report.py
+```
+
 ## Knowledge Graph Views
 Main Tab [Characters, Places, Session Notes]
 - Characters: [Single Character, Party View]

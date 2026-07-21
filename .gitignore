@@ -9,6 +9,7 @@ venv/
 
 # App-generated data, local campaign lore, memory, chat logs, and model folders stay local.
 data/
+models/
 world_building/
 meta_data/
 /.idea/

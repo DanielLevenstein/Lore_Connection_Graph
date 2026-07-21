@@ -9,13 +9,13 @@ sys.path.insert(0, str(ROOT_DIR))
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
 from local_chatbot.character_rewrites import (
-    REWRITE_ENGINE_NAME,
     RewriteClient,
     graph_generated_backstory,
     rewrite_quality_context,
     rewrite_required_terms,
     semantic_rewrite_score,
 )
+from local_chatbot.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_language_model_config
 from local_chatbot.storage import Character, read_character_profile
 
 
@@ -27,7 +27,14 @@ def build_report(character_path: Path = DEFAULT_CHARACTER_PATH, rewrite_client: 
     character = Character(name=character_path.stem, path=character_path)
     profile = read_character_profile(character)
     graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
-    model_story = graph_generated_backstory(graph, profile, rewrite_client=rewrite_client)
+    rewrite_client = rewrite_client or real_model_rewrite_client()
+    model_error = ""
+    try:
+        model_story = graph_generated_backstory(graph, profile, rewrite_client=rewrite_client)
+    except RuntimeError as exc:
+        model_story = ""
+        model_error = str(exc)
+    model_metadata = getattr(rewrite_client, "last_metadata", {})
     source_context = rewrite_quality_context(graph, profile)
     required_terms = rewrite_required_terms(graph, profile)
     existing_generated_backstory = profile.backstory
@@ -37,40 +44,82 @@ def build_report(character_path: Path = DEFAULT_CHARACTER_PATH, rewrite_client: 
     original_score = semantic_rewrite_score(original_backstory, source_context, required_terms)
     delta = round(model_score.score - original_score.score, 4)
     score_rows = [
-        score_row("Graph rewrite", model_score),
-        score_row("Existing generated section", existing_generated_score),
+        score_row("Local model rewrite", model_score, "Rejected" if not model_story.strip() else "Accepted"),
+        score_row("Existing generated section", existing_generated_score, "Accepted"),
     ]
     if original_backstory.strip() != existing_generated_backstory.strip():
-        score_rows.append(score_row("Original section", original_score))
+        score_rows.append(score_row("Original section", original_score, "Source"))
     score_table = markdown_table(
-        ["Candidate", "Overall", "Similarity", "Coverage", "Concision"],
+        ["Candidate", "Status", "Overall", "Similarity", "Coverage", "Concision"],
         score_rows,
-        alignments=["left", "right", "right", "right", "right"],
+        alignments=["left", "left", "right", "right", "right", "right"],
     )
     return (
         "# Semantic Improvement Report: Orin Nightbloom\n\n"
         "## Rewrite Engine\n\n"
-        f"- Rewrite engine: `{REWRITE_ENGINE_NAME}`\n"
+        f"- Rewrite engine: `{LOCAL_REWRITE_MODEL_ENGINE}`\n"
         "- Evaluation: local hash-embedding source-context similarity, required concept coverage, and concision.\n"
         "- Source context similarity compares each candidate against the assembled character profile and graph evidence.\n\n"
+        "## Model Runtime\n\n"
+        f"{model_runtime_section(model_metadata)}\n\n"
         "## Candidate\n\n"
-        "### LangGraph Rewrite\n\n"
-        f"{model_story}\n\n"
-        "### Legacy Rewrite \n\n"
+        "### Local Model Rewrite\n\n"
+        f"{model_candidate_section(model_story, model_error)}\n\n"
+        "### Existing Generated Section\n\n"
         f"{existing_generated_backstory}\n\n"
         "### Original Backstory\n\n"
         f"{original_backstory}\n\n"
         "## Scores\n\n"
         f"{score_table}\n\n"
         "## Result\n\n"
-        f"The graph rewrite improves the overall quality score over the original section by `{delta:.4f}`. "
-        "It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.\n"
+        f"{result_summary(model_story, delta)}\n"
     )
 
 
-def score_row(label: str, score) -> list[str]:
+def model_runtime_section(metadata: dict) -> str:
+    prompt_eval_time = metadata.get("prompt_eval_time_ms")
+    rows = [
+        ["Model", metadata.get("model_id", "not reported")],
+        ["Quantization", metadata.get("quantization", "not reported")],
+        ["Prompt version", metadata.get("prompt_version", "not reported")],
+        ["Prompt eval time", f"{prompt_eval_time} ms" if prompt_eval_time else "not reported"],
+        ["Prompt tokens", metadata.get("prompt_tokens", "not reported")],
+        ["Completion tokens", metadata.get("completion_tokens", "not reported")],
+        ["Total tokens", metadata.get("total_tokens", "not reported")],
+    ]
+    return markdown_table(["Metric", "Value"], rows)
+
+
+def model_candidate_section(model_story: str, model_error: str) -> str:
+    if model_story.strip():
+        return model_story
+    detail = f" {model_error}" if model_error else ""
+    return f"_No acceptable local model rewrite was produced.{detail}_"
+
+
+def result_summary(model_story: str, delta: float) -> str:
+    if not model_story.strip():
+        return (
+            "The local model run did not produce an acceptable rewrite, so its score is reported as `0.0000`. "
+            "The existing generated section remains the better candidate for this fixture."
+        )
+    return (
+        f"The local model rewrite improves the overall quality score over the original section by `{delta:.4f}`. "
+        "It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc."
+    )
+
+
+def real_model_rewrite_client() -> RewriteClient:
+    return LocalRewriteModelClient(
+        config=load_local_language_model_config(allow_download=True),
+        status_callback=lambda message: print(message, file=sys.stderr),
+    )
+
+
+def score_row(label: str, score, status: str) -> list[str]:
     return [
         label,
+        status,
         f"{score.score:.4f}",
         f"{score.semantic_similarity:.4f}",
         f"{score.concept_coverage:.4f}",

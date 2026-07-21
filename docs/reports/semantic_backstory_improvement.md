@@ -2,19 +2,27 @@
 
 ## Rewrite Engine
 
-- Rewrite engine: `deterministic-graph-rewrite`
+- Rewrite engine: `local-language-model-llama-cli`
 - Evaluation: local hash-embedding source-context similarity, required concept coverage, and concision.
 - Source context similarity compares each candidate against the assembled character profile and graph evidence.
 
+## Model Runtime
+
+| Metric            | Value                                |
+| ----------------- | ------------------------------------ |
+| Model             | Qwen/Qwen2.5-0.5B-Instruct-GGUF      |
+| Quantization      | Q4_K_M                               |
+| Prompt version    | character-rewrite-v5-local-qwen-0.5b |
+| Prompt eval time  | 2106.71 ms                           |
+| Prompt tokens     | 601                                  |
+| Completion tokens | 149                                  |
+| Total tokens      | 750                                  |
+
 ## Candidate
 
-### Model Rewrite
+### Local Model Rewrite
 
-Orin is a Half-Orc Bard from a coastal mage college whose story keeps circling back to Sunstone Mage College.
-
-Ties to Orin Nightbloom's Mother give the story its sharpest edges. Orin is remembered as brave.
-
-Now Orin is driven to stop a younger relative from repeating their worst choice while still needing to break a curse that only worsens when ignored.
+Orin Nightbloom, a Half-Orc Bard, was born with a weight the world seldom places on a child, the weight of a half-orc heritage clashing with the refined air of the Sunstone Mage College nestled on the frosted coast of his life. He shouldered his lineage with the strength of a lineage elder, a duty his mother, a revered elven mage, instilled in him. He excelled, his magic a beacon in the world of magic, but the weight of his heritage and the burden of his family's legacy weighed heavily on him. The loss of Orin Nightbloom's Mother, a revered elven mage, gave him a reason to understand the curse shadowing his family and to...
 
 ### Existing Generated Section
 
@@ -24,7 +32,7 @@ The loss of Orin Nightbloom's Mother left more than grief behind; it gave Orin a
 
 Now Orin carries his music forward as a form of defiance, trying to stop a younger relative from repeating their worst choice while turning inherited sorrow into something brave enough to protect the living.
 
-### Original Character Backstory
+### Original Backstory
 
 Orin was born with a weight the world seldom places on a child, the weight of a half-orc heritage clashing with the refined air of the Sunstone Mage College nestled on the frosted coast of his life. He shouldered his lineage with the strength of a lineage elder, a duty his mother, a revered elven mage, instilled in him. He excelled, his magic a beacon in the night, but his untamed half-orc blood often felt at odds with the elegant halls and whispers of "less-than-pure lineage." He learned the lute and the stories woven through song, the solace found in melody rather than the strict, precise incantations favored at the college. But his world fractured when a lingering illness stole his mother from him, her death a chilling echo of a lingering, potent curse she carried.  A whispered tale, carried across the sea by the blood of his kin - a treacherous pact with a shadowy entity, one that poisoned her soul and, upon her death, amplified the affliction to its zenith, now bearing upon his soul.
 
@@ -34,12 +42,12 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 ## Scores
 
-| Candidate         | Overall | Similarity | Coverage | Concision |
-|-------------------| ------: | ---------: | -------: | --------: |
-| LangGraph rewrite | 0.7987  | 0.5857     | 0.8750   | 1.0000    |
-| Legacy rewrite    | 0.7762  | 0.7357     | 0.7500   | 0.9062    |
-| Original section  | 0.4441  | 0.7867     | 0.3750   | 0.0000    |
+| Candidate                  | Status   | Overall | Similarity | Coverage | Concision |
+| -------------------------- | -------- | ------: | ---------: | -------: | --------: |
+| Local model rewrite        | Accepted | 0.7380  | 0.8265     | 0.6250   | 0.8375    |
+| Existing generated section | Accepted | 0.7754  | 0.7334     | 0.7500   | 0.9062    |
+| Original section           | Source   | 0.4444  | 0.7875     | 0.3750   | 0.0000    |
 
 ## Result
 
-The model rewrite improves the overall quality score over the original section by `0.3546`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
+The local model rewrite improves the overall quality score over the original section by `0.2936`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
