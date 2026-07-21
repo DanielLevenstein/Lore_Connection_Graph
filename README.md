@@ -75,7 +75,7 @@ models/local_language_model/
 
 That directory is ignored by git so the model is visible for local disk cleanup without being committed.
 
-The default rewrite model is `Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M`. Advanced users can switch the JSON config to a smaller or larger GGUF model when they want to tune the speed/quality tradeoff.
+The default rewrite model is `JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF`. Advanced users can switch the JSON config to a smaller or larger GGUF model when they want to tune the speed/quality tradeoff.
 
 Advanced users can change the model, quantization, download URL, and runtime settings in:
 
@@ -83,10 +83,9 @@ Advanced users can change the model, quantization, download URL, and runtime set
 config/model/local_language_model.json
 ```
 
-To show rewrite buttons and allow first-run model download:
+To use the local model for rewrite generation and allow first-run model download:
 
 ```bash
-LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES=1 \
 LOCAL_CHATBOT_ENABLE_LOCAL_REWRITE_MODEL=1 \
 LOCAL_CHATBOT_ALLOW_MODEL_DOWNLOAD=1 \
 ./run_streamlit.sh
@@ -151,7 +150,6 @@ The current app is the roleplaying lore and knowledge graph tool; the prefix rem
 | Variable                                        | Enabled Value | Purpose                                                                                                                   |
 | ----------------------------------------------- |---------------| ------------------------------------------------------------------------------------------------------------------------- |
 | `LOCAL_CHATBOT_DISABLE_LORE_BACKUPS`            | `1`           | Skips the automatic backup that normally runs when the Streamlit app starts.                                              |
-| `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES`           | `1`           | Shows graph-backed summary and backstory rewrite controls in the character editor.                                        |
 | `LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE` | `1`           | Shows the internal attribute graph override editor. This is a maintenance/debug surface, not part of the normal app flow. |
 
 Example isolated run:

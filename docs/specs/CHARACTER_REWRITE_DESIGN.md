@@ -6,11 +6,7 @@ Character rewrites are an explicit, player-requested editing aid for improving a
 
 ## Current Status
 
-The UI already exposes rewrite actions behind:
-
-```text
-LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES=1
-```
+The UI exposes rewrite actions directly in the character editor.
 
 The buttons are:
 
@@ -19,7 +15,7 @@ The buttons are:
 - `Rewrite Backstory`
 - `Undo Changes`
 
-`Undo Changes` remains available even when graph rewrite generation is disabled. The undo stack is recursive in the practical UI sense: each saved mutation pushes a snapshot, and repeated undo actions walk backward through prior snapshots.
+`Undo Changes` remains available alongside rewrite actions. The undo stack is recursive in the practical UI sense: each saved mutation pushes a snapshot, and repeated undo actions walk backward through prior snapshots.
 
 ## Rewrite Engine
 
@@ -27,13 +23,13 @@ Use a small local model through a narrow adapter, with the deterministic graph r
 
 Release behavior:
 
-- Preferred model: `Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M`.
+- Preferred model: `JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF`.
 - Preferred runner: app-managed `llama cli` subprocess.
 - Fallback engine: `deterministic-graph-rewrite`.
 - Inputs: authored character profile fields plus compact knowledge graph segments for the character's identity, places, relationships, drives, alliances, enemies, traits, and evidence.
 - Role: generate compact summaries and backstory drafts from source-backed graph facts.
 
-The selected model is Qwen2.5 0.5B Q4_K_M because it is the most promising local candidate after parser and prompt-boundary fixes. SmolLM2 135M and 360M made prompt evaluation much faster, but both cut off prose mid-sentence or repeated themselves on the Orin fixture. TinyLlama produced real prose, but copied fact-line wording and repeated itself. Qwen initially failed under the compact prompt because prompt truncation inserted ellipses and the parser did not strip Qwen chat-template artifacts; after switching to Qwen chat tokens and removing generated ellipses from prompt context, the real-model test produced accepted prose.
+The selected model is Qwen2.5 1.5B Q4_K_M because Qwen2.5 0.5B was the most promising local family after parser and prompt-boundary fixes, but still produced clipped sentence fragments. SmolLM2 135M and 360M made prompt evaluation much faster, but both cut off prose mid-sentence or repeated themselves on the Orin fixture. TinyLlama produced real prose, but copied fact-line wording and repeated itself. Qwen initially failed under the compact prompt because prompt truncation inserted ellipses and the parser did not strip Qwen chat-template artifacts; after switching to Qwen chat tokens and removing generated ellipses from prompt context, the larger Qwen model became the next candidate.
 
 This model must be treated as optional runtime data, not committed repository content. The app should report missing artifact/download status visibly and keep the current character fields unchanged until a clean candidate is produced and accepted.
 
@@ -43,7 +39,8 @@ The model rewrite output should be labeled as graph-backed generated text and sh
 
 References:
 
-- Qwen 0.5B GGUF model card: <https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF>
+- Qwen 1.5B Q4_K_M GGUF model card: <https://huggingface.co/JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF>
+- Qwen 0.5B GGUF model card, retained as the prior baseline: <https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF>
 - TinyLlama 1.1B Chat GGUF model card, retained as a fallback comparison: <https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF>
 - SmolLM2 360M GGUF model card, rejected for truncated prose: <https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF>
 - SmolLM2 135M GGUF model card, rejected for repetition and truncated prose: <https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF>
@@ -85,15 +82,15 @@ The adapter must not expose LangChain, LangGraph, raw subprocess details, or dow
 
 The first implementation should prefer explicit configuration constants over broad settings machinery:
 
-- Model id: `Qwen/Qwen2.5-0.5B-Instruct-GGUF`.
+- Model id: `JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF`.
 - Quantization: `Q4_K_M`.
-- Prompt version: `character-rewrite-v5-local-qwen-0.5b`.
+- Prompt version: `character-rewrite-v6-local-qwen-1.5b`.
 - Output mode: summary or backstory.
 - Max generated tokens: short bounded values appropriate to each mode.
 - Temperature: low, deterministic prose generation.
 - Context window, batch size, and thread count: conservative defaults chosen to avoid container memory spikes.
 
-If the selected Qwen 0.5B model still fails semantic gates on the fixture set after parser and graph-segment prompt cleanup, the next design review should compare TinyLlama and a larger Qwen 1.5B candidate with the same compact prompt. The implementation should not silently promote to a larger model.
+If the selected Qwen 1.5B model still fails semantic gates on the fixture set after parser and graph-segment prompt cleanup, the next design review should compare TinyLlama or a larger Qwen candidate with the same compact prompt. The implementation should not silently promote to a larger model.
 
 ## Service-Free Model Execution
 
@@ -247,7 +244,7 @@ Undo should:
 - Restore the most recent snapshot.
 - Pop only one snapshot per click.
 - Regenerate the graph after restoring the sheet.
-- Remain visible and usable whether or not `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES` is enabled.
+- Remain visible and usable alongside rewrite actions.
 
 Future durable undo can store snapshots under `world_building/lore/character_sheets/<character>/undo/`, but the current session stack is sufficient for the first implementation.
 
@@ -258,7 +255,7 @@ The editor should show both versions when originals exist:
 - Current or generated summary beside original summary.
 - Current or generated backstory beside original backstory.
 
-Rewrite buttons should appear only when `LOCAL_CHATBOT_ENABLE_GRAPH_REWRITES=1`. Save and undo should always remain available.
+Rewrite buttons should always appear in the character editor. Save and undo should always remain available.
 
 ## Test Plan
 

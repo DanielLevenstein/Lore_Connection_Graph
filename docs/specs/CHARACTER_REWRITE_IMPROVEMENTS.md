@@ -5,7 +5,7 @@ This branch preserves the experimental character rewrite work for review, but th
 
 ## Design Decision
 
-Use `Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M` as the current local model candidate for character summary and backstory rewrites.
+Use `JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF` as the current local model candidate for character summary and backstory rewrites.
 
 Reasons:
 
@@ -46,7 +46,7 @@ Rejected option: LangChain/LangGraph orchestration around the rewrite model. It 
 
 1. Add a local rewrite model adapter.
 
-   - Configure `Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M` in code and in the advanced JSON config file, not in editable UI fields.
+   - Configure `JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF` in code and in the advanced JSON config file, not in editable UI fields.
    - Document `llama cli` installation in README.
    - Use an app-managed short-lived `llama cli` process for generation.
    - Do not call `llama serve`, require a localhost API endpoint, or leave background inference processes running.
@@ -96,4 +96,4 @@ Rejected option: LangChain/LangGraph orchestration around the rewrite model. It 
 
 ## Model Escalation Rule
 
-If `Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M` cannot beat the original Orin backstory while preserving required terms after graph-segment prompt fixes, stop and document the failure. The next comparison candidates are TinyLlama and `Qwen/Qwen2.5-1.5B-Instruct-GGUF:Q4_K_M`, but promotion to a different model should happen in a separate design update rather than silently inside implementation.
+If `JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF` cannot beat the original Orin backstory while preserving required terms after graph-segment prompt fixes, stop and document the failure. The next comparison candidates are TinyLlama and a larger Qwen model, but promotion to a different model should happen in a separate design update rather than silently inside implementation.

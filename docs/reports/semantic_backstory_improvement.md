@@ -8,21 +8,21 @@
 
 ## Model Runtime
 
-| Metric            | Value                                |
-| ----------------- | ------------------------------------ |
-| Model             | Qwen/Qwen2.5-0.5B-Instruct-GGUF      |
-| Quantization      | Q4_K_M                               |
-| Prompt version    | character-rewrite-v5-local-qwen-0.5b |
-| Prompt eval time  | 1948.19 ms                           |
-| Prompt tokens     | 595                                  |
-| Completion tokens | 165                                  |
-| Total tokens      | 760                                  |
+| Metric            | Value                                      |
+| ----------------- | ------------------------------------------ |
+| Model             | JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF |
+| Quantization      | Q4_K_M                                     |
+| Prompt version    | character-rewrite-v6-local-qwen-1.5b       |
+| Prompt eval time  | 9204.82 ms                                 |
+| Prompt tokens     | 615                                        |
+| Completion tokens | 220                                        |
+| Total tokens      | 835                                        |
 
 ## Candidate
 
 ### Local Model Rewrite
 
-Orin Nightbloom, a Half-Orc Bard, was born with a weight the world seldom places on a child, the weight of a half-orc heritage clashing with the refined air of Sunstone Mage College. He shouldered his lineage with the strength of a lineage elder, a duty his mother, a revered elven mage, instilled in him. Orin excelled, his magic a beacon in. He came of age at Sunstone Mage College, a place that sharpened both his talent and his sense of exile. The loss of Orin Nightbloom's Mother left more than grief behind; it gave Orin a reason to understand the curse shadowing his family and to. He seeks to stop a younger relative from repeating their worst choice, breaking a curse that only worsens when ignored.
+Orin Nightbloom, a Half-Orc Bard, was born with the weight of a half-orc heritage clashing with the refined air of Sunstone Mage College, a place that sharpened both his talent and his sense of exile. The loss of his mother, a revered elven mage, left more than grief behind; it gave Orin a reason to understand the curse shadowing his family and to break a curse that only worsens when ignored. Orin excelled at Sunstone Mage College, his magic a beacon in the world. He came of age at the prestigious institution, where he learned to shoulder the weight of his lineage with the strength of a lineage elder, a duty his mother, a revered elven mage, instilled in him. Orin's drives are to stop a younger relative from repeating their worst choice and to break a curse that only worsens when ignored. Orin's mother, a brave and revered elven mage, instilled in him the duty to understand the curse shadowing his family and to break a curse that only worsens when ignored.
 
 ### Existing Generated Section
 
@@ -44,10 +44,10 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 | Candidate                  | Status   | Overall | Similarity | Coverage | Sentence Quality |
 | -------------------------- | -------- | ------: | ---------: | -------: | ---------------: |
-| Local model rewrite        | Accepted | 0.7616  | 0.8307     | 0.7500   | 0.6667           |
-| Existing generated section | Accepted | 0.7942  | 0.7334     | 0.7500   | 1.0000           |
-| Original section           | Source   | 0.6320  | 0.7875     | 0.3750   | 0.9383           |
+| Local model rewrite        | Accepted | 0.7173  | 0.7981     | 0.7500   | 0.5024           |
+| Existing generated section | Accepted | 0.7588  | 0.7334     | 0.7500   | 0.8229           |
+| Original section           | Source   | 0.5470  | 0.7875     | 0.3750   | 0.5129           |
 
 ## Result
 
-The local model rewrite improves the overall quality score over the original section by `0.1296`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
+The local model rewrite improves the overall quality score over the original section by `0.1703`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.

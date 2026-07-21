@@ -111,3 +111,20 @@ def test_rewrite_concision_score_penalizes_dangling_sentence_fragments():
 
     assert rewrite_concision_score(malformed) < rewrite_concision_score(clean)
     assert rewrite_concision_score(malformed) < 0.5
+
+
+def test_rewrite_concision_score_penalizes_comma_heavy_sentences_that_should_split():
+    split = (
+        "Orin Nightbloom was born under the weight of half-orc heritage. "
+        "Sunstone Mage College sharpened his talent and deepened his exile. "
+        "His mother taught him to carry his lineage with discipline. "
+        "Now he seeks to break the curse before it claims a younger relative."
+    )
+    should_split = (
+        "Orin Nightbloom, a Half-Orc Bard, was born with the weight of a half-orc heritage clashing with "
+        "the refined air of Sunstone Mage College, a place that sharpened both his talent and his sense of exile. "
+        "He came of age at the prestigious institution, where he excelled in his magic, a beacon in the world."
+    )
+
+    assert rewrite_concision_score(split) == 1.0
+    assert rewrite_concision_score(should_split) < 0.8

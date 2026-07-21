@@ -112,9 +112,9 @@ def test_rewrite_prompt_uses_compact_graph_segments_instead_of_full_graph_dump()
     prompt = rewrite_prompt("backstory", graph, profile)
     segments = graph_segment_context(graph, profile)
 
-    assert "Knowledge graph segments:" in prompt
-    assert "- place:" in segments
-    assert "- drive:" in segments
+    assert "Facts to preserve:" in prompt
+    assert "Sunstone Mage College" in segments
+    assert "Wants to" in segments
     assert "Use the graph segments as the rewrite outline" in prompt
     assert "Characters:" not in prompt
     assert len(prompt) < len(profile.backstory) + len(profile.original_backstory)
@@ -311,7 +311,7 @@ def test_worker_process_returns_cli_output_and_timing_metadata(tmp_path, monkeyp
     assert result.ok
     assert commands[0][:2] == ["llama", "completion"]
     assert "--device" in commands[0]
-    assert "<|assistant|>" in commands[0][-1]
+    assert "<|im_start|>assistant" in commands[0][-1]
     assert result.text == "Backstory: Mara keeps the archive safe."
     assert result.metadata["prompt_eval_time_ms"] == "42.50"
     assert result.metadata["prompt_tokens"] == "12"
@@ -373,7 +373,7 @@ def test_load_local_language_model_config_resolves_relative_cache_dir(tmp_path):
 def test_default_local_language_model_config_uses_fast_probe_model():
     config = LocalRewriteModelConfig()
 
-    assert config.model_id == "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
-    assert config.filename == "qwen2.5-0.5b-instruct-q4_k_m.gguf"
-    assert config.max_tokens <= 420
-    assert config.n_ctx <= 4096
+    assert config.model_id == "JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF"
+    assert config.filename == "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    assert config.max_tokens <= 640
+    assert config.n_ctx <= 8192

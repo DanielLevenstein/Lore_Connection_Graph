@@ -194,7 +194,8 @@ def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) 
             "Rewrite the character backstory as exactly 2 concise paragraphs. Preserve the named people, places, "
             "relationships, and drives. Make it read like authored campaign lore, not a bullet list. "
             "Spell every name exactly as written. Do not repeat the same drive, phrase, or sentence. "
-            "Do not use ellipses."
+            "Use short sentences. Split long or comma-heavy sentences. "
+            "Do not use ellipses or describe graph labels such as traits as labels."
         )
     else:
         raise ValueError(f"Unknown rewrite kind: {kind}")
@@ -740,15 +741,29 @@ def sentence_quality_penalty(sentence: str) -> float:
     tokens = term_tokens(sentence)
     if not tokens:
         return 1.0
-    return min(1.0, run_on_sentence_penalty(len(tokens)) + dangling_sentence_penalty(tokens))
+    return min(
+        1.0,
+        run_on_sentence_penalty(len(tokens))
+        + comma_density_penalty(sentence, len(tokens))
+        + dangling_sentence_penalty(tokens),
+    )
 
 
 def run_on_sentence_penalty(word_count: int) -> float:
-    if word_count <= 35:
+    if word_count <= 24:
         return 0.0
-    if word_count <= 55:
-        return (word_count - 35) / 40
-    return min(1.0, 0.5 + ((word_count - 55) / 40))
+    if word_count <= 36:
+        return (word_count - 24) / 24
+    return min(1.0, 0.5 + ((word_count - 36) / 28))
+
+
+def comma_density_penalty(sentence: str, word_count: int) -> float:
+    comma_count = sentence.count(",") + sentence.count(";")
+    if comma_count <= 1:
+        return 0.0
+    if word_count <= 18:
+        return 0.0
+    return min(0.5, (comma_count - 1) * 0.15)
 
 
 def dangling_sentence_penalty(tokens: list[str]) -> float:

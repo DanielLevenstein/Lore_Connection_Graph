@@ -1,0 +1,91 @@
+import os
+import subprocess
+from pathlib import Path
+
+import pytest
+from playwright.sync_api import expect, sync_playwright
+
+from language_model.storage import Character, read_character_profile
+from tests.e2e.test_character_sheet_roundtrip_ui import (
+    APP_URL,
+    ROOT_DIR,
+    seed_lore_fixture,
+    select_character,
+    streamlit_executable,
+    wait_for_profile_write,
+    wait_for_streamlit,
+)
+
+
+@pytest.fixture()
+def graph_rewrite_app(tmp_path):
+    world_building_dir = tmp_path / "world_building"
+    docs_lore_dir = world_building_dir / "lore"
+    characters_dir = docs_lore_dir / "character_sheets"
+    places_dir = docs_lore_dir / "places"
+    session_notes_dir = docs_lore_dir / "session_notes"
+    meta_data_dir = world_building_dir / "meta_data"
+    seed_lore_fixture(docs_lore_dir, characters_dir, places_dir, session_notes_dir)
+    meta_data_dir.mkdir()
+
+    env = os.environ.copy()
+    env["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+    env["LOCAL_CHATBOT_WORLD_BUILDING_DIR"] = str(world_building_dir)
+    env["LOCAL_CHATBOT_LORE_DIR"] = str(docs_lore_dir)
+    env["LOCAL_CHATBOT_CHARACTERS_DIR"] = str(characters_dir)
+    env["LOCAL_CHATBOT_PLACES_DIR"] = str(places_dir)
+    env["LOCAL_CHATBOT_SESSION_NOTES_DIR"] = str(session_notes_dir)
+    env["LOCAL_CHATBOT_META_DATA_DIR"] = str(meta_data_dir)
+    process = subprocess.Popen(
+        [
+            str(streamlit_executable()),
+            "run",
+            "streamlit_app.py",
+            "--server.port",
+            "8512",
+            "--server.headless",
+            "true",
+        ],
+        cwd=ROOT_DIR,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        wait_for_streamlit(APP_URL, process)
+        yield APP_URL, characters_dir, meta_data_dir
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+
+
+def test_rewrite_backstory_button_saves_graph_backed_backstory(graph_rewrite_app):
+    app_url, characters_dir, data_dir = graph_rewrite_app
+    character_file = characters_dir / "Orin_Nightbloom.md"
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        page.goto(app_url, wait_until="networkidle")
+        expect(page.get_by_role("heading", name="Characters")).to_be_visible(timeout=10000)
+        select_character(page, "Orin Nightbloom", 0)
+
+        if not page.get_by_role("button", name="edit_note Rewrite Backstory").is_visible():
+            page.get_by_text("Edit Character", exact=True).click()
+        rewrite_button = page.get_by_role("button", name="edit_note Rewrite Backstory")
+        expect(rewrite_button).to_be_visible(timeout=10000)
+        rewrite_button.click()
+
+        expect(page.get_by_text("Character Saved.")).to_be_visible(timeout=10000)
+        wait_for_profile_write(data_dir, character_file)
+        profile = read_character_profile(Character(name=character_file.stem, path=character_file))
+
+        assert "Character Backstory" in profile.auto_generated_sections
+        assert profile.original_backstory.strip()
+        assert "Sunstone Mage College" in profile.backstory
+        assert profile.backstory != profile.original_backstory
+        browser.close()

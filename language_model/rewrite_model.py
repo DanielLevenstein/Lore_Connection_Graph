@@ -17,12 +17,12 @@ from .paths import CONFIG_DIR, ROOT_DIR
 
 
 LOCAL_REWRITE_MODEL_ENGINE = "local-language-model-llama-cli"
-LOCAL_REWRITE_PROMPT_VERSION = "character-rewrite-v5-local-qwen-0.5b"
-DEFAULT_MODEL_ID = "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
+LOCAL_REWRITE_PROMPT_VERSION = "character-rewrite-v6-local-qwen-1.5b"
+DEFAULT_MODEL_ID = "JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF"
 DEFAULT_MODEL_QUANTIZATION = "Q4_K_M"
-DEFAULT_MODEL_FILENAME = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+DEFAULT_MODEL_FILENAME = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
 DEFAULT_MODEL_URL = (
-    "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/"
+    "https://huggingface.co/JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF/resolve/main/"
     f"{DEFAULT_MODEL_FILENAME}"
 )
 DEFAULT_MODEL_CONFIG_PATH = CONFIG_DIR / "model" / "local_language_model.json"
