@@ -13,16 +13,16 @@
 | Model             | JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF |
 | Quantization      | Q4_K_M                                     |
 | Prompt version    | character-rewrite-v6-local-qwen-1.5b       |
-| Prompt eval time  | 9282.35 ms                                 |
+| Prompt eval time  | 8885.81 ms                                 |
 | Prompt tokens     | 615                                        |
-| Completion tokens | 182                                        |
-| Total tokens      | 797                                        |
+| Completion tokens | 156                                        |
+| Total tokens      | 771                                        |
 
 ## Candidate
 
 ### Local Model Rewrite
 
-Orin Nightbloom was born with a weight that the world rarely places on a child, the weight of a half-orc heritage clashing with the refined air of the Sunstone Mage College nestled on the frosted coast of his life. He came of age at the prestigious Sunstone Mage College, where both his talent and a sense of exile were sharpened. Orin's mother, a revered elven mage, instilled in him the duty to shoulder his lineage with the strength of a lineage elder, a duty that has left a mark on Orin's life. His drives are to stop a younger relative from repeating their worst choice, break a curse that only worsens when ignored, and avoid repeating history. Sunstone Mage College is the place where Orin learned to harness his magic, while his Mother is the source of his duty and his resilience. Orin is known for his bravery.
+Orin Nightbloom, known as Orin, was born into a world that couldn't accept his heritage. Despite the weight of his half-orc lineage, Orin excelled at Sunstone Mage College, a place that sharpened both his talent and his sense of exile. His mother, a revered elven mage, instilled in him the duty to understand the curse shadowing their family. Orin's drive is to stop a younger relative from repeating their worst choice, a curse that only worsens when ignored, and to break a curse that only worsens when ignored. His mother's legacy and the tension between his heritage and the refined environment of Sunstone Mage College have shaped his character, leading him to believe that his actions will change the course of history.
 
 ### Existing Generated Section
 
@@ -44,10 +44,10 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 | Candidate                  | Status   | Overall | Similarity | Coverage | Sentence Quality |
 | -------------------------- | -------- | ------: | ---------: | -------: | ---------------: |
-| Local model rewrite        | Accepted | 0.7244  | 0.8385     | 0.6250   | 0.7484           |
+| Local model rewrite        | Accepted | 0.6959  | 0.7334     | 0.6250   | 0.7900           |
 | Existing generated section | Accepted | 0.7588  | 0.7334     | 0.7500   | 0.8229           |
 | Original section           | Source   | 0.5470  | 0.7875     | 0.3750   | 0.5129           |
 
 ## Result
 
-The local model rewrite improves the overall quality score over the original section by `0.1774`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
+The local model rewrite improves the overall quality score over the original section by `0.1489`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
