@@ -219,7 +219,7 @@ This gate is intentionally modest. It catches regressions where generated summar
 
 The semantic improvement report should compare:
 
-- Local model rewrite candidate.
+- Newest Model Rewrite candidate.
 - Existing generated section.
 - Original authored backstory.
 

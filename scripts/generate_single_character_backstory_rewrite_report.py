@@ -32,6 +32,7 @@ DEFAULT_SENTENCE_LENGTH_CHART_PATH = ROOT_DIR / "docs" / "reports" / "semantic_s
 ACCEPTANCE_SCORE_THRESHOLD = 70.0
 SUMMARY_LENGTH_TARGET_MIN_WORDS = 30
 SUMMARY_LENGTH_TARGET_MAX_WORDS = 60
+MODEL_REWRITE_LABEL = "Model Rewrite"
 
 
 @dataclass(frozen=True)
@@ -104,18 +105,18 @@ def build_character_rewrite_report(
     original_text = original_candidate_text(profile, rewrite_kind)
     source_context = rewrite_quality_context(graph, profile)
     required_terms = rewrite_required_terms(graph, profile, rewrite_kind)
-    candidates = [ReportCandidate(original_label, original_text, "source")]
-    candidates.append(ReportCandidate("Local model rewrite", model_story))
+    candidates = [ReportCandidate(MODEL_REWRITE_LABEL, model_story)]
     if original_text.strip() != existing_text.strip():
         candidates.append(ReportCandidate(existing_label, existing_text))
+    candidates.append(ReportCandidate(original_label, original_text, "source"))
     evaluation = evaluate_report_candidates(
         candidates,
         rewrite_kind=rewrite_kind,
         source_context=source_context,
         required_terms=required_terms,
     )
-    model_evaluation = next(candidate for candidate in evaluation.evaluated_candidates if candidate.label == "Local model rewrite")
-    source_evaluation = evaluation.evaluated_candidates[0]
+    model_evaluation = next(candidate for candidate in evaluation.evaluated_candidates if candidate.label == MODEL_REWRITE_LABEL)
+    source_evaluation = next(candidate for candidate in evaluation.evaluated_candidates if candidate.label == original_label)
     delta = round(model_evaluation.semantic_score.score - source_evaluation.semantic_score.score, 4)
     if sentence_length_chart_path:
         render_sentence_length_chart(list(evaluation.sentence_chart_candidates), sentence_length_chart_path)
@@ -301,7 +302,7 @@ def model_runtime_section(metadata: dict) -> str:
 
 
 def model_candidate_section(model_result: RewriteResult) -> str:
-    return f"### Local Model Rewrite\n\n{model_result.text}"
+    return f"### {MODEL_REWRITE_LABEL}\n\n{model_result.text}"
 
 
 def render_single_character_candidates(
@@ -313,11 +314,11 @@ def render_single_character_candidates(
     include_existing: bool,
 ) -> str:
     sections = [
-        f"### {original_label}\n\n{original_text}",
         model_candidate_section(model_result),
     ]
     if include_existing:
         sections.append(f"### {existing_label}\n\n{existing_text}")
+    sections.append(f"### {original_label}\n\n{original_text}")
     return "\n\n".join(sections)
 
 
@@ -328,7 +329,7 @@ def result_summary(model_story: str, delta: float) -> str:
             "The existing generated section remains the better candidate for this fixture."
         )
     return (
-        f"The local model rewrite changes the writing quality score versus the original section by `{delta:.4f}`."
+        f"The model rewrite changes the writing quality score versus the original section by `{delta:.4f}`."
     )
 
 

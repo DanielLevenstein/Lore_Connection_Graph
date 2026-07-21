@@ -18,11 +18,11 @@
 | GPU layers        | 0                                                    |
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
-| Prompt hash       | 9f1d57257b232b81                                     |
-| Prompt eval time  | 11531.56 ms                                          |
-| Prompt tokens     | 665                                                  |
-| Completion tokens | 269                                                  |
-| Total tokens      | 934                                                  |
+| Prompt hash       | 79c326b1f78320b0                                     |
+| Prompt eval time  | 13000.44 ms                                          |
+| Prompt tokens     | 725                                                  |
+| Completion tokens | 228                                                  |
+| Total tokens      | 953                                                  |
 
 ## Rewrite Engine
 
@@ -34,9 +34,9 @@
 
 | Candidate       | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality |
 | --------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: |
-| Orin Nightbloom | Rejected | 54.18   | 100.00               | 52.43      | 52.00                 | 66.67            |
-| Jory Ravenmark  | Accepted | 87.92   | 100.00               | 65.48      | 92.00                 | 100.00           |
-| Neal Lovington  | Accepted | 71.35   | 100.00               | 45.46      | 58.67                 | 97.22            |
+| Orin Nightbloom | Rejected | 52.61   | 100.00               | 44.20      | 20.00                 | 5.71             |
+| Jory Ravenmark  | Accepted | 88.98   | 100.00               | 78.05      | 48.00                 | 83.33            |
+| Neal Lovington  | Accepted | 71.63   | 100.00               | 45.45      | 66.67                 | 98.61            |
 
 ### Rejection Reasons
 
@@ -46,14 +46,9 @@
 
 | Candidate       | Status   | Overall | Length Score | Similarity | Sentence Length Score | Sentence Quality |
 | --------------- | -------- | ------: | -----------: | ---------: | --------------------: | ---------------: |
-| Orin Nightbloom | Accepted | 74.24   | 100.00       | 64.73      | 75.20                 | 89.17            |
-| Jory Ravenmark  | Rejected | 68.36   | 100.00       | 69.16      | 86.00                 | 92.22            |
-| Neal Lovington  | Rejected | 68.46   | 100.00       | 61.95      | 58.29                 | 90.71            |
-
-### Rejection Reasons
-
-- Jory Ravenmark: overall score below 70
-- Neal Lovington: overall score below 70
+| Orin Nightbloom | Accepted | 70.57   | 100.00       | 62.64      | 44.00                 | 50.39            |
+| Jory Ravenmark  | Accepted | 71.39   | 100.00       | 82.48      | 41.00                 | 51.90            |
+| Neal Lovington  | Accepted | 74.53   | 100.00       | 52.59      | 72.67                 | 96.53            |
 
 ## Character Outputs
 
@@ -63,13 +58,13 @@ Source material: generation 1 auto-generated backstory
 
 #### Generated Summary
 
-Orin Nightbloom is a Half-Orc Bard from Sunstone Mage College who wants to break a curse that worsens when ignored while also preventing his younger relative from repeating their worst choice.
+Orin Nightbloom, half-Orc Bard from Sunstone Mage College, seeks to prevent his younger relative's repetition of past mistakes and break a curse that worsens when ignored, driven by his desire to avoid repeating history at his college alma mater.
 
 #### Generated Backstory
 
-Orin Nightbloom is a Half-Orc Bard who came to light at Sunstone Mage College. His life was shaped by the tension between his inherited legacy and his personal quest for self-discovery. The loss of Orin's Mother left him with an unwavering resolve: stop a younger relative from repeating their worst choice, which in turn would break a curse that only worsens when ignored.
+Orin Nightbloom, Half-Orc Bard, was raised at Sunstone Mage College, where his musical talent and sense of isolation intertwined to shape him into a figure of defiance against family history. The loss of Orin's Mother left an unspoken burden on her son; it fueled the desire within him to break a curse that only worsens when ignored—either by stopping a younger relative from repeating their worst choice or by preventing his own tragic fate being inherited.
 
-Orin seeks to avoid repeating history while striving to be remembered as brave through the strength and resilience he brings to his community. With skills honed at Sunstone Mage College, Orin aims not just for mastery but also to honor his mother's legacy by breaking cycles of despair rather than perpetuating them.
+Orin carries this music as a defiance, using it not just for pleasure but also as a weapon against history's cyclical nature. He aims to ensure the cycle of tragedy does not continue and hopes that through his art, he can turn grief into something meaningful enough to protect those still living in the shadow of past mistakes.
 
 ### Jory Ravenmark
 
@@ -77,13 +72,13 @@ Source material: current character backstory
 
 #### Generated Summary
 
-Jory Ravenmark is a Human Barbarian haunted by the loss of her family and inexplicable mercy shown by a monstrous leviathan. These traumatic events drive Jory to blend nomadic hunter memories with a burning oath to track and face the beast that saved them.
+Jory Ravenmark is a Human Barbarian haunted by the loss of her family and the inexplicable mercy shown by a monstrous leviathan that compelled her to seek revenge. She blends her nomadic hunter-memories with a burning oath to track and face the beast that tormented her childhood, driven by the memory of Neal Lovington's favorite client being actually Ms. Ravenmark.
 
 #### Generated Backstory
 
-Jory Ravenmark is a Human Barbarian who grew up with her mother and father on a watchtower island. Her mother died at sea, leaving both Jory's father to become consumed by loneliness after drinking heavily. When she was still young, a monstrous creature from the ocean attacked their home, but Jory managed to survive despite losing both of her fathers in that night.
+Jory Ravenmark is a Human Barbarian who dedicated her life to hunting down monsters from the sea after losing both of her parents in a horrific attack on their island watchtower as a child. Her father's loneliness and alcoholism consumed him until he disappeared without a trace just before Jory was taken by the beast that killed them, driving her into a fierce dedication to tracking the creature responsible for her family’s demise.
 
-Jory has an important relationship with her Mother who passed away and Father who became consumed by alcoholism. Their deaths drove them into darkness, leading Jory on this path as she grew older. Despite these challenges, Jory was raised by a skilled shipwright named Neal Lovington, who took pity on the young orphaned girl.
+Jory Ravenmark uses all aspects of sea life—her knowledge gleaned from watching her father as a child—to track down the monster. Her love for the open ocean is strong enough to make up for the grief she feels over losing both her parents, and though she knows in her heart that it's impossible for them to return, her resolve keeps pushing her forward.
 
 ### Neal Lovington
 
@@ -91,10 +86,10 @@ Source material: current character backstory
 
 #### Generated Summary
 
-Neal Lovington is an Elf Bard traveling at the Lantern House in Ashton to entertain sailors on shore leave and ease their boredom with lively performances. His goal of entertaining them aligns with his desire to please those he encounters. Mrs.
+Neal Lovington is an Elf Bard who has been entertaining sailors on shore leave for many years at the Lantern House in Ashton's seaside village. They are driven by their passion to make others happy and have become a beloved figure among the locals. Mrs.
 
 #### Generated Backstory
 
-Neal Lovington is an Elf Bard who has spent several years entertaining guests at the Lantern House in a tavern filled with lively stage performances and steady flow of visitors. Their most notable patron was Mr. Nightbloom, a sailor carrying grief from losing his mother. The characters often discussed how Jory Ravenmark's clientship could help ease some of their burdens.
+Neal Lovington is an Elf Bard who has spent several years entertaining guests at the Lantern House, a welcoming pub with a lively stage and steady traffic of visitors. They work tirelessly to entertain sailors on shore leave, providing them with some much-needed distraction from their duties.
 
-Neal Lovington has driven to entertain sailors on shore leave by using their talents as an Elf Bard and entertaining them with performances that capture the spirit of sea voyages. Mrs. Nightbloom, feeling uneasy about growing tension in the household, sought out Neal for his skillful storytelling and comedic relief to help ease her worries.
+Their favorite patron was Jory Ravenmark, a lighthouse keeper known for his quiet loneliness. Their conversations were often filled with meaning that resonated deeply with Orin Nightbloom's grief over losing his mother. Mrs. Nightbloom, the housekeeper and caretaker of Lantern House, harbored unease about growing tensions in their household.

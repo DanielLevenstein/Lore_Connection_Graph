@@ -23,13 +23,21 @@
 | GPU layers        | 0                                                    |
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
-| Prompt hash       | 10c4d88317bc133a                                     |
-| Prompt eval time  | 11947.50 ms                                          |
-| Prompt tokens     | 468                                                  |
-| Completion tokens | 82                                                   |
-| Total tokens      | 550                                                  |
+| Prompt hash       | 8c32c67093ca575a                                     |
+| Prompt eval time  | 10245.60 ms                                          |
+| Prompt tokens     | 369                                                  |
+| Completion tokens | 54                                                   |
+| Total tokens      | 423                                                  |
 
 ## Candidate
+
+### Local Model Rewrite
+
+Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable act of mercy from a monstrous leviathan that ignited her burning oath to track and face the beast, blending nomadic hunter-memories with this quest for vengeance.
+
+### Existing Summary
+
+Haunted by the loss of her family and the inexplicable mercy shown by a monstrous leviathan, Jory Ravenmark blends her nomadic hunter-memories with a burning oath to track and face the beast.
 
 ### Source Backstory
 
@@ -39,21 +47,13 @@ She learned to read the open sea as her father once had before her. She greaved 
 
 Jory Ravenmark directed her grief to become a beacon of light to her community helping others who had lost love ones to the sea work on rebuilding their lives into something their ancestors would be proud of.
 
-### Local Model Rewrite
-
-Jory Ravenmark is a Human Barbarian haunted by the loss of her family and inexplicable mercy shown by a monstrous leviathan. These traumatic events drive Jory to blend nomadic hunter memories with a burning oath to track and face the beast that saved them.
-
-### Existing Summary
-
-Haunted by the loss of her family and the inexplicable mercy shown by a monstrous leviathan, Jory Ravenmark blends her nomadic hunter-memories with a burning oath to track and face the beast.
-
 ## Scores
 
 | Candidate           | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality |
 | ------------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: |
-| Source Backstory    | Source   | 63.44   | 31.75                | 90.26      | 72.89                 | 84.26            |
-| Local model rewrite | Accepted | 87.92   | 100.00               | 65.48      | 92.00                 | 100.00           |
+| Newest Model Rewrite| Accepted | 73.49   | 100.00               | 67.11      | 8.00                  | 25.00            |
 | Existing Summary    | Rejected | 52.78   | 100.00               | 72.24      | 48.00                 | 62.50            |
+| Source Backstory    | Source   | 63.44   | 31.75                | 90.26      | 72.89                 | 84.26            |
 
 ### Rejection Reasons
 
@@ -65,4 +65,4 @@ Haunted by the loss of her family and the inexplicable mercy shown by a monstrou
 
 ## Result
 
-The local model rewrite changes the writing quality score versus the original section by `0.2448`.
+The Newest Model Rewritechanges the writing quality score versus the original section by `0.1005`.

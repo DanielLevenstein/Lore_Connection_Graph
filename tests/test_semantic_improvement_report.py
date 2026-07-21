@@ -76,7 +76,7 @@ def test_semantic_report_formats_three_version_score_table():
         if line.startswith("| ")
         and (
             "Candidate" in line
-            or "Local model rewrite" in line
+            or "Model Rewrite" in line
             or "Existing Generated Section" in line
                 or "Original Backstory" in line
             or "---" in line
@@ -103,10 +103,24 @@ def test_semantic_report_formats_three_version_score_table():
     assert "Sentence Length Score" in score_table
     assert "Sentence Quality" in report
     assert "## Sentence Lengths" in report
-    assert any("Local model rewrite" in line for line in table_lines)
+    assert any("Model Rewrite" in line for line in table_lines)
     assert any("Existing Generated Section" in line for line in table_lines)
     assert any("Original Backstory" in line for line in table_lines)
     assert len({len(line) for line in table_lines}) == 1
+    assert score_table_candidate_order(score_table) == [
+        "Model Rewrite",
+        "Existing Generated Section",
+        "Original Backstory",
+    ]
+    assert "- Original Backstory:" not in score_table
+
+
+def test_single_character_report_candidate_sections_put_original_last():
+    report = build_report(rewrite_client=FakeRewriteClient())
+    candidate_section = report.split("## Candidate", 1)[1].split("## Scores", 1)[0]
+
+    assert candidate_section.index("### Model Rewrite") < candidate_section.index("### Existing Generated Section")
+    assert candidate_section.index("### Existing Generated Section") < candidate_section.index("### Original Backstory")
 
 
 def test_sentence_length_distribution_reports_percentages_by_category():
@@ -248,6 +262,12 @@ def test_summary_report_scores_existing_summary_not_backstory():
     assert rows["Existing Summary"][summary_length_index] == existing_summary_length_score
     assert rows["Existing Summary"][summary_length_index] != source_backstory_length_score
     assert rows["Source Backstory"][summary_length_index] == source_backstory_length_score
+    assert score_table_candidate_order(score_table) == [
+        "Model Rewrite",
+        "Existing Summary",
+        "Source Backstory",
+    ]
+    assert "- Source Backstory:" not in score_table
 
 
 def test_semantic_report_defaults_to_real_model_client(monkeypatch):
@@ -262,7 +282,7 @@ def test_semantic_report_defaults_to_real_model_client(monkeypatch):
     report = build_report()
 
     assert calls == ["real"]
-    assert "Local model rewrite" in report
+    assert "Model Rewrite" in report
 
 
 def test_semantic_report_records_rejected_model_candidate():
@@ -273,9 +293,9 @@ def test_semantic_report_records_rejected_model_candidate():
     assert "fixture model echoed the prompt" not in report
     assert "prompt## Candidate" not in report
     assert "prompt.### Existing" not in report
-    local_candidate = report.split("### Local Model Rewrite", 1)[1].split("### Existing", 1)[0]
+    local_candidate = report.split("### Model Rewrite", 1)[1].split("### Existing", 1)[0]
     assert local_candidate.strip() == ""
-    assert "Local model rewrite        | Rejected" in report
+    assert "Model Rewrite       | Rejected" in report
     assert "existing generated section remains the better candidate" in report
 
 
@@ -284,16 +304,16 @@ def test_summary_report_keeps_rejected_generated_text_outside_error_section():
 
     assert "## Model Error" not in report
     assert "ERROR:" not in report
-    local_candidate = report.split("### Local Model Rewrite", 1)[1].split("### Existing Summary", 1)[0]
+    local_candidate = report.split("### Model Rewrite", 1)[1].split("### Existing Summary", 1)[0]
     assert "Jory Ravenmark keeps searching the sea" in local_candidate
     assert "repetitive wording" not in local_candidate
     assert "Rejection Reasons" in report
     score_table = report.split("## Scores", 1)[1].split("### Rejection Reasons", 1)[0]
     assert "Rejection Reasons" not in score_table
     assert "repetitive wording" in report
-    assert "- Local model rewrite: repeated sentence; repetitive wording; overall score below 70" in report
-    assert "Local model rewrite | Rejected |" in report
-    assert report.count("Local model rewrite") == 2
+    assert "- Model Rewrite: repeated sentence; repetitive wording; overall score below 70" in report
+    assert "Model Rewrite| Rejected |" in report
+    assert report.count("Model Rewrite") == 2
 
 
 def test_jory_summary_tuning_metrics_without_generating_report():
@@ -354,3 +374,12 @@ def test_rewrite_sentence_quality_score_penalizes_comma_heavy_sentences_that_sho
 
     assert rewrite_sentence_quality_score(split) == 1.0
     assert rewrite_sentence_quality_score(should_split) < 0.8
+
+
+def score_table_candidate_order(score_table: str) -> list[str]:
+    rows = []
+    for line in score_table.splitlines():
+        if not line.startswith("| ") or "---" in line or "Candidate" in line:
+            continue
+        rows.append(line.strip("|").split("|", 1)[0].strip())
+    return rows

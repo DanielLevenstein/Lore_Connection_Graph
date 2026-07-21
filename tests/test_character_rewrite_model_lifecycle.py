@@ -52,7 +52,7 @@ def test_graph_rewrite_uses_in_code_deterministic_engine():
     assert "Orin" in summary
     assert "Half-Orc Bard" in summary
     assert "Sunstone Mage College" in summary
-    assert "Orin Nightbloom's Mother" in backstory
+    assert "mother" in backstory
     assert "break a curse" in backstory
 
 
@@ -124,7 +124,9 @@ def test_rewrite_prompt_uses_compact_graph_segments_instead_of_full_graph_dump()
     assert "Wants to" in segments
     assert "Use the graph segments as the rewrite outline" in prompt
     assert "Characters:" not in prompt
-    assert len(prompt) < len(profile.backstory) + len(profile.original_backstory)
+    assert "Current backstory source:" in prompt
+    assert "and to." not in prompt
+    assert len(prompt) < 3500
 
 
 def test_backstory_prompt_lists_required_coverage_phrases():
@@ -139,7 +141,7 @@ def test_backstory_prompt_lists_required_coverage_phrases():
     assert "- Bard" in prompt
     assert "- stop a younger relative from repeating their worst choice" in prompt
     assert "- break a curse that only worsens when ignored" in prompt
-    assert "- Orin Nightbloom's Mother" in prompt
+    assert "- mother" in prompt
 
 
 def test_summary_prompt_requests_one_summary_only():

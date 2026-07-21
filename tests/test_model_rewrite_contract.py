@@ -13,6 +13,7 @@ from language_model.character_rewrites import (
     rewrite_quality_context,
     rewrite_required_terms,
     semantic_rewrite_score,
+    split_overloaded_summary_sentence,
 )
 from language_model.rewrite_quality import writing_quality_score
 from language_model.storage import Character, read_character_profile
@@ -65,6 +66,8 @@ def test_summary_prompt_has_single_candidate_contract():
     assert "Mention each motive or loss only once." in prompt
     assert "If the draft is over 60 words, shorten it before returning." in prompt
     assert "Split long or comma-heavy sentences when needed." in prompt
+    assert "Do not pack identity, origin, and motivation into one sentence." in prompt
+    assert "Avoid chained clauses using by, as, or while." in prompt
     assert "Use one to three" not in prompt
     assert "Write three" not in prompt
 
@@ -81,6 +84,20 @@ def test_summary_required_terms_exclude_secondary_relationship_names():
     assert "Jory Ravenmark's Parents" not in terms
 
 
+def test_backstory_required_terms_use_story_natural_coverage_terms():
+    character_path = ROOT_DIR / "tests" / "fixtures" / "character_sheets" / "Orin_Nightbloom.md"
+    character = Character(name=character_path.stem, path=character_path)
+    profile = read_character_profile(character)
+    graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
+
+    terms = rewrite_required_terms(graph, profile, "backstory")
+
+    assert "Sunstone Mage College" in terms
+    assert "mother" in terms
+    assert "a coastal mage college" not in terms
+    assert "Orin Nightbloom's Mother" not in terms
+
+
 def test_backstory_prompt_has_two_paragraph_contract():
     profile, graph = jory_profile_and_graph()
 
@@ -90,6 +107,19 @@ def test_backstory_prompt_has_two_paragraph_contract():
     assert "Preserve the named people, places, relationships, and drives." in prompt
     assert "Return only the rewritten prose." in prompt
     assert "2 to 4 concise paragraphs" not in prompt
+
+
+def test_backstory_prompt_source_context_does_not_clip_mid_sentence():
+    character_path = ROOT_DIR / "tests" / "fixtures" / "character_sheets" / "Orin_Nightbloom.md"
+    character = Character(name=character_path.stem, path=character_path)
+    profile = read_character_profile(character)
+    graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
+
+    prompt = rewrite_prompt("backstory", graph, profile)
+
+    assert "Current backstory source:" in prompt
+    assert "and to." not in prompt
+    assert "turning inherited sorrow into something brave enough to protect the living." in prompt
 
 
 def test_rewrite_api_sends_mode_specific_source_context_to_model_client():
@@ -131,6 +161,21 @@ def test_summary_generation_collapses_multiple_model_alternatives():
     assert summary == GOOD_JORY_SUMMARY
     assert "another possible summary" not in summary
     assert "\n\n" not in summary
+
+
+def test_summary_normalization_splits_overloaded_appositive_sentence():
+    summary = (
+        "Orin Nightbloom, half-Orc Bard from Sunstone Mage College, seeks to prevent his younger relative's "
+        "repetition of past mistakes and break a curse that worsens when ignored by avoiding repeating history, "
+        "as he seeks redemption at the hands of fate itself."
+    )
+
+    normalized = split_overloaded_summary_sentence(summary)
+
+    assert normalized.startswith("Orin Nightbloom is a half-Orc Bard from Sunstone Mage College.")
+    assert "Orin seeks to prevent his younger relative" in normalized
+    assert len(writing_quality_score(normalized).sentence_word_counts) == 2
+    assert writing_quality_score(normalized).sentence_quality > writing_quality_score(summary).sentence_quality
 
 
 def test_summary_generation_makes_one_model_call_for_soft_sentence_quality_issue():
@@ -227,5 +272,5 @@ def test_summary_metrics_distinguish_usable_run_on_and_repetitive_candidates():
 
 
 def test_diagnostic_only_model_output_is_not_candidate_text():
-    assert clean_model_rewrite("ERROR: local model rewrite returned an unusable rewrite: repetitive wording.") == ""
+    assert clean_model_rewrite("ERROR: Newest Model Rewritereturned an unusable rewrite: repetitive wording.") == ""
     assert clean_model_rewrite("Traceback (most recent call last):\nRuntimeError: worker failed") == ""

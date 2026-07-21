@@ -253,6 +253,7 @@ def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) 
             "Choose the strongest source-backed details instead of covering every fact. "
             "Mention each motive or loss only once. "
             "Split long or comma-heavy sentences when needed. "
+            "Avoid chained clauses using by, as, or while. "
             "If the draft is over 60 words, shorten it before returning. "
             "Do not use ellipses or describe graph labels such as traits as labels. "
             "Do not use markdown tags or formatting."
@@ -350,13 +351,14 @@ def prompt_injection_indicators(source_text: str) -> list[str]:
 def character_profile_context(profile: CharacterProfile, kind: str = "backstory") -> str:
     source_section = profile.summary if kind == "summary" else profile.backstory
     original_section = profile.original_summary if kind == "summary" else profile.original_backstory
+    source_limit = 360 if kind == "summary" else 700
     identity = " ".join(value for value in [profile.race, profile.character_class] if value)
     values = [
         f"- The character is {profile.name}, called {profile.first_name or character_first_name(profile.name)}.",
         f"- {profile.name} is a {identity}." if identity else "",
         f"- Use {profile.pronouns} pronouns." if profile.pronouns else "",
-        f"- Current {kind} source: {compact_source_text(source_section, 360)}",
-        f"- Original {kind} source: {compact_source_text(original_section, 360)}",
+        f"- Current {kind} source: {compact_source_text(source_section, source_limit)}",
+        f"- Original {kind} source: {compact_source_text(original_section, source_limit)}",
         f"- Drives to preserve: {'; '.join(profile.drives or [])}",
         f"- Alliances to preserve: {'; '.join(profile.alliances or [])}",
         f"- Enemies to preserve: {'; '.join(profile.enemies or [])}",
@@ -481,6 +483,9 @@ def compact_source_text(value: str, max_chars: int) -> str:
     if len(normalized) <= max_chars:
         return normalized
     clipped = normalized[:max_chars].rsplit(" ", 1)[0].rstrip(" ,;:-")
+    complete = complete_sentence_prefix(clipped)
+    if complete:
+        return complete
     return clipped.rstrip(".!?") + "."
 
 
@@ -693,7 +698,37 @@ def trim_summary_candidate(response: str, max_words: int = 60) -> str:
         if selected and len(candidate.split()) > max_words:
             break
         selected.append(sentence)
-    return complete_sentence_prefix(" ".join(selected))
+    return split_overloaded_summary_sentence(complete_sentence_prefix(" ".join(selected)))
+
+
+def split_overloaded_summary_sentence(summary: str) -> str:
+    sentences = candidate_sentences(summary)
+    if len(sentences) != 1 or len(term_tokens(summary)) <= 30:
+        return summary
+    appositive_match = re.match(r"^([^,]+),\s*([^,]+),\s*(.+)$", summary.strip())
+    if not appositive_match:
+        return summary
+    subject, identity, rest = appositive_match.groups()
+    rest = rest.strip()
+    first_name = subject.split()[0]
+    if re.match(r"^(seeks|strives|wants|works|tries)\b", rest, flags=re.IGNORECASE):
+        rest = f"{first_name} {rest}"
+    return f"{subject} is {summary_identity_phrase(identity)}. {capitalize_sentence(rest)}"
+
+
+def capitalize_sentence(sentence: str) -> str:
+    sentence = sentence.strip()
+    if not sentence:
+        return sentence
+    return sentence[:1].upper() + sentence[1:]
+
+
+def summary_identity_phrase(identity: str) -> str:
+    identity = identity.strip()
+    lowered = identity.lower()
+    if lowered.startswith(("a ", "an ", "the ")):
+        return identity
+    return f"{article_for(identity)} {identity}"
 
 
 def complete_sentence_prefix(response: str) -> str:
@@ -752,18 +787,20 @@ def rewrite_quality_context(graph: CharacterGraph, profile: CharacterProfile) ->
 
 
 def rewrite_required_terms(graph: CharacterGraph, profile: CharacterProfile, rewrite_kind: str = "backstory") -> list[str]:
+    place_names = story_place_names(graph)
     terms = [
         profile.name,
         profile.race,
         profile.character_class,
-        profile.origin,
         *(profile.drives or []),
         *(profile.motivations or []),
         *(profile.alliances or []),
         *(profile.enemies or []),
     ]
+    if profile.origin and not place_names:
+        terms.append(profile.origin)
     if rewrite_kind != "summary":
-        terms.extend(story_place_names(graph))
+        terms.extend(place_names)
         terms.extend(story_relationship_names(graph))
     return unique_values(term for term in terms if term)
 
@@ -825,8 +862,19 @@ def story_relationship_names(graph: CharacterGraph) -> list[str]:
             continue
         if name.lower() in non_story_names:
             continue
-        names.append(humanize_generated_text(name))
+        names.append(story_relationship_coverage_name(name, graph.primary_character.name))
     return unique_values(names)
+
+
+def story_relationship_coverage_name(name: str, primary_name: str) -> str:
+    lowered = name.lower()
+    primary_parts = [part.lower() for part in primary_name.split() if part]
+    kinship_terms = ("mother", "father", "parents", "parent", "sibling", "brother", "sister")
+    if primary_parts and any(part in lowered for part in primary_parts):
+        for kinship in kinship_terms:
+            if kinship in lowered:
+                return kinship
+    return humanize_generated_text(name)
 
 
 def humanize_generated_text(value: str) -> str:
@@ -841,13 +889,13 @@ def attribute_value(graph: CharacterGraph, attribute_type: str) -> str:
 
 
 def covered_term_ratio(candidate: str, required_terms: list[str]) -> float:
-    terms = [term for term in unique_values(required_terms) if term_tokens(term)]
+    terms = [term for term in unique_values(required_terms) if coverage_tokens(term)]
     if not terms:
         return 1.0
-    candidate_tokens = set(term_tokens(candidate))
+    candidate_tokens = set(coverage_tokens(candidate))
     covered = 0
     for term in terms:
-        tokens = set(term_tokens(term))
+        tokens = set(coverage_tokens(term))
         if tokens and tokens <= candidate_tokens:
             covered += 1
     return covered / len(terms)
@@ -965,3 +1013,43 @@ def unique_story_values(values) -> list[str]:
 
 def term_tokens(value: str) -> list[str]:
     return re.findall(r"[a-z0-9']+", value.lower())
+
+
+def coverage_tokens(value: str) -> list[str]:
+    stopwords = {
+        "a",
+        "an",
+        "and",
+        "as",
+        "at",
+        "by",
+        "for",
+        "from",
+        "in",
+        "into",
+        "of",
+        "on",
+        "only",
+        "the",
+        "their",
+        "to",
+        "when",
+        "who",
+        "with",
+    }
+    return [
+        coverage_token_stem(token)
+        for token in term_tokens(value)
+        if coverage_token_stem(token) and coverage_token_stem(token) not in stopwords
+    ]
+
+
+def coverage_token_stem(token: str) -> str:
+    token = token.removesuffix("'s")
+    if len(token) > 5 and token.endswith("ing"):
+        return token[:-3]
+    if len(token) > 4 and token.endswith("ed"):
+        return token[:-2]
+    if len(token) > 4 and token.endswith("s"):
+        return token[:-1]
+    return token
