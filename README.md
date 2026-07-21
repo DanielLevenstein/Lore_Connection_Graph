@@ -12,6 +12,17 @@ The app treats authored markdown in `world_building/lore` as the source of truth
 Backup lore files are stored in `world_building/backup` and are updated everytime the app is loaded.
 A manual backup button has been added in the `Lore Import` Section for your convenience.
 
+## Dependencies
+
+- [Python 3.11](https://www.python.org/downloads/): Streamlit App
+- [llama.cpp](https://github.com/ggml-org/llama.cpp): For Backstory Wrties
+
+## Running App
+
+- Launch the app through the command line `./run_streamlit.sh
+- Store local lore documents in the world_building directory
+- Import local files through the UI or generate them through the app
+
 ## What It Does
 
 - Create and edit character sheets with stats, backstory, summary, details, and character connections.
@@ -30,12 +41,12 @@ A manual backup button has been added in the `Lore Import` Section for your conv
 
 ## Release Notes
 
-
-| Version | Summary                                                                           |
-| ------- | --------------------------------------------------------------------------------- |
-| v1.1.0 | Implemented distinct knowledge graph views for character, place and sesison tab|
-| v1.0.0 | This release adds a dedicated Knowledge Graph UI using graphviz.|
-| v0.1.0 | Packaged as a Streamlit app for local character sheets, campaign lore management. |
+| Version | Summary                                                                                       |
+| ------- | --------------------------------------------------------------------------------------------- |
+| v2.0.0  | Adds local character rewrite tuning, rewrite quality reports, and safer generated-text saves. |
+| v1.1.0  | Implemented distinct knowledge graph views for character, place and sesison tab               |
+| v1.0.0  | This release adds a dedicated Knowledge Graph UI using graphviz.                              |
+| v0.1.0  | Packaged as a Streamlit app for local character sheets, campaign lore management.             |
 
 ## Setup
 
@@ -56,15 +67,31 @@ pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
 
-### Optional Local Language Model Rewrites
+### Backstory and Summary Rewrites
 
-Graph-backed deterministic rewrites work without any model runner. To enable model-backed character rewrites and the real semantic improvement report, install the `llama` CLI from llama.cpp.
+Graph-backed deterministic rewrites work without any model runner. To enable model-backed character rewrites and the real semantic improvement report, install the llama.cpp command-line tools.
 
-On macOS or Linux:
+Recommended installs:
 
 ```bash
-curl -LsSf https://llama.cpp/install.sh | sh
+brew install llama.cpp        # macOS or Linux with Homebrew
+winget install llama.cpp      # Windows
+conda install -c conda-forge llama-cpp
+```
+
+The app calls the llama.cpp wrapper as `llama completion`, so verify that `llama` is on your `PATH`:
+
+```bash
 llama --version
+llama completion --help
+```
+
+If your install only exposes `llama-cli`, install or link the llama.cpp wrapper before using model-backed rewrites. The app does not require `llama-server` or any long-running local API service.
+
+After installing llama.cpp, start the app normally:
+
+```bash
+./run_streamlit.sh
 ```
 
 The app stores downloaded local language model files in:
@@ -97,7 +124,9 @@ To regenerate the semantic improvement report with the real local model:
 ```
 
 ## Knowledge Graph Views
+
 Main Tab [Characters, Places, Session Notes]
+
 - Characters: [Single Character, Party View]
 - Places: [Location View, Heading View]
 - Session Notes: [Location View, Directory File View]
@@ -147,7 +176,7 @@ The current app is the roleplaying lore and knowledge graph tool; the prefix rem
 
 
 | Variable                                        | Enabled Value | Purpose                                                                                                                   |
-| ----------------------------------------------- |---------------| ------------------------------------------------------------------------------------------------------------------------- |
+| ----------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `LOCAL_CHATBOT_DISABLE_LORE_BACKUPS`            | `1`           | Skips the automatic backup that normally runs when the Streamlit app starts.                                              |
 | `LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE` | `1`           | Shows the internal attribute graph override editor. This is a maintenance/debug surface, not part of the normal app flow. |
 

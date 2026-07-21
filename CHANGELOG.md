@@ -99,3 +99,24 @@
 
 ### Multi-Character Rewrite Comparison
 - Added a second rewrite report generator for Orin Nightbloom, Jory Ravenmark, and Neal Lovington that scores source material, generated summaries, and generated backstories; Orin uses the generation 1 auto-generated backstory as the report source material.
+
+## 2026-07-21
+
+### Character Rewrite Workflow
+- Added graph-backed summary and backstory rewrite actions to the character editor, routed rewrites through the local `llama` CLI path, and kept deterministic graph rewrites as the fallback path.
+- Kept generated text reviewable after save/rerun and added focused Streamlit e2e coverage for the rewrite controls.
+
+### Local Rewrite Model Tuning
+- Tuned model-backed summary and backstory rewrites around the Qwen 0.5B local model candidate, removed retry-loop distractions, and kept deterministic graph rewrites as the fallback path.
+
+### Rewrite Quality Reporting
+- Split summary and backstory evaluation into dedicated single-character and multi-character reports with normalized 0-100 scores for overall quality, length, similarity, sentence length, and sentence quality.
+- Added sentence-structure charts with sentence category distributions and KDE overlays for the single-character rewrite flow.
+- Reordered report candidates so model rewrites appear first, previous Markdown rewrites appear second when present, and original/source text appears last without blocking release acceptance.
+
+### Save Flow Safety
+- Fixed generated-text promotion so choosing `Replace Original` promotes current generated summary and backstory text into the main character Markdown and removes stale generated/original markers.
+- Added regression coverage for accepting generated character sections and preserving the promoted text in both Markdown and profile metadata.
+
+### Supporting Graph Cleanup
+- Included post-`knowledge_graph2` fixture and graph cleanup where it affected character rewrite inputs and report stability.

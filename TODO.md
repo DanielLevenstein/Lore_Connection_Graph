@@ -29,6 +29,10 @@ Current branch has a backstory rewrite function, but it's disabled because of lo
 - Top-level Streamlit tab state needs careful handling, so validation errors do not move the user to another tab.
 - The current rewrite path should be simplified and tested before merging back to main.
 
+## Completed - v2.0.0 Release Notes - 2026-07-21 - feature/character_rewrite
+- Added the `tag/v2.0.0` changelog entry and updated `RELEASE_NOTES.md` with character rewrite tuning, normalized reporting, generated-text save promotion, and supporting graph cleanup.
+- Testing: `git diff --check`.
+
 ## Completed - Qwen 0.5B Report Rerun - 2026-07-21 - feature/character_rewrite
 - Switched the local rewrite model defaults and advanced JSON config to `Qwen/Qwen2.5-0.5B-Instruct-GGUF` with the `Q4_K_M` artifact.
 - Regenerated the single-character backstory report, single-character summary report, multi-character rewrite comparison, and sentence-length charts.
