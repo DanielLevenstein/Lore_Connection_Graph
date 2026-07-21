@@ -75,7 +75,7 @@ models/local_language_model/
 
 That directory is ignored by git so the model is visible for local disk cleanup without being committed.
 
-The default rewrite model is `JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF`. Advanced users can switch the JSON config to a smaller or larger GGUF model when they want to tune the speed/quality tradeoff.
+The default rewrite model is `Qwen/Qwen2.5-0.5B-Instruct-GGUF` using the `Q4_K_M` GGUF artifact. Advanced users can switch the JSON config to a smaller or larger GGUF model when they want to tune the speed/quality tradeoff.
 
 Advanced users can change the model, quantization, download URL, and runtime settings in:
 
@@ -93,7 +93,7 @@ LOCAL_CHATBOT_ALLOW_MODEL_DOWNLOAD=1 \
 To regenerate the semantic improvement report with the real local model:
 
 ```bash
-.venv/bin/python scripts/generate_semantic_improvement_report.py
+.venv/bin/python scripts/generate_single_character_backstory_rewrite_report.py
 ```
 
 ## Knowledge Graph Views

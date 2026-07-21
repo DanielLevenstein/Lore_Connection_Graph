@@ -482,7 +482,7 @@ def test_load_local_config_resolves_relative_cache_dir(tmp_path):
 def test_default_local_config_uses_fast_probe_model():
     config = LocalRewriteModelConfig()
 
-    assert config.model_id == "JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF"
-    assert config.filename == "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    assert config.model_id == "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
+    assert config.filename == "qwen2.5-0.5b-instruct-q4_k_m.gguf"
     assert config.max_tokens <= 640
     assert config.n_ctx <= 8192

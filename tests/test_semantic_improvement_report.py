@@ -295,7 +295,7 @@ def test_semantic_report_records_rejected_model_candidate():
     assert "prompt.### Existing" not in report
     local_candidate = report.split("### Model Rewrite", 1)[1].split("### Existing", 1)[0]
     assert local_candidate.strip() == ""
-    assert "Model Rewrite       | Rejected" in report
+    assert "| Model Rewrite              | Rejected |" in report
     assert "existing generated section remains the better candidate" in report
 
 
@@ -312,8 +312,8 @@ def test_summary_report_keeps_rejected_generated_text_outside_error_section():
     assert "Rejection Reasons" not in score_table
     assert "repetitive wording" in report
     assert "- Model Rewrite: repeated sentence; repetitive wording; overall score below 70" in report
-    assert "Model Rewrite| Rejected |" in report
-    assert report.count("Model Rewrite") == 2
+    assert "| Model Rewrite    | Rejected |" in report
+    assert report.count("Model Rewrite") == 3
 
 
 def test_jory_summary_tuning_metrics_without_generating_report():

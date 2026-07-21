@@ -1,5 +1,6 @@
 import json
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import language_model.storage as storage
@@ -361,6 +362,70 @@ Manual summary.
     assert profile.original_summary == "Manual summary."
     assert set(profile.auto_generated_sections) == {"Character Backstory", "Character Summary"}
     assert set(profile.updated_sections) == {"Character Backstory", "Character Summary"}
+
+
+def test_save_promotes_generated_sections_when_original_text_is_accepted(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "regenerate_character_graph", lambda character: None)
+    monkeypatch.setattr(storage, "CHARACTER_METADATA_DIR", tmp_path / "data" / "character_metadata")
+    character_path = tmp_path / "Mara_Voss.md"
+    character = Character(name=character_path.stem, path=character_path)
+    character_path.write_text(
+        """# Mara Voss
+
+## Character Stats
+
+| Name | Race | Class |
+| ---- | ---- | ----- |
+| Mara | Elf | Wizard |
+
+## Character Backstory (Generated)
+
+Generated backstory.
+
+### Character Backstory (Original)
+
+Manual backstory.
+
+## Character Summary (Updated)
+
+Generated summary.
+
+### Character Summary (Original)
+
+Manual summary.
+
+### Character Details
+
+Drives:
+- keep records
+""",
+        encoding="utf-8",
+    )
+    accepted = read_character_profile(character)
+    accepted = replace(
+        accepted,
+        original_backstory="",
+        original_summary="",
+        auto_generated_sections=[],
+        updated_sections=[],
+    )
+
+    storage.write_character_profile(character, accepted)
+
+    text = character_path.read_text(encoding="utf-8")
+    assert "## Character Backstory" in text
+    assert "Generated backstory." in text
+    assert "### Character Backstory (Original)" not in text
+    assert "## Character Summary" in text
+    assert "Generated summary." in text
+    assert "### Character Summary (Original)" not in text
+    assert "(Generated)" not in text
+    assert "(Updated)" not in text
+    reloaded = read_character_profile(character)
+    assert reloaded.original_backstory == ""
+    assert reloaded.original_summary == ""
+    assert reloaded.auto_generated_sections == []
+    assert reloaded.updated_sections == []
 
 
 def test_read_character_profile_trusts_markdown_auto_generated_headings_over_stale_json(tmp_path, monkeypatch):

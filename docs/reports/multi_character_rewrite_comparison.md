@@ -4,9 +4,9 @@
 
 | Metric            | Value                                                |
 | ----------------- | ---------------------------------------------------- |
-| Model             | JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF           |
+| Model             | Qwen/Qwen2.5-0.5B-Instruct-GGUF                      |
 | Quantization      | Q4_K_M                                               |
-| Prompt version    | character-rewrite-v7-local-qwen-1.5b-writing-quality |
+| Prompt version    | character-rewrite-v7-local-qwen-0.5b-writing-quality |
 | Max tokens        | 640                                                  |
 | Temperature       | 0.75                                                 |
 | Top P             | 0.85                                                 |
@@ -18,11 +18,11 @@
 | GPU layers        | 0                                                    |
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
-| Prompt hash       | 79c326b1f78320b0                                     |
-| Prompt eval time  | 13000.44 ms                                          |
-| Prompt tokens     | 725                                                  |
-| Completion tokens | 228                                                  |
-| Total tokens      | 953                                                  |
+| Prompt hash       | 79b97ecf5c7fe657                                     |
+| Prompt eval time  | 2860.18 ms                                           |
+| Prompt tokens     | 724                                                  |
+| Completion tokens | 321                                                  |
+| Total tokens      | 1045                                                 |
 
 ## Rewrite Engine
 
@@ -34,21 +34,26 @@
 
 | Candidate       | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality |
 | --------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: |
-| Orin Nightbloom | Rejected | 52.61   | 100.00               | 44.20      | 20.00                 | 5.71             |
-| Jory Ravenmark  | Accepted | 88.98   | 100.00               | 78.05      | 48.00                 | 83.33            |
-| Neal Lovington  | Accepted | 71.63   | 100.00               | 45.45      | 66.67                 | 98.61            |
+| Orin Nightbloom | Accepted | 81.77   | 100.00               | 58.16      | 74.00                 | 82.08            |
+| Jory Ravenmark  | Accepted | 77.57   | 100.00               | 52.58      | 56.00                 | 70.83            |
+| Neal Lovington  | Rejected | 52.81   | 100.00               | 68.03      | 93.33                 | 100.00           |
 
 ### Rejection Reasons
 
-- Orin Nightbloom: summary sentence too long; overall score below 70
+- Neal Lovington: overall score below 70
 
 ## Generated Backstory Scores
 
 | Candidate       | Status   | Overall | Length Score | Similarity | Sentence Length Score | Sentence Quality |
 | --------------- | -------- | ------: | -----------: | ---------: | --------------------: | ---------------: |
-| Orin Nightbloom | Accepted | 70.57   | 100.00       | 62.64      | 44.00                 | 50.39            |
-| Jory Ravenmark  | Accepted | 71.39   | 100.00       | 82.48      | 41.00                 | 51.90            |
-| Neal Lovington  | Accepted | 74.53   | 100.00       | 52.59      | 72.67                 | 96.53            |
+| Orin Nightbloom | Rejected | 65.11   | 50.00        | 62.93      | 76.00                 | 86.88            |
+| Jory Ravenmark  | Accepted | 80.78   | 50.00        | 63.44      | 66.00                 | 100.00           |
+| Neal Lovington  | Rejected | 55.17   | 100.00       | 65.43      | 69.71                 | 100.00           |
+
+### Rejection Reasons
+
+- Orin Nightbloom: backstory paragraph count; length score below target; overall score below 70
+- Neal Lovington: overall score below 70
 
 ## Character Outputs
 
@@ -58,13 +63,11 @@ Source material: generation 1 auto-generated backstory
 
 #### Generated Summary
 
-Orin Nightbloom, half-Orc Bard from Sunstone Mage College, seeks to prevent his younger relative's repetition of past mistakes and break a curse that worsens when ignored, driven by his desire to avoid repeating history at his college alma mater.
+Orin Nightbloom, a Half-Orc Bard from the coastal mage college Sunstone Mage College, comes of age at this institution where he honed his talent and sense of exile. His drive to preserve is to stop younger relatives from repeating their worst choice while also breaking a curse that only worsens when ignored.
 
 #### Generated Backstory
 
-Orin Nightbloom, Half-Orc Bard, was raised at Sunstone Mage College, where his musical talent and sense of isolation intertwined to shape him into a figure of defiance against family history. The loss of Orin's Mother left an unspoken burden on her son; it fueled the desire within him to break a curse that only worsens when ignored—either by stopping a younger relative from repeating their worst choice or by preventing his own tragic fate being inherited.
-
-Orin carries this music as a defiance, using it not just for pleasure but also as a weapon against history's cyclical nature. He aims to ensure the cycle of tragedy does not continue and hopes that through his art, he can turn grief into something meaningful enough to protect those still living in the shadow of past mistakes.
+Orin Nightbloom, known for his talent and an exile sense, came of age at Sunstone Mage College. A place that sharpened both his gift and his isolation, it offered a chance to understand the curse that had been haunting his family. The loss of Orin's mother left him with only grief but also gave him reason to see the consequences of legacy and self-invention. Now, Orin carries his music forward as a form of defiance, trying to stop younger relatives from repeating their worst choice while turning inherited sorrow into something brave enough to protect the living.
 
 ### Jory Ravenmark
 
@@ -72,13 +75,11 @@ Source material: current character backstory
 
 #### Generated Summary
 
-Jory Ravenmark is a Human Barbarian haunted by the loss of her family and the inexplicable mercy shown by a monstrous leviathan that compelled her to seek revenge. She blends her nomadic hunter-memories with a burning oath to track and face the beast that tormented her childhood, driven by the memory of Neal Lovington's favorite client being actually Ms. Ravenmark.
+Jory Ravenmark is a Human Barbarian with strong feelings towards her nomadic hunter memories and a burning oath to track down and face the monstrous leviathan that has inexplicably shown mercy.
 
 #### Generated Backstory
 
-Jory Ravenmark is a Human Barbarian who dedicated her life to hunting down monsters from the sea after losing both of her parents in a horrific attack on their island watchtower as a child. Her father's loneliness and alcoholism consumed him until he disappeared without a trace just before Jory was taken by the beast that killed them, driving her into a fierce dedication to tracking the creature responsible for her family’s demise.
-
-Jory Ravenmark uses all aspects of sea life—her knowledge gleaned from watching her father as a child—to track down the monster. Her love for the open ocean is strong enough to make up for the grief she feels over losing both her parents, and though she knows in her heart that it's impossible for them to return, her resolve keeps pushing her forward.
+Jory Ravenmark is a human barbarian who grew up on a watchtower with her mother and father. Her mother died at sea when she was but a child, while her father was consumed by loneliness that drove him to drink heavily. Neal Lovington is Jory's favorite client, whose favorite customer is actually Ms. Ravenmark.
 
 ### Neal Lovington
 
@@ -86,10 +87,10 @@ Source material: current character backstory
 
 #### Generated Summary
 
-Neal Lovington is an Elf Bard who has been entertaining sailors on shore leave for many years at the Lantern House in Ashton's seaside village. They are driven by their passion to make others happy and have become a beloved figure among the locals. Mrs.
+Neal Lovington is a traveling performer working at the Lantern House in the seaside village of Ashton. He seeks entertainment to help manage his growing tensions with Mrs Nightbloom about the household's increasing drama and conflict. The character has been entertaining guests at the Lantern House for several years, which provides them with steady attendance.
 
 #### Generated Backstory
 
-Neal Lovington is an Elf Bard who has spent several years entertaining guests at the Lantern House, a welcoming pub with a lively stage and steady traffic of visitors. They work tirelessly to entertain sailors on shore leave, providing them with some much-needed distraction from their duties.
+Neal Lovington is a traveling performer who works in a local tavern. They have spent several years entertaining guests at the Lantern House, a welcoming pub with a lively stage and a steady flow of visitors.
 
-Their favorite patron was Jory Ravenmark, a lighthouse keeper known for his quiet loneliness. Their conversations were often filled with meaning that resonated deeply with Orin Nightbloom's grief over losing his mother. Mrs. Nightbloom, the housekeeper and caretaker of Lantern House, harbored unease about growing tensions in their household.
+One of their recurring patrons was Mr. Nightbloom, an old sailor carrying the grief of losing his mother. Their conversations often help him reflect on the old family curse that had shaped his life. But Neal's favorite patron is Ms. Ravenmark, who works at the shoreline lighthouse and carries a quiet loneliness that makes their talks feel unusually meaningful.

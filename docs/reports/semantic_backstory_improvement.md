@@ -9,9 +9,9 @@
 
 | Metric            | Value                                                |
 | ----------------- | ---------------------------------------------------- |
-| Model             | JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF           |
+| Model             | Qwen/Qwen2.5-0.5B-Instruct-GGUF                      |
 | Quantization      | Q4_K_M                                               |
-| Prompt version    | character-rewrite-v7-local-qwen-1.5b-writing-quality |
+| Prompt version    | character-rewrite-v7-local-qwen-0.5b-writing-quality |
 | Max tokens        | 640                                                  |
 | Temperature       | 0.75                                                 |
 | Top P             | 0.85                                                 |
@@ -23,19 +23,19 @@
 | GPU layers        | 0                                                    |
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
-| Prompt hash       | 659ec09ed594ccbe                                     |
-| Prompt eval time  | 13915.36 ms                                          |
-| Prompt tokens     | 623                                                  |
-| Completion tokens | 163                                                  |
-| Total tokens      | 786                                                  |
+| Prompt hash       | de45e0c824a34438                                     |
+| Prompt eval time  | 2628.45 ms                                           |
+| Prompt tokens     | 725                                                  |
+| Completion tokens | 282                                                  |
+| Total tokens      | 1007                                                 |
 
 ## Candidate
 
-### Local Model Rewrite
+### Model Rewrite
 
-Orin Nightbloom was born with a weight the world rarely placed on children—a half-orc heritage clashing with the refined air of Sunstone Mage College nestled on the frosted coast where he grew up. He came of age at this prestigious institution that sharpened both his talent and sense of exile, leaving behind memories of loss. Orin's mother was a revered elven mage, instilling in him the duty to understand the curse shadowing their family history and break a curse that only worsened when ignored.
+Orin Nightbloom was born with a weight the world seldom places on a child - his half-orc heritage and refined air of Sunstone Mage College. The loss of Orin's mother instilled in him a duty to uphold the legacy of the mage college; he excelled but often felt at odds with "less-than-pure lineage." He learned the lute and the stories woven through song, seeking solace in melody rather than strict incantations favored by the arcane halls. His drive was to stop younger relatives from repeating their worst choice while breaking a curse that only worsens when ignored.
 
-Orin wanted to stop a younger relative from repeating their worst choice and break a curse that only worsened when ignored. The knowledge he gained at Sunstone Mage College fueled his desire for change, making it impossible for him to avoid repeating the cycle of destiny or ignoring the consequences that followed.
+Orin carried his music forward as a form of defiance - he had become an Orin Nightbloom, a Half-Orc Bard with a talent for song and a sense of exile tempered by the weight of lineage. Despite his heritage's struggles to align with the refined atmosphere at Sunstone Mage College, Orin knew that breaking a curse only worsens when ignored.
 
 ### Existing Generated Section
 
@@ -57,7 +57,7 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 | Candidate                  | Status   | Overall | Length Score | Similarity | Sentence Length Score | Sentence Quality |
 | -------------------------- | -------- | ------: | -----------: | ---------: | --------------------: | ---------------: |
-| Newest Model Rewrite       | Accepted | 81.46   | 100.00       | 76.34      | 69.60                 | 80.83            |
+| Model Rewrite              | Accepted | 87.22   | 100.00       | 81.12      | 52.80                 | 69.17            |
 | Existing Generated Section | Accepted | 80.70   | 50.00        | 73.34      | 75.00                 | 82.29            |
 | Original Backstory         | Source   | 63.53   | 50.00        | 78.75      | 56.53                 | 51.29            |
 
@@ -67,4 +67,4 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 ## Result
 
-The Newest Model Rewritechanges the writing quality score versus the original section by `0.1793`.
+The model rewrite changes the writing quality score versus the original section by `0.2369`.

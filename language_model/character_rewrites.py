@@ -254,15 +254,16 @@ def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) 
             "Mention each motive or loss only once. "
             "Split long or comma-heavy sentences when needed. "
             "Avoid chained clauses using by, as, or while. "
-            "If the draft is over 60 words, shorten it before returning. "
             "Do not use ellipses or describe graph labels such as traits as labels. "
             "Do not use markdown tags or formatting."
         )
     elif kind == "backstory":
         instruction = (
-            "Rewrite the character backstory as exactly 2 concise paragraphs. Preserve the named people, places, "
-            "relationships, and drives. Make it read like authored campaign lore, not a bullet list. "
-            "Spell every name exactly as written. Do not repeat the same drive, phrase, or sentence. "
+            "Rewrite the character backstory as exactly 2 concise paragraphs."
+            "Preserve the named people, places,  relationships, and drives. "
+            "Make it read like authored campaign lore, not a bullet list. "
+            "Use double spacing between paragraphs."
+            "Do not repeat the same drive, phrase, or sentence. "
             "Use short sentences. Split long or comma-heavy sentences. "
             "Do not use ellipses or describe graph labels such as traits as labels."
         )

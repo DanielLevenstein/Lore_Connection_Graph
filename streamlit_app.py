@@ -297,22 +297,19 @@ def remove_auto_generated_section(profile: CharacterProfile, section: str) -> li
 
 
 def accept_current_character_text(profile: CharacterProfile) -> CharacterProfile:
-    accepted = profile
-    if profile.original_backstory.strip():
-        accepted = replace(
-            accepted,
-            original_backstory="",
-            auto_generated_sections=remove_auto_generated_section(accepted, "Character Backstory"),
-            updated_sections=remove_updated_section(accepted.updated_sections or [], "Character Backstory"),
-        )
-    if profile.original_summary.strip():
-        accepted = replace(
-            accepted,
-            original_summary="",
-            auto_generated_sections=remove_auto_generated_section(accepted, "Character Summary"),
-            updated_sections=remove_updated_section(accepted.updated_sections or [], "Character Summary"),
-        )
-    return accepted
+    auto_generated_sections = remove_auto_generated_section(profile, "Character Backstory")
+    auto_generated_sections = [
+        value for value in auto_generated_sections if value.lower() != "character summary"
+    ]
+    updated_sections = remove_updated_section(profile.updated_sections or [], "Character Backstory")
+    updated_sections = remove_updated_section(updated_sections, "Character Summary")
+    return replace(
+        profile,
+        original_backstory="",
+        original_summary="",
+        auto_generated_sections=auto_generated_sections,
+        updated_sections=updated_sections,
+    )
 
 
 def graph_generated_summary(character: Character, profile: CharacterProfile) -> str:

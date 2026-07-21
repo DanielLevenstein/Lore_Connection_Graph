@@ -29,6 +29,11 @@ Current branch has a backstory rewrite function, but it's disabled because of lo
 - Top-level Streamlit tab state needs careful handling, so validation errors do not move the user to another tab.
 - The current rewrite path should be simplified and tested before merging back to main.
 
+## Completed - Qwen 0.5B Report Rerun - 2026-07-21 - feature/character_rewrite
+- Switched the local rewrite model defaults and advanced JSON config to `Qwen/Qwen2.5-0.5B-Instruct-GGUF` with the `Q4_K_M` artifact.
+- Regenerated the single-character backstory report, single-character summary report, multi-character rewrite comparison, and sentence-length charts.
+- Testing: `.venv/bin/python scripts/generate_single_character_backstory_rewrite_report.py`; `.venv/bin/python scripts/generate_single_character_summary_rewrite_report.py`; `.venv/bin/python scripts/generate_multi_character_rewrite_report.py`; `PYTHONPATH=. .venv/bin/python -m pytest tests/test_semantic_improvement_report.py tests/test_multi_character_rewrite_report.py tests/test_character_rewrite_model_lifecycle.py -q`.
+
 ### Character Rewrite Metadata Stabilization
 
 - Centralized deterministic rewrite story signals so summary, backstory, prompt context, and required-term scoring use the same profile-plus-graph facts.

@@ -9,9 +9,9 @@
 
 | Metric            | Value                                                |
 | ----------------- | ---------------------------------------------------- |
-| Model             | JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF           |
+| Model             | Qwen/Qwen2.5-0.5B-Instruct-GGUF                      |
 | Quantization      | Q4_K_M                                               |
-| Prompt version    | character-rewrite-v7-local-qwen-1.5b-writing-quality |
+| Prompt version    | character-rewrite-v7-local-qwen-0.5b-writing-quality |
 | Max tokens        | 640                                                  |
 | Temperature       | 0.75                                                 |
 | Top P             | 0.85                                                 |
@@ -23,17 +23,17 @@
 | GPU layers        | 0                                                    |
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
-| Prompt hash       | 8c32c67093ca575a                                     |
-| Prompt eval time  | 10245.60 ms                                          |
-| Prompt tokens     | 369                                                  |
-| Completion tokens | 54                                                   |
-| Total tokens      | 423                                                  |
+| Prompt hash       | 059deadfda616978                                     |
+| Prompt eval time  | 974.55 ms                                            |
+| Prompt tokens     | 365                                                  |
+| Completion tokens | 153                                                  |
+| Total tokens      | 518                                                  |
 
 ## Candidate
 
-### Local Model Rewrite
+### Model Rewrite
 
-Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable act of mercy from a monstrous leviathan that ignited her burning oath to track and face the beast, blending nomadic hunter-memories with this quest for vengeance.
+Jory Ravenmark is a Human Barbarian with strong feelings towards her nomadic hunter memories and a burning oath to track down and face the monstrous leviathan that has inexplicably shown mercy.
 
 ### Existing Summary
 
@@ -49,11 +49,11 @@ Jory Ravenmark directed her grief to become a beacon of light to her community h
 
 ## Scores
 
-| Candidate           | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality |
-| ------------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: |
-| Newest Model Rewrite| Accepted | 73.49   | 100.00               | 67.11      | 8.00                  | 25.00            |
-| Existing Summary    | Rejected | 52.78   | 100.00               | 72.24      | 48.00                 | 62.50            |
-| Source Backstory    | Source   | 63.44   | 31.75                | 90.26      | 72.89                 | 84.26            |
+| Candidate        | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality |
+| ---------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: |
+| Model Rewrite    | Accepted | 77.57   | 100.00               | 52.58      | 56.00                 | 70.83            |
+| Existing Summary | Rejected | 52.78   | 100.00               | 72.24      | 48.00                 | 62.50            |
+| Source Backstory | Source   | 63.44   | 31.75                | 90.26      | 72.89                 | 84.26            |
 
 ### Rejection Reasons
 
@@ -65,4 +65,4 @@ Jory Ravenmark directed her grief to become a beacon of light to her community h
 
 ## Result
 
-The Newest Model Rewritechanges the writing quality score versus the original section by `0.1005`.
+The model rewrite changes the writing quality score versus the original section by `0.1413`.
