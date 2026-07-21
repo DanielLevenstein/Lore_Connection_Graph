@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR))
@@ -12,12 +13,13 @@ from character_graph.ingest import load_backstory
 from language_model.character_rewrites import (
     RewriteClient,
     graph_generated_backstory,
+    graph_generated_summary,
     rewrite_quality_context,
     rewrite_required_terms,
     semantic_rewrite_score,
 )
 from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_language_model_config
-from language_model.rewrite_quality import writing_quality_score
+from language_model.rewrite_quality import SENTENCE_LENGTH_PENALTY_PER_WORD, writing_quality_score
 from language_model.storage import Character, read_character_profile
 
 
@@ -25,6 +27,17 @@ DEFAULT_CHARACTER_PATH = ROOT_DIR / "tests" / "fixtures" / "character_sheets" / 
 DEFAULT_REPORT_PATH = ROOT_DIR / "docs" / "reports" / "semantic_backstory_improvement.md"
 DEFAULT_SENTENCE_LENGTH_CHART_PATH = ROOT_DIR / "docs" / "reports" / "semantic_sentence_lengths.png"
 ACCEPTANCE_SCORE_THRESHOLD = 70.0
+SUMMARY_LENGTH_TARGET_MIN_WORDS = 30
+SUMMARY_LENGTH_TARGET_MAX_WORDS = 60
+
+
+@dataclass(frozen=True)
+class CandidateScore:
+    label: str
+    text: str
+    semantic_score: object
+    writing_score: object
+    status: str
 
 
 def build_report(
@@ -32,71 +45,105 @@ def build_report(
     rewrite_client: RewriteClient | None = None,
     sentence_length_chart_path: Path | None = None,
 ) -> str:
+    return build_character_rewrite_report(
+        character_path=character_path,
+        rewrite_client=rewrite_client,
+        sentence_length_chart_path=sentence_length_chart_path,
+        report_title="Semantic Improvement Report: Orin Nightbloom",
+        rewrite_kind="backstory",
+        generate_model_text=graph_generated_backstory,
+        existing_label="Existing Generated Section",
+        original_label="Original Backstory",
+        include_summary_length_score=False,
+    )
+
+
+def build_character_rewrite_report(
+    character_path: Path,
+    rewrite_client: RewriteClient | None,
+    sentence_length_chart_path: Path | None,
+    report_title: str,
+    rewrite_kind: str,
+    generate_model_text: Callable,
+    existing_label: str,
+    original_label: str,
+    include_summary_length_score: bool,
+) -> str:
     character = Character(name=character_path.stem, path=character_path)
     profile = read_character_profile(character)
     graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
     rewrite_client = rewrite_client or real_model_rewrite_client()
-    model_error = ""
+    model_rejected = False
     try:
-        model_story = graph_generated_backstory(graph, profile, rewrite_client=rewrite_client)
+        model_story = generate_model_text(graph, profile, rewrite_client=rewrite_client)
     except RuntimeError as exc:
-        model_story = ""
-        model_error = str(exc)
+        model_story = getattr(exc, "candidate_text", "")
+        model_rejected = True
     model_metadata = getattr(rewrite_client, "last_metadata", {})
-    existing_generated_backstory = profile.backstory
-    original_backstory = profile.original_backstory or profile.backstory
+    existing_text = existing_candidate_text(profile, rewrite_kind)
+    original_text = original_candidate_text(profile, rewrite_kind)
     source_context = rewrite_quality_context(graph, profile)
     required_terms = rewrite_required_terms(graph, profile)
     model_semantic_score = semantic_rewrite_score(model_story, source_context, required_terms)
-    existing_generated_semantic_score = semantic_rewrite_score(existing_generated_backstory, source_context, required_terms)
-    original_semantic_score = semantic_rewrite_score(original_backstory, source_context, required_terms)
+    existing_generated_semantic_score = semantic_rewrite_score(existing_text, source_context, required_terms)
+    original_semantic_score = semantic_rewrite_score(original_text, source_context, required_terms)
     model_writing_score = writing_quality_score(model_story)
-    existing_generated_writing_score = writing_quality_score(existing_generated_backstory)
-    original_writing_score = writing_quality_score(original_backstory)
+    existing_generated_writing_score = writing_quality_score(existing_text)
+    original_writing_score = writing_quality_score(original_text)
     delta = round(model_semantic_score.score - original_semantic_score.score, 4)
     candidate_scores = [
-        ("Local model rewrite", model_semantic_score, model_writing_score, status_for_score(model_semantic_score)),
-        (
-            "Existing generated section",
+        CandidateScore(
+            "Local model rewrite",
+            model_story,
+            model_semantic_score,
+            model_writing_score,
+            "Rejected" if model_rejected else status_for_score(model_semantic_score),
+        ),
+        CandidateScore(
+            existing_label,
+            existing_text,
             existing_generated_semantic_score,
             existing_generated_writing_score,
             status_for_score(existing_generated_semantic_score),
         ),
     ]
-    if original_backstory.strip() != existing_generated_backstory.strip():
-        candidate_scores.append(("Original section", original_semantic_score, original_writing_score, "Source"))
+    if original_text.strip() != existing_text.strip():
+        candidate_scores.append(CandidateScore(original_label, original_text, original_semantic_score, original_writing_score, "Source"))
     if sentence_length_chart_path:
         render_sentence_length_chart(
-            [(label, writing_score) for label, _semantic_score, writing_score, _status in candidate_scores],
+            [(candidate.label, candidate.writing_score) for candidate in candidate_scores],
             sentence_length_chart_path,
         )
     score_rows = [
-        score_row(label, semantic_score, writing_score, status)
-        for label, semantic_score, writing_score, status in candidate_scores
+        score_row(candidate, include_summary_length_score=include_summary_length_score)
+        for candidate in candidate_scores
     ]
+    score_headers = ["Candidate", "Status", "Overall", "Similarity", "Sentence Length Score", "Sentence Quality"]
+    score_alignments = ["left", "left", "right", "right", "right", "right"]
+    if include_summary_length_score:
+        score_headers.insert(2, "Summary Length Score")
+        score_alignments.insert(2, "right")
     score_table = markdown_table(
-        ["Candidate", "Status", "Overall", "Similarity", "Sentence Length Score", "Sentence Quality"],
+        score_headers,
         score_rows,
-        alignments=["left", "left", "right", "right", "right", "right"],
+        alignments=score_alignments,
     )
 
     chart_markdown = sentence_length_chart_markdown(sentence_length_chart_path)
     return (
-        "# Semantic Improvement Report: Orin Nightbloom\n\n"
+        f"# {report_title}\n\n"
         "## Rewrite Engine\n\n"
         f"- Rewrite engine: `{LOCAL_REWRITE_MODEL_ENGINE}`\n"
         "- Evaluation: semantic similarity, sentence length fit, and sentence quality.\n\n"
         "## Model Runtime\n\n"
         f"{model_runtime_section(model_metadata)}\n\n"
-        f"{model_error_section(model_error)}"
         "## Candidate\n\n"
         "### Local Model Rewrite\n\n"
         f"{model_candidate_section(model_story)}\n\n"
-        f"{model_error_section(model_error)}"
-        "### Existing Generated Section\n\n"
-        f"{existing_generated_backstory}\n\n"
-        "### Original Backstory\n\n"
-        f"{original_backstory}\n\n"
+        f"### {existing_label}\n\n"
+        f"{existing_text}\n\n"
+        f"### {original_label}\n\n"
+        f"{original_text}\n\n"
         "## Scores\n\n"
         f"{score_table}\n\n"
         "## Sentence Lengths\n\n"
@@ -104,6 +151,18 @@ def build_report(
         "## Result\n\n"
         f"{result_summary(model_story, delta)}\n"
     )
+
+
+def existing_candidate_text(profile, rewrite_kind: str) -> str:
+    if rewrite_kind == "summary":
+        return profile.summary
+    return profile.backstory
+
+
+def original_candidate_text(profile, rewrite_kind: str) -> str:
+    if rewrite_kind == "summary":
+        return profile.backstory or profile.original_backstory or profile.summary
+    return profile.original_backstory or profile.backstory
 
 
 def model_runtime_section(metadata: dict) -> str:
@@ -135,8 +194,6 @@ def model_runtime_section(metadata: dict) -> str:
 def model_candidate_section(model_story: str) -> str:
     return model_story
 
-def model_error_section(model_error: str) -> str:
-    return f" \n\nERROR: {model_error}" if model_error else ""
 
 def result_summary(model_story: str, delta: float) -> str:
     if not model_story.strip():
@@ -156,15 +213,18 @@ def real_model_rewrite_client() -> RewriteClient:
     )
 
 
-def score_row(label: str, semantic_score, writing_score, status: str) -> list[str]:
-    return [
-        label,
-        status,
-        f"{normalized_score(semantic_score.score):.2f}",
-        f"{normalized_score(semantic_score.semantic_similarity):.2f}",
-        f"{writing_score.sentence_length:.2f}",
-        f"{normalized_score(semantic_score.concision):.2f}",
+def score_row(candidate: CandidateScore, include_summary_length_score: bool = False) -> list[str]:
+    row = [
+        candidate.label,
+        candidate.status,
+        f"{normalized_score(candidate.semantic_score.score):.2f}",
+        f"{normalized_score(candidate.semantic_score.semantic_similarity):.2f}",
+        f"{candidate.writing_score.sentence_length:.2f}",
+        f"{normalized_score(candidate.semantic_score.concision):.2f}",
     ]
+    if include_summary_length_score:
+        row.insert(2, f"{summary_length_score(candidate.text):.2f}")
+    return row
 
 
 def normalized_score(score: float) -> float:
@@ -173,6 +233,21 @@ def normalized_score(score: float) -> float:
 
 def status_for_score(score) -> str:
     return "Accepted" if normalized_score(score.score) >= ACCEPTANCE_SCORE_THRESHOLD else "Rejected"
+
+
+def summary_word_count(summary: str) -> int:
+    return len(summary.split())
+
+
+def summary_length_score(summary: str) -> float:
+    word_count = summary_word_count(summary)
+    if SUMMARY_LENGTH_TARGET_MIN_WORDS <= word_count <= SUMMARY_LENGTH_TARGET_MAX_WORDS:
+        return 100.0
+    difference = min(
+        abs(word_count - SUMMARY_LENGTH_TARGET_MIN_WORDS),
+        abs(word_count - SUMMARY_LENGTH_TARGET_MAX_WORDS),
+    )
+    return max(0.0, 100.0 - (difference * SENTENCE_LENGTH_PENALTY_PER_WORD))
 
 
 def sentence_length_rows(candidates: list[tuple[str, object]]) -> list[list[str]]:

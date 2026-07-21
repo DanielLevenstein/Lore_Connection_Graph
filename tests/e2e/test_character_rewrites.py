@@ -132,7 +132,7 @@ def test_semantic_improvement_report_includes_scores_and_result():
     assert "# Semantic Improvement Report: Orin Nightbloom" in report
     assert "semantic similarity, sentence length fit, and sentence quality" in report
     assert "Local model rewrite" in report
-    assert "Existing generated section" in report
+    assert "Existing Generated Section" in report
     assert "Original section" in report
     assert "## Sentence Lengths" in report
     assert "Sentence Length Score" in report

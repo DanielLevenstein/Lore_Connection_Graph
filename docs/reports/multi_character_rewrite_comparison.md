@@ -19,7 +19,7 @@
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
 | Prompt hash       | 9f1d57257b232b81                                     |
-| Prompt eval time  | 11861.11 ms                                          |
+| Prompt eval time  | 12666.18 ms                                          |
 | Prompt tokens     | 665                                                  |
 | Completion tokens | 269                                                  |
 | Total tokens      | 934                                                  |
@@ -34,17 +34,17 @@
 
 | Character       | Status   | Summary Length Score | Overall | Similarity | Sentence Length Score | Sentence Quality |
 | --------------- | -------- | -------------------: | ------: | ---------: | --------------------: | ---------------: |
-| Orin Nightbloom | Rejected | 100.00               | 61.87   | 66.05      | 46.00                 | 81.25            |
-| Jory Ravenmark  | Rejected | 36.00                | 20.00   | 0.00       | 96.00                 | 100.00           |
-| Neal Lovington  | Accepted | 100.00               | 71.56   | 56.18      | 64.00                 | 95.83            |
+| Orin Nightbloom | Rejected | 100.00               | 61.87   | 66.05      | 66.00                 | 81.25            |
+| Jory Ravenmark  | Rejected | 0.00                 | 56.48   | 71.64      | 50.67                 | 60.58            |
+| Neal Lovington  | Accepted | 100.00               | 71.56   | 56.18      | 84.00                 | 95.83            |
 
 ## Generated Backstory Scores
 
 | Character       | Status   | Overall | Similarity | Sentence Length Score | Sentence Quality |
 | --------------- | -------- | ------: | ---------: | --------------------: | ---------------: |
-| Orin Nightbloom | Accepted | 74.24   | 64.73      | 66.40                 | 89.17            |
-| Jory Ravenmark  | Rejected | 68.36   | 69.16      | 82.00                 | 92.22            |
-| Neal Lovington  | Rejected | 68.46   | 61.95      | 61.14                 | 90.71            |
+| Orin Nightbloom | Accepted | 74.24   | 64.73      | 75.20                 | 89.17            |
+| Jory Ravenmark  | Rejected | 68.36   | 69.16      | 86.00                 | 92.22            |
+| Neal Lovington  | Rejected | 68.46   | 61.95      | 58.29                 | 90.71            |
 
 ## Character Outputs
 
@@ -68,7 +68,11 @@ Source material: current character backstory
 
 #### Generated Summary
 
-Exception thrown on candidate generation local model rewrite returned an unusable rewrite: repetitive wording._
+Jory Ravenmark is a Human Barbarian haunted by her mother's loss at sea and her father’s loneliness from heavy drinking, leading her to blend nomadic hunter memories with a burning oath against tracking and facing a monstrous leviathan. Jory's parents' untimely deaths led her to adopt their legacy as she seeks justice through relentless pursuit of the beast that could have taken them both.
+
+Jory Ravenmark is a Human Barbarian who has adopted her mother’s nomadic hunting lifestyle but has also developed a burning oath against tracking and facing what some believe is an inexplicably merciful leviathan. Her parents' untimely deaths drove Jory to adopt their legacy as she pursues justice through relentless pursuit of the beast that could have taken them both, blending her memories with her rage.
+
+Jory Ravenmark, a Human Barbarian, seeks revenge against a monstrous Leviathan after losing her mother and father at sea, leading her to blend her nomadic hunting experiences with a burning oath. Her parents' untimely deaths drove Jory into adopting their legacy as she pursues justice through relentless pursuit of the beast that could have taken them both, blending her memories with her rage.
 
 #### Generated Backstory
 

@@ -1,4 +1,5 @@
 import scripts.generate_semantic_improvement_report as report_script
+import scripts.generate_semantic_summary_improvement_report as summary_report_script
 from language_model.character_rewrites import rewrite_concision_score
 from language_model.rewrite_quality import TARGET_SENTENCE_WORD_COUNT, sentence_length_distribution, writing_quality_score
 from scripts.generate_semantic_improvement_report import (
@@ -52,6 +53,16 @@ class FailingRewriteClient(FakeRewriteClient):
         raise RuntimeError("fixture model echoed the prompt")
 
 
+class RepetitiveRewriteClient(FakeRewriteClient):
+    def __call__(self, messages):
+        return (
+            "Jory Ravenmark keeps searching the sea for the beast that took her family. "
+            "She follows every storm track and every rumor she can find. "
+            "She follows every storm track and every rumor she can find. "
+            "She follows every storm track and every rumor she can find."
+        )
+
+
 def test_semantic_report_formats_three_version_score_table():
     report = build_report(rewrite_client=FakeRewriteClient())
     score_table = report.split("## Scores", 1)[1].split("## Sentence Lengths", 1)[0]
@@ -62,8 +73,8 @@ def test_semantic_report_formats_three_version_score_table():
         and (
             "Candidate" in line
             or "Local model rewrite" in line
-            or "Existing generated section" in line
-            or "Original section" in line
+            or "Existing Generated Section" in line
+                or "Original Backstory" in line
             or "---" in line
         )
     ]
@@ -89,8 +100,8 @@ def test_semantic_report_formats_three_version_score_table():
     assert "Sentence Quality" in report
     assert "## Sentence Lengths" in report
     assert any("Local model rewrite" in line for line in table_lines)
-    assert any("Existing generated section" in line for line in table_lines)
-    assert any("Original section" in line for line in table_lines)
+    assert any("Existing Generated Section" in line for line in table_lines)
+    assert any("Original Backstory" in line for line in table_lines)
     assert len({len(line) for line in table_lines}) == 1
 
 
@@ -106,11 +117,11 @@ def test_sentence_length_distribution_reports_percentages_by_category():
         "twentyseven twentyeight twentynine thirty thirtyone thirtytwo thirtythree thirtyfour thirtyfive thirtysix."
     )
 
-    assert TARGET_SENTENCE_WORD_COUNT == 15
+    assert TARGET_SENTENCE_WORD_COUNT == 20
     assert [(bucket.category, bucket.word_range, bucket.count, bucket.percentage) for bucket in distribution] == [
         ("Fragment", "0-5", 1, 20.0),
-        ("Short", "6-15", 1, 20.0),
-        ("Medium", "16-25", 1, 20.0),
+        ("Short", "6-15", 2, 40.0),
+        ("Medium", "16-25", 0, 0.0),
         ("Long", "26-35", 1, 20.0),
         ("Run-on", "36+", 1, 20.0),
     ]
@@ -193,6 +204,24 @@ def test_semantic_report_embeds_sentence_length_chart_when_path_is_provided(tmp_
     assert chart_path.exists()
 
 
+def test_summary_report_uses_jory_and_summary_score_table(tmp_path):
+    chart_path = tmp_path / "summary-sentence-lengths.png"
+
+    report = summary_report_script.build_report(
+        rewrite_client=FakeRewriteClient(),
+        sentence_length_chart_path=chart_path,
+    )
+    score_table = report.split("## Scores", 1)[1].split("## Sentence Lengths", 1)[0]
+
+    assert "# Semantic Summary Improvement Report: Jory Ravenmark" in report
+    assert "Existing Summary" in report
+    assert "Source Backstory" in report
+    assert "Summary Length Score" in score_table
+    assert "Coverage" not in score_table
+    assert f"![Sentence length distribution]({chart_path.as_posix()})" in report
+    assert chart_path.exists()
+
+
 def test_semantic_report_defaults_to_real_model_client(monkeypatch):
     calls = []
 
@@ -211,10 +240,26 @@ def test_semantic_report_defaults_to_real_model_client(monkeypatch):
 def test_semantic_report_records_rejected_model_candidate():
     report = build_report(rewrite_client=FailingRewriteClient())
 
-    assert "ERROR:" in report
-    assert "fixture model echoed the prompt" in report
+    assert "## Model Error" not in report
+    assert "ERROR:" not in report
+    assert "fixture model echoed the prompt" not in report
+    assert "prompt## Candidate" not in report
+    assert "prompt.### Existing" not in report
+    local_candidate = report.split("### Local Model Rewrite", 1)[1].split("### Existing", 1)[0]
+    assert local_candidate.strip() == ""
     assert "Local model rewrite        | Rejected" in report
     assert "existing generated section remains the better candidate" in report
+
+
+def test_summary_report_keeps_rejected_generated_text_outside_error_section():
+    report = summary_report_script.build_report(rewrite_client=RepetitiveRewriteClient())
+
+    assert "## Model Error" not in report
+    assert "ERROR:" not in report
+    assert "repetitive wording" not in report
+    local_candidate = report.split("### Local Model Rewrite", 1)[1].split("### Existing Summary", 1)[0]
+    assert "Jory Ravenmark keeps searching the sea" in local_candidate
+    assert "Local model rewrite | Rejected" in report
 
 
 def test_rewrite_concision_score_penalizes_run_on_sentences():

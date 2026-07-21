@@ -14,6 +14,12 @@ REWRITE_ENGINE_NAME = "deterministic-graph-rewrite"
 RewriteClient = Callable[[list[dict[str, str]]], str]
 
 
+class RejectedRewrite(RuntimeError):
+    def __init__(self, message: str, candidate_text: str = "") -> None:
+        super().__init__(message)
+        self.candidate_text = candidate_text
+
+
 @dataclass(frozen=True)
 class RewriteQualityScore:
     score: float
@@ -82,13 +88,16 @@ def run_graph_rewrite(
     cleaned = clean_model_rewrite(response)
     engine_name = "local model rewrite" if rewrite_client else REWRITE_ENGINE_NAME
     if not cleaned:
-        raise RuntimeError(f"{engine_name} returned an empty rewrite.")
+        raise RejectedRewrite(f"{engine_name} returned an empty rewrite.", candidate_text=cleaned)
     rewritten = humanize_generated_text(cleaned)
     if rewrite_client and kind == "backstory":
         rewritten = trim_backstory_candidate(rewritten)
     quality_issues = model_rewrite_quality_issues(rewritten)
     if quality_issues:
-        raise RuntimeError(f"{engine_name} returned an unusable rewrite: {', '.join(quality_issues)}.")
+        raise RejectedRewrite(
+            f"{engine_name} returned an unusable rewrite: {', '.join(quality_issues)}.",
+            candidate_text=rewritten,
+        )
     return rewritten
 
 

@@ -24,7 +24,7 @@
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
 | Prompt hash       | 02f0e87e27d4b079                                     |
-| Prompt eval time  | 15056.71 ms                                          |
+| Prompt eval time  | 22484.59 ms                                          |
 | Prompt tokens     | 679                                                  |
 | Completion tokens | 477                                                  |
 | Total tokens      | 1156                                                 |
@@ -58,8 +58,8 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 | Candidate                  | Status   | Overall | Similarity | Sentence Length Score | Sentence Quality |
 | -------------------------- | -------- | ------: | ---------: | --------------------: | ---------------: |
 | Local model rewrite        | Rejected | 59.71   | 67.07      | 59.20                 | 68.67            |
-| Existing generated section | Accepted | 75.88   | 73.34      | 75.00                 | 82.29            |
-| Original section           | Source   | 54.70   | 78.75      | 56.53                 | 51.29            |
+| Existing Generated Section | Accepted | 75.88   | 73.34      | 75.00                 | 82.29            |
+| Original Backstory         | Source   | 54.70   | 78.75      | 56.53                 | 51.29            |
 
 ## Sentence Lengths
 

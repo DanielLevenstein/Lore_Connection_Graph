@@ -18,9 +18,15 @@ from language_model.character_rewrites import (
     semantic_rewrite_score,
 )
 from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_language_model_config
-from language_model.rewrite_quality import SENTENCE_LENGTH_PENALTY_PER_WORD, writing_quality_score
+from language_model.rewrite_quality import writing_quality_score
 from language_model.storage import Character, CharacterProfile, read_character_profile
-from scripts.generate_semantic_improvement_report import markdown_table, model_runtime_section, normalized_score, status_for_score
+from scripts.generate_semantic_improvement_report import (
+    markdown_table,
+    model_runtime_section,
+    normalized_score,
+    status_for_score,
+    summary_length_score,
+)
 
 
 CHARACTER_SHEETS_DIR = ROOT_DIR / "tests" / "fixtures" / "character_sheets"
@@ -30,8 +36,8 @@ DEFAULT_CHARACTER_PATHS = [
     CHARACTER_SHEETS_DIR / "Neal_Lovington.md",
 ]
 DEFAULT_REPORT_PATH = ROOT_DIR / "docs" / "reports" / "multi_character_rewrite_comparison.md"
-SUMMARY_LENGTH_TARGET_MIN_WORDS = 30
-SUMMARY_LENGTH_TARGET_MAX_WORDS = 60
+
+# TODO: Refactor this report to use the combined single-character report scoring/rendering helpers.
 
 
 def build_report(
@@ -148,11 +154,7 @@ def source_label(profile: CharacterProfile) -> str:
 
 
 def generated_candidate(generate) -> str:
-    try:
-        return generate()
-    except RuntimeError as exc:
-        return f"Exception thrown on candidate generation {exc}_"
-
+    return generate()
 
 def summary_score_row(character_name: str, summary: str, score, writing_score) -> list[str]:
     return [
@@ -179,17 +181,6 @@ def score_row(character_name: str, score, writing_score) -> list[str]:
 
 def summary_word_count(summary: str) -> int:
     return len(summary.split())
-
-
-def summary_length_score(summary: str) -> float:
-    word_count = summary_word_count(summary)
-    if SUMMARY_LENGTH_TARGET_MIN_WORDS <= word_count <= SUMMARY_LENGTH_TARGET_MAX_WORDS:
-        return 100.0
-    difference = min(
-        abs(word_count - SUMMARY_LENGTH_TARGET_MIN_WORDS),
-        abs(word_count - SUMMARY_LENGTH_TARGET_MAX_WORDS),
-    )
-    return max(0.0, 100.0 - (difference * SENTENCE_LENGTH_PENALTY_PER_WORD))
 
 
 def real_model_rewrite_client() -> RewriteClient:
