@@ -17,6 +17,7 @@ from language_model.character_rewrites import (
     run_graph_rewrite,
     rewrite_prompt,
     rewrite_required_terms,
+    trim_summary_candidate,
 )
 from language_model.rewrite_model import (
     LocalRewriteModelConfig,
@@ -139,6 +140,19 @@ def test_backstory_prompt_lists_required_coverage_phrases():
     assert "- stop a younger relative from repeating their worst choice" in prompt
     assert "- break a curse that only worsens when ignored" in prompt
     assert "- Orin Nightbloom's Mother" in prompt
+
+
+def test_summary_prompt_requests_one_summary_only():
+    character_path = FIXTURE_CHARACTER_SHEETS_DIR / "Jory_Ravenmark.md"
+    character = Character(name=character_path.stem, path=character_path)
+    profile = read_character_profile(character)
+    graph = extract_character_graph(load_backstory(character_path, character_id=character.name))
+
+    prompt = rewrite_prompt("summary", graph, profile)
+
+    assert "Write one polished character summary paragraph in 30 to 60 words." in prompt
+    assert "Return exactly one summary, not alternatives or drafts." in prompt
+    assert "Write three" not in prompt
 
 
 def test_external_model_generation_is_disabled():
@@ -299,6 +313,18 @@ Knowledge graph segments:
     )
 
     assert cleaned == ""
+
+
+def test_trim_summary_candidate_keeps_one_concise_candidate():
+    summary = trim_summary_candidate(
+        "Jory Ravenmark is a Human Barbarian haunted by family loss and sworn to hunt the leviathan that "
+        "destroyed her home. She turns grief into fierce protection for other sea-scarred families.\n\n"
+        "Jory Ravenmark is another possible summary that should not be kept."
+    )
+
+    assert "another possible summary" not in summary
+    assert "\n\n" not in summary
+    assert 30 <= len(summary.split()) <= 60
 
 
 def test_model_rewrite_quality_flags_repetition_and_truncation():

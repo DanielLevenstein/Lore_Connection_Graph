@@ -37,9 +37,6 @@ DEFAULT_CHARACTER_PATHS = [
 ]
 DEFAULT_REPORT_PATH = ROOT_DIR / "docs" / "reports" / "multi_character_rewrite_comparison.md"
 
-# TODO: Refactor this report to use the combined single-character report scoring/rendering helpers.
-
-
 def build_report(
     character_paths: list[Path] | None = None,
     rewrite_client: RewriteClient | None = None,
@@ -84,7 +81,7 @@ def summary_score_table_for_results(results: list[dict]) -> str:
         for result in results
     ]
     return markdown_table(
-        ["Character", "Status", "Summary Length Score", "Overall", "Similarity", "Sentence Length Score", "Sentence Quality"],
+        ["Character", "Status", "Overall", "Summary Length Score", "Similarity", "Sentence Length Score", "Sentence Quality"],
         rows,
         alignments=["left", "left", "right", "right", "right", "right", "right"],
     )
@@ -163,8 +160,8 @@ def summary_score_row(character_name: str, summary: str, score, writing_score) -
     return [
         character_name,
         status_for_score(score),
-        f"{summary_length_score(summary):.2f}",
         f"{normalized_score(score.score):.2f}",
+        f"{summary_length_score(summary):.2f}",
         f"{normalized_score(score.semantic_similarity):.2f}",
         f"{writing_score.sentence_length:.2f}",
         f"{normalized_score(score.concision):.2f}",

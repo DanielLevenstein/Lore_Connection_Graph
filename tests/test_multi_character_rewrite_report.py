@@ -72,6 +72,7 @@ def test_multi_character_report_compares_three_characters():
     assert "Status" in summary_table
     assert "Status" in backstory_table
     assert "Summary Length Score" in summary_table
+    assert summary_table.index("Overall") < summary_table.index("Summary Length Score")
     assert "Coverage" not in summary_table
     assert "Coverage" not in backstory_table
     assert "Sentence Length Score" in summary_table

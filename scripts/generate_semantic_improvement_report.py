@@ -119,8 +119,8 @@ def build_character_rewrite_report(
     score_headers = ["Candidate", "Status", "Overall", "Similarity", "Sentence Length Score", "Sentence Quality"]
     score_alignments = ["left", "left", "right", "right", "right", "right"]
     if include_summary_length_score:
-        score_headers.insert(2, "Summary Length Score")
-        score_alignments.insert(2, "right")
+        score_headers.insert(3, "Summary Length Score")
+        score_alignments.insert(3, "right")
     score_table = markdown_table(
         score_headers,
         score_rows,
@@ -221,7 +221,7 @@ def score_row(candidate: CandidateScore, include_summary_length_score: bool = Fa
         f"{normalized_score(candidate.semantic_score.concision):.2f}",
     ]
     if include_summary_length_score:
-        row.insert(2, f"{summary_length_score(candidate.text):.2f}")
+        row.insert(3, f"{summary_length_score(candidate.text):.2f}")
     return row
 
 

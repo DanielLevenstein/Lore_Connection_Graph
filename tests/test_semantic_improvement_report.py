@@ -232,21 +232,22 @@ def test_summary_report_scores_existing_summary_not_backstory():
     profile = read_character_profile(character)
     report = summary_report_script.build_report(rewrite_client=FakeRewriteClient())
     score_table = report.split("## Scores", 1)[1].split("## Sentence Lengths", 1)[0]
+    table_lines = [line for line in score_table.splitlines() if line.startswith("| ") and "---" not in line]
+    headers = [cell.strip() for cell in table_lines[0].strip("|").split("|")]
+    summary_length_index = headers.index("Summary Length Score")
+    overall_index = headers.index("Overall")
     rows = {
         cells[0]: cells
-        for cells in (
-            [cell.strip() for cell in line.strip("|").split("|")]
-            for line in score_table.splitlines()
-            if line.startswith("| ") and "---" not in line and "Candidate" not in line
-        )
+        for cells in ([cell.strip() for cell in line.strip("|").split("|")] for line in table_lines[1:])
     }
 
     existing_summary_length_score = f"{summary_length_score(profile.summary):.2f}"
     source_backstory_length_score = f"{summary_length_score(profile.backstory):.2f}"
 
-    assert rows["Existing Summary"][2] == existing_summary_length_score
-    assert rows["Existing Summary"][2] != source_backstory_length_score
-    assert rows["Source Backstory"][2] == source_backstory_length_score
+    assert overall_index < summary_length_index
+    assert rows["Existing Summary"][summary_length_index] == existing_summary_length_score
+    assert rows["Existing Summary"][summary_length_index] != source_backstory_length_score
+    assert rows["Source Backstory"][summary_length_index] == source_backstory_length_score
 
 
 def test_semantic_report_defaults_to_real_model_client(monkeypatch):

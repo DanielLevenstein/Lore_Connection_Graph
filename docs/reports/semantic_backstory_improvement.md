@@ -24,7 +24,7 @@
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
 | Prompt hash       | 02f0e87e27d4b079                                     |
-| Prompt eval time  | 15984.25 ms                                          |
+| Prompt eval time  | 10225.82 ms                                          |
 | Prompt tokens     | 679                                                  |
 | Completion tokens | 477                                                  |
 | Total tokens      | 1156                                                 |
