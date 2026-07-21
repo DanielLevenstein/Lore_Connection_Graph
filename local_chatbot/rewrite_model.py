@@ -46,9 +46,9 @@ class LocalRewriteModelConfig:
     download_url: str = DEFAULT_MODEL_URL
     cache_dir: Path = DEFAULT_MODEL_CACHE_DIR
     prompt_version: str = LOCAL_REWRITE_PROMPT_VERSION
-    max_tokens: int = 420
+    max_tokens: int = 640
     temperature: float = 0.2
-    n_ctx: int = 2048
+    n_ctx: int = 8192
     n_batch: int = 64
     n_threads: int = 2
     n_gpu_layers: int = 0

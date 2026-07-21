@@ -75,7 +75,7 @@ models/local_language_model/
 
 That directory is ignored by git so the model is visible for local disk cleanup without being committed.
 
-The default rewrite model is `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF:Q4_K_M`. Advanced users can switch the JSON config to a smaller or larger GGUF model when they want to tune the speed/quality tradeoff.
+The default rewrite model is `Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M`. Advanced users can switch the JSON config to a smaller or larger GGUF model when they want to tune the speed/quality tradeoff.
 
 Advanced users can change the model, quantization, download URL, and runtime settings in:
 

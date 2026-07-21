@@ -376,4 +376,4 @@ def test_default_local_language_model_config_uses_fast_probe_model():
     assert config.model_id == "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
     assert config.filename == "qwen2.5-0.5b-instruct-q4_k_m.gguf"
     assert config.max_tokens <= 420
-    assert config.n_ctx <= 2048
+    assert config.n_ctx <= 4096

@@ -13,16 +13,16 @@
 | Model             | Qwen/Qwen2.5-0.5B-Instruct-GGUF      |
 | Quantization      | Q4_K_M                               |
 | Prompt version    | character-rewrite-v5-local-qwen-0.5b |
-| Prompt eval time  | 2106.71 ms                           |
-| Prompt tokens     | 601                                  |
-| Completion tokens | 149                                  |
-| Total tokens      | 750                                  |
+| Prompt eval time  | 2104.46 ms                           |
+| Prompt tokens     | 586                                  |
+| Completion tokens | 178                                  |
+| Total tokens      | 764                                  |
 
 ## Candidate
 
 ### Local Model Rewrite
 
-Orin Nightbloom, a Half-Orc Bard, was born with a weight the world seldom places on a child, the weight of a half-orc heritage clashing with the refined air of the Sunstone Mage College nestled on the frosted coast of his life. He shouldered his lineage with the strength of a lineage elder, a duty his mother, a revered elven mage, instilled in him. He excelled, his magic a beacon in the world of magic, but the weight of his heritage and the burden of his family's legacy weighed heavily on him. The loss of Orin Nightbloom's Mother, a revered elven mage, gave him a reason to understand the curse shadowing his family and to...
+Orin Nightbloom, a Half-Orc Bard, was born with a weight the world seldom places on a child, the weight of a half-orc heritage clashing with the refined air of the Sunstone Mage College nestled on the frosted coast of his life. He shouldered his lineage with the strength of a lineage elder, a duty his mother, a revered elven mage, instilled in him. Orin excelled, his magic a beacon in. He came of age at Sunstone Mage College, a place that sharpened both his talent and his sense of exile. The loss of Orin Nightbloom's Mother left more than grief behind; it gave Orin a reason to understand the curse shadowing his family and to. He sought to break a curse that only worsens when ignored, a drive that stops a younger relative from repeating their worst choice.
 
 ### Existing Generated Section
 
@@ -44,10 +44,10 @@ Orin now sees his path illuminated: a bard, a weaver of defiance, his music is a
 
 | Candidate                  | Status   | Overall | Similarity | Coverage | Concision |
 | -------------------------- | -------- | ------: | ---------: | -------: | --------: |
-| Local model rewrite        | Accepted | 0.7380  | 0.8265     | 0.6250   | 0.8375    |
+| Local model rewrite        | Accepted | 0.7728  | 0.8510     | 0.7500   | 0.6875    |
 | Existing generated section | Accepted | 0.7754  | 0.7334     | 0.7500   | 0.9062    |
 | Original section           | Source   | 0.4444  | 0.7875     | 0.3750   | 0.0000    |
 
 ## Result
 
-The local model rewrite improves the overall quality score over the original section by `0.2936`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.
+The local model rewrite improves the overall quality score over the original section by `0.3284`. It keeps the core graph-backed concepts while turning the attribute graph into a cleaner narrative arc.

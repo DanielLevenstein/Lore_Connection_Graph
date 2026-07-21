@@ -27,13 +27,13 @@ Use a small local model through a narrow adapter, with the deterministic graph r
 
 Release behavior:
 
-- Preferred model: `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF:Q4_K_M`.
+- Preferred model: `Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M`.
 - Preferred runner: app-managed `llama cli` subprocess.
 - Fallback engine: `deterministic-graph-rewrite`.
 - Inputs: authored character profile fields plus compact knowledge graph segments for the character's identity, places, relationships, drives, alliances, enemies, traits, and evidence.
 - Role: generate compact summaries and backstory drafts from source-backed graph facts.
 
-The selected model is TinyLlama 1.1B Chat Q4_K_M because prior local-model experiments with TinyLlama were successful, while the current Qwen and SmolLM2 attempts were not stable enough for this rewrite path. SmolLM2 135M and 360M made prompt evaluation much faster, but both cut off prose mid-sentence or repeated themselves on the Orin fixture. Qwen2.5 0.5B produced complete prose in an earlier prompt shape, but with the compact graph-segment prompt it returned the stop marker instead of usable lore. TinyLlama should therefore be the active candidate while the compact graph-segment prompt and stricter output rejection checks remain in place.
+The selected model is Qwen2.5 0.5B Q4_K_M because it is the most promising local candidate after parser and prompt-boundary fixes. SmolLM2 135M and 360M made prompt evaluation much faster, but both cut off prose mid-sentence or repeated themselves on the Orin fixture. TinyLlama produced real prose, but copied fact-line wording and repeated itself. Qwen initially failed under the compact prompt because prompt truncation inserted ellipses and the parser did not strip Qwen chat-template artifacts; after switching to Qwen chat tokens and removing generated ellipses from prompt context, the real-model test produced accepted prose.
 
 This model must be treated as optional runtime data, not committed repository content. The app should report missing artifact/download status visibly and keep the current character fields unchanged until a clean candidate is produced and accepted.
 
@@ -43,8 +43,8 @@ The model rewrite output should be labeled as graph-backed generated text and sh
 
 References:
 
-- TinyLlama 1.1B Chat GGUF model card: <https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF>
-- Qwen 0.5B GGUF model card, rejected for the compact prompt path: <https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF>
+- Qwen 0.5B GGUF model card: <https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF>
+- TinyLlama 1.1B Chat GGUF model card, retained as a fallback comparison: <https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF>
 - SmolLM2 360M GGUF model card, rejected for truncated prose: <https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF>
 - SmolLM2 135M GGUF model card, rejected for repetition and truncated prose: <https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF>
 - llama.cpp install docs: <https://llama.cpp/>
@@ -85,15 +85,15 @@ The adapter must not expose LangChain, LangGraph, raw subprocess details, or dow
 
 The first implementation should prefer explicit configuration constants over broad settings machinery:
 
-- Model id: `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF`.
+- Model id: `Qwen/Qwen2.5-0.5B-Instruct-GGUF`.
 - Quantization: `Q4_K_M`.
-- Prompt version: `character-rewrite-v5-local-tinyllama-1.1b`.
+- Prompt version: `character-rewrite-v5-local-qwen-0.5b`.
 - Output mode: summary or backstory.
 - Max generated tokens: short bounded values appropriate to each mode.
 - Temperature: low, deterministic prose generation.
 - Context window, batch size, and thread count: conservative defaults chosen to avoid container memory spikes.
 
-If the selected TinyLlama model still fails semantic gates on the fixture set after graph-segment prompt cleanup, the next design review should compare a larger Qwen 1.5B candidate with the same compact prompt. The implementation should not silently promote to a larger model.
+If the selected Qwen 0.5B model still fails semantic gates on the fixture set after parser and graph-segment prompt cleanup, the next design review should compare TinyLlama and a larger Qwen 1.5B candidate with the same compact prompt. The implementation should not silently promote to a larger model.
 
 ## Service-Free Model Execution
 

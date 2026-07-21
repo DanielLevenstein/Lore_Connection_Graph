@@ -5,13 +5,13 @@ This branch preserves the experimental character rewrite work for review, but th
 
 ## Design Decision
 
-Use `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF:Q4_K_M` as the current local model candidate for character summary and backstory rewrites.
+Use `Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M` as the current local model candidate for character summary and backstory rewrites.
 
 Reasons:
 
-- TinyLlama has worked well in prior local-model experiments and is a better fit to try next than continuing with Qwen or SmolLM2 churn.
+- Qwen2.5 0.5B is the most promising candidate after fixing Qwen chat-template parsing and removing generated ellipses from prompt context.
 - SmolLM2 135M and 360M were faster, but both stopped mid-sentence or repeated prose on the Orin fixture.
-- Qwen2.5 0.5B produced complete prose under an earlier prompt shape, but returned unusable stop-marker output with the compact graph-segment prompt.
+- TinyLlama produced real prose, but copied fact-line wording and repeated itself.
 - It can run through an app-managed `llama cli` subprocess, avoiding a long-running local API server.
 - It preserves the existing injected `RewriteClient` testing shape, so unit tests can use fake clients and transcript fixtures.
 - It keeps the deterministic graph rewrite as the fallback and regression oracle.
@@ -39,14 +39,14 @@ Rejected option: LangChain/LangGraph orchestration around the rewrite model. It 
 - Top-level Streamlit tab state needs careful handling, so validation errors do not move the user to another tab.
 - The current rewrite path should be simplified and tested before merging back to main.
 - The semantic report currently describes `LangGraph Rewrite` even when the actual engine is `deterministic-graph-rewrite`; labels should reflect the local model candidate, existing generated section, and original section.
-- The selected TinyLlama model may still fail canon preservation; semantic and required-term gates must be allowed to reject it without damaging authored lore.
+- The selected Qwen 0.5B model may still fail canon preservation; semantic and required-term gates must be allowed to reject it without damaging authored lore.
 - Long prompts make the local CLI path too slow. The model prompt should provide the graph segments associated with the character instead of dumping every graph node and the full character sheet.
 
 ## Required Implementation Pass
 
 1. Add a local rewrite model adapter.
 
-   - Configure `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF:Q4_K_M` in code and in the advanced JSON config file, not in editable UI fields.
+   - Configure `Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M` in code and in the advanced JSON config file, not in editable UI fields.
    - Document `llama cli` installation in README.
    - Use an app-managed short-lived `llama cli` process for generation.
    - Do not call `llama serve`, require a localhost API endpoint, or leave background inference processes running.
@@ -96,4 +96,4 @@ Rejected option: LangChain/LangGraph orchestration around the rewrite model. It 
 
 ## Model Escalation Rule
 
-If `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF:Q4_K_M` cannot beat the original Orin backstory while preserving required terms after graph-segment prompt fixes, stop and document the failure. The next comparison candidate is `Qwen/Qwen2.5-1.5B-Instruct-GGUF:Q4_K_M`, but promotion to a different model should happen in a separate design update rather than silently inside implementation.
+If `Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M` cannot beat the original Orin backstory while preserving required terms after graph-segment prompt fixes, stop and document the failure. The next comparison candidates are TinyLlama and `Qwen/Qwen2.5-1.5B-Instruct-GGUF:Q4_K_M`, but promotion to a different model should happen in a separate design update rather than silently inside implementation.
