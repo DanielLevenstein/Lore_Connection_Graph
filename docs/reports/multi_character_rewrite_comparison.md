@@ -19,7 +19,7 @@
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
 | Prompt hash       | 9f1d57257b232b81                                     |
-| Prompt eval time  | 11846.12 ms                                          |
+| Prompt eval time  | 11533.68 ms                                          |
 | Prompt tokens     | 665                                                  |
 | Completion tokens | 269                                                  |
 | Total tokens      | 934                                                  |
@@ -32,11 +32,11 @@
 
 ## Generated Summary Scores
 
-| Character       | Status   | Summary Length Score | Overall | Similarity | Sentence Length Score | Sentence Quality |
-| --------------- | -------- | -------------------: | ------: | ---------: | --------------------: | ---------------: |
-| Orin Nightbloom | Rejected | 100.00               | 61.87   | 66.05      | 66.00                 | 81.25            |
-| Jory Ravenmark  | Rejected | 31.25                | 56.48   | 71.64      | 50.67                 | 60.58            |
-| Neal Lovington  | Accepted | 100.00               | 71.56   | 56.18      | 84.00                 | 95.83            |
+| Character       | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality |
+| --------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: |
+| Orin Nightbloom | Rejected | 46.82   | 100.00               | 49.09      | 20.00                 | 35.71            |
+| Jory Ravenmark  | Rejected | 46.76   | 100.00               | 68.29      | 0.00                  | 17.86            |
+| Neal Lovington  | Rejected | 69.52   | 100.00               | 65.03      | 54.00                 | 90.62            |
 
 ## Generated Backstory Scores
 
@@ -54,7 +54,7 @@ Source material: generation 1 auto-generated backstory
 
 #### Generated Summary
 
-Orin Nightbloom is a Half-Orc Bard who came to the Sunstone Mage College with hopes of avoiding his younger relative's worst choice and breaking their curse that worsens when ignored. His mother instilled in him an unwavering drive to preserve history by preventing repetition, even if it means facing origninal mistakes through the strength of lineage.
+Orin Nightbloom is a Half-Orc Bard from Sunstone Mage College, driven to preserve by stopping his younger relative's worst choice and breaking a curse that worsens when ignored through history lessons instilled by his mother as an elven mage.
 
 #### Generated Backstory
 
@@ -68,11 +68,7 @@ Source material: current character backstory
 
 #### Generated Summary
 
-Jory Ravenmark is a Human Barbarian haunted by her mother's loss at sea and her father’s loneliness from heavy drinking, leading her to blend nomadic hunter memories with a burning oath against tracking and facing a monstrous leviathan. Jory's parents' untimely deaths led her to adopt their legacy as she seeks justice through relentless pursuit of the beast that could have taken them both.
-
-Jory Ravenmark is a Human Barbarian who has adopted her mother’s nomadic hunting lifestyle but has also developed a burning oath against tracking and facing what some believe is an inexplicably merciful leviathan. Her parents' untimely deaths drove Jory to adopt their legacy as she pursues justice through relentless pursuit of the beast that could have taken them both, blending her memories with her rage.
-
-Jory Ravenmark, a Human Barbarian, seeks revenge against a monstrous Leviathan after losing her mother and father at sea, leading her to blend her nomadic hunting experiences with a burning oath. Her parents' untimely deaths drove Jory into adopting their legacy as she pursues justice through relentless pursuit of the beast that could have taken them both, blending her memories with her rage.
+Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable mercy shown by a monstrous leviathan that has driven her to blend nomadic hunter-memories with a burning oath to track and face the beast she seeks to vanquish.
 
 #### Generated Backstory
 
@@ -86,7 +82,7 @@ Source material: current character backstory
 
 #### Generated Summary
 
-Neal Lovington is an Elf Bard who entertains sailors with performances on shore leave at the Lantern House in Ashton's seaside village. Mrs Nightbloom harbors unease about growing household tensions, while Jory Ravenmark remains a Client of theirs at the pub where they've spent many years entertaining guests.
+Neal Lovington is an Elf Bard known for entertaining sailors on shore leave at the Lantern House in Ashton village, a welcoming pub with a lively stage and a steady flow of visitors. He has spent several years performing there. Mrs. Nightbloom was uneasy about growing tension within her household but found comfort by visiting Neal at the Lantern House.
 
 #### Generated Backstory
 

@@ -55,7 +55,7 @@ from language_model.rewrite_model import (
     LocalRewriteModelClient,
     LocalRewriteModelError,
     LocalRewriteModelLifecycle,
-    load_local_language_model_config,
+    load_local_config,
 )
 from language_model.session_notes import (
     child_markdown_sections,
@@ -348,7 +348,7 @@ def graph_generated_backstory(character: Character, profile: CharacterProfile) -
 
 
 def local_rewrite_client_or_none() -> LocalRewriteModelClient | None:
-    config = load_local_language_model_config(allow_download=local_model_downloads_enabled())
+    config = load_local_config(allow_download=local_model_downloads_enabled())
     lifecycle = LocalRewriteModelLifecycle(config)
     if not lifecycle.is_runtime_available():
         st.warning("llama CLI is not installed; using deterministic graph rewrite.")

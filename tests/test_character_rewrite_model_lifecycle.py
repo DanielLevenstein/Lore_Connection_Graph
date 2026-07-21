@@ -24,7 +24,7 @@ from language_model.rewrite_model import (
     LocalRewriteModelError,
     LocalRewriteModelLifecycle,
     WorkerResult,
-    load_local_language_model_config,
+    load_local_config,
     parse_llama_timing,
     run_worker_process,
 )
@@ -449,7 +449,7 @@ total time = 52.75 ms
     assert metadata["total_time_ms"] == "52.75"
 
 
-def test_load_local_language_model_config_resolves_relative_cache_dir(tmp_path):
+def test_load_local_config_resolves_relative_cache_dir(tmp_path):
     config_path = tmp_path / "local_language_model.json"
     config_path.write_text(
         """
@@ -467,7 +467,7 @@ def test_load_local_language_model_config_resolves_relative_cache_dir(tmp_path):
         encoding="utf-8",
     )
 
-    config = load_local_language_model_config(config_path=config_path, allow_download=True)
+    config = load_local_config(config_path=config_path, allow_download=True)
 
     assert config.model_id == "example/model"
     assert config.filename == "example.gguf"
@@ -477,7 +477,7 @@ def test_load_local_language_model_config_resolves_relative_cache_dir(tmp_path):
     assert config.seed == 42
 
 
-def test_default_local_language_model_config_uses_fast_probe_model():
+def test_default_local_config_uses_fast_probe_model():
     config = LocalRewriteModelConfig()
 
     assert config.model_id == "JustineF/Qwen2.5-1.5B-Instruct-Q4_K_M-GGUF"

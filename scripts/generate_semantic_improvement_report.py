@@ -18,7 +18,7 @@ from language_model.character_rewrites import (
     rewrite_required_terms,
     semantic_rewrite_score,
 )
-from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_language_model_config
+from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_config
 from language_model.rewrite_quality import writing_quality_score
 from language_model.storage import Character, read_character_profile
 
@@ -206,7 +206,7 @@ def result_summary(model_story: str, delta: float) -> str:
 
 def real_model_rewrite_client() -> RewriteClient:
     return LocalRewriteModelClient(
-        config=load_local_language_model_config(allow_download=True),
+        config=load_local_config(allow_download=True),
         status_callback=lambda message: print(message, file=sys.stderr),
     )
 

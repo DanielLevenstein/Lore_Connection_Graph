@@ -263,9 +263,9 @@ Graph JSON now lives under:
 world_building/meta_data/character_graph/<name>.graph.json
 ```
 
-`local_chatbot.paths` defines `CHARACTER_GRAPHS_DIR` and creates it in `ensure_base_dirs()`.
+`language_model.paths` defines `CHARACTER_GRAPHS_DIR` and creates it in `ensure_base_dirs()`.
 
-`local_chatbot.storage.Character.graph_path` points at the derived graph file.
+`language_model.storage.Character.graph_path` points at the derived graph file.
 
 `write_character_profile(character, profile)` now writes `PROFILE.json`, writes `BACKSTORY.md`, then calls `regenerate_character_graph(character)`.
 

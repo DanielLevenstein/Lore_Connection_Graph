@@ -1,8 +1,8 @@
 import os
 from datetime import date
 
-import local_chatbot.session_notes as session_notes
-from local_chatbot.session_notes import (
+import language_model.session_notes as session_notes
+from language_model.session_notes import (
     child_markdown_sections,
     combine_markdown_section,
     date_from_line,

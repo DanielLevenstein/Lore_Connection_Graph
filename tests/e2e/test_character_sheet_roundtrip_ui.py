@@ -8,7 +8,7 @@ import pytest
 import requests
 from playwright.sync_api import expect, sync_playwright
 
-from local_chatbot.storage import Character, read_character_profile
+from language_model.storage import Character, read_character_profile
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]

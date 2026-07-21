@@ -65,7 +65,7 @@ class LocalRewriteModelConfig:
         return self.cache_dir / self.filename
 
 
-def load_local_language_model_config(
+def load_local_config(
     config_path: Path = DEFAULT_MODEL_CONFIG_PATH,
     allow_download: bool = False,
 ) -> LocalRewriteModelConfig:

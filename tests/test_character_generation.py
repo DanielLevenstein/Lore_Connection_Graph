@@ -2,10 +2,10 @@ import json
 import shutil
 from pathlib import Path
 
-import local_chatbot.storage as storage
-from local_chatbot.character_generator import RandomCharacterGenerator
-from local_chatbot.paths import CHARACTER_METADATA_DIR, CHARACTERS_DIR, ROOT_DIR
-from local_chatbot.storage import (
+import language_model.storage as storage
+from language_model.character_generator import RandomCharacterGenerator
+from language_model.paths import CHARACTER_METADATA_DIR, CHARACTERS_DIR, ROOT_DIR
+from language_model.storage import (
     Character,
     CharacterProfile,
     PlaceProfile,

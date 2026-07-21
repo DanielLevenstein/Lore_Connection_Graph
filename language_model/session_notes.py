@@ -1050,13 +1050,13 @@ def write_lore_document(path: Path, body: str) -> SessionNote:
 
 
 def regenerate_session_note_graph(path: Path) -> None:
-    from local_chatbot.storage import regenerate_lore_graph
+    from language_model.storage import regenerate_lore_graph
 
     regenerate_lore_graph(path)
 
 
 def delete_session_note_graph(path: Path) -> None:
-    from local_chatbot.storage import graph_path_for_lore_path
+    from language_model.storage import graph_path_for_lore_path
 
     graph_path_for_lore_path(path).unlink(missing_ok=True)
 

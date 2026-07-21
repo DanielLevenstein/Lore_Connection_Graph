@@ -182,9 +182,10 @@ def primary_traits(graph: CharacterGraph) -> list[str]:
 def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) -> str:
     if kind == "summary":
         instruction = (
-            "Write a short summary for the given backstory"
-            "Use short sentences. Split long or comma-heavy sentences up into short ones. "
-            "Do not use ellipses or describe graph labels such as traits as labels."
+            "Write one polished character summary paragraph in 30 to 60 words. "
+            "Return exactly one summary, not alternatives or drafts. "
+            "Use one to three short sentences. Split long or comma-heavy sentences. "
+            "Do not use ellipses or describe graph labels such as traits as labels. "
             "Do not use markdown tags or formatting."
         )
     elif kind == "backstory":
@@ -425,6 +426,8 @@ def clean_model_rewrite(response: str) -> str:
     cleaned = strip_prompt_echo(cleaned)
     if looks_like_prompt_echo(cleaned):
         return ""
+    if looks_like_backend_diagnostic(cleaned):
+        return ""
     return cleaned.strip()
 
 
@@ -531,6 +534,19 @@ def looks_like_prompt_echo(response: str) -> bool:
         "return only the rewritten prose",
     ]
     return sum(1 for marker in prompt_markers if marker in lowered) >= 2
+
+
+def looks_like_backend_diagnostic(response: str) -> bool:
+    stripped = response.strip()
+    if not stripped:
+        return False
+    diagnostic_patterns = [
+        r"^ERROR:\s+.*",
+        r"^Traceback \(most recent call last\):",
+        r"^(?:RuntimeError|ValueError|Exception|LocalRewriteModelError):\s+.*",
+        r"^worker failed\b.*",
+    ]
+    return any(re.match(pattern, stripped, flags=re.IGNORECASE | re.DOTALL) for pattern in diagnostic_patterns)
 
 
 def model_rewrite_quality_issues(response: str) -> list[str]:

@@ -3,14 +3,14 @@ from pathlib import Path
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
 from character_graph.schema import CharacterGraph, CharacterNode, PrimaryCharacterRef, RelationshipEdge
-from local_chatbot.character_rewrites import (
+from language_model.character_rewrites import (
     graph_generated_backstory,
     graph_generated_summary,
     rewrite_quality_context,
     rewrite_required_terms,
     semantic_rewrite_score,
 )
-from local_chatbot.storage import Character, read_character_profile
+from language_model.storage import Character, read_character_profile
 from scripts.generate_semantic_improvement_report import build_report
 
 

@@ -20,8 +20,8 @@ from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
 from character_graph.schema import AttributeNode, CharacterGraph, CharacterNode, PlaceNode, PrimaryCharacterRef, RelationshipEdge
 from character_graph.session_entities import derived_lore_entity_relationships, extract_lore_entity_candidates
-import local_chatbot.storage as storage
-from local_chatbot.storage import Character, append_character_connections, read_character_profile
+import language_model.storage as storage
+from language_model.storage import Character, append_character_connections, read_character_profile
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -2105,7 +2105,7 @@ def test_combined_graph_prunes_disconnected_nodes():
 
 
 def test_append_character_connections_adds_prioritized_table(tmp_path, monkeypatch):
-    monkeypatch.setattr("local_chatbot.storage.regenerate_character_graph", lambda character: None)
+    monkeypatch.setattr("language_model.storage.regenerate_character_graph", lambda character: None)
     path = tmp_path / "Mara_Voss.md"
     path.write_text(
         """# Mara Voss
@@ -2144,7 +2144,7 @@ Manual summary.
 
 
 def test_append_character_connections_merges_existing_table_without_losing_rows(tmp_path, monkeypatch):
-    monkeypatch.setattr("local_chatbot.storage.regenerate_character_graph", lambda character: None)
+    monkeypatch.setattr("language_model.storage.regenerate_character_graph", lambda character: None)
     path = tmp_path / "Mara_Voss.md"
     path.write_text(
         """# Mara Voss
@@ -2190,7 +2190,7 @@ Manual summary.
 
 
 def test_append_character_connections_limits_long_table_cell_text(tmp_path, monkeypatch):
-    monkeypatch.setattr("local_chatbot.storage.regenerate_character_graph", lambda character: None)
+    monkeypatch.setattr("language_model.storage.regenerate_character_graph", lambda character: None)
     path = tmp_path / "Mara_Voss.md"
     path.write_text(
         """# Mara Voss
@@ -2234,7 +2234,7 @@ Manual summary.
 
 
 def test_append_character_connections_summarizes_evidence_with_connection_context(tmp_path, monkeypatch):
-    monkeypatch.setattr("local_chatbot.storage.regenerate_character_graph", lambda character: None)
+    monkeypatch.setattr("language_model.storage.regenerate_character_graph", lambda character: None)
     path = tmp_path / "Mara_Voss.md"
     path.write_text(
         """# Mara Voss
