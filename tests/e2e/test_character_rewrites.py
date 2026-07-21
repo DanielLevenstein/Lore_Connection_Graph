@@ -11,7 +11,7 @@ from language_model.character_rewrites import (
     semantic_rewrite_score,
 )
 from language_model.storage import Character, read_character_profile
-from scripts.generate_semantic_improvement_report import build_report
+from scripts.generate_single_character_backstory_rewrite_report import build_report
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -59,7 +59,7 @@ def test_orin_graph_generated_summary_scores_better_than_original_backstory():
     assert "Sunstone Mage College" in generated_summary
     assert generated_score.score > original_score.score
     assert generated_score.concept_coverage >= original_score.concept_coverage
-    assert generated_score.concision > original_score.concision
+    assert generated_score.sentence_quality > original_score.sentence_quality
 
 
 def test_graph_generated_summary_uses_default_graph_engine_without_model():

@@ -20,7 +20,7 @@ from language_model.character_rewrites import (
 from language_model.rewrite_model import LOCAL_REWRITE_MODEL_ENGINE, LocalRewriteModelClient, load_local_config
 from language_model.rewrite_quality import writing_quality_score
 from language_model.storage import Character, CharacterProfile, read_character_profile
-from scripts.generate_semantic_improvement_report import (
+from scripts.generate_single_character_backstory_rewrite_report import (
     backstory_length_score,
     candidate_rejection_reason,
     markdown_table,
@@ -135,7 +135,8 @@ def generate_character_outputs(path: Path, rewrite_client: RewriteClient) -> dic
     source_profile = source_profile_for_report(profile)
     graph = extract_character_graph(load_backstory(path, character_id=character.name))
     source_context = rewrite_quality_context(graph, source_profile)
-    required_terms = rewrite_required_terms(graph, source_profile)
+    summary_required_terms = rewrite_required_terms(graph, source_profile, "summary")
+    backstory_required_terms = rewrite_required_terms(graph, source_profile, "backstory")
     source_text = source_material(source_profile)
     summary = generated_candidate(lambda: graph_generated_summary(graph, source_profile, rewrite_client=rewrite_client))
     backstory = generated_candidate(lambda: graph_generated_backstory(graph, source_profile, rewrite_client=rewrite_client))
@@ -145,10 +146,10 @@ def generate_character_outputs(path: Path, rewrite_client: RewriteClient) -> dic
         "source": source_text,
         "summary": summary,
         "backstory": backstory,
-        "source_score": semantic_rewrite_score(source_text, source_context, required_terms),
-        "summary_score": semantic_rewrite_score(summary, source_context, required_terms),
+        "source_score": semantic_rewrite_score(source_text, source_context, backstory_required_terms),
+        "summary_score": semantic_rewrite_score(summary, source_context, summary_required_terms),
         "summary_writing_score": writing_quality_score(summary),
-        "backstory_score": semantic_rewrite_score(backstory, source_context, required_terms),
+        "backstory_score": semantic_rewrite_score(backstory, source_context, backstory_required_terms),
         "backstory_writing_score": writing_quality_score(backstory),
     }
 
@@ -184,7 +185,7 @@ def summary_score_row(character_name: str, summary: str, score, writing_score) -
         f"{length_score:.2f}",
         f"{normalized_score(score.semantic_similarity):.2f}",
         f"{writing_score.sentence_length:.2f}",
-        f"{normalized_score(score.concision):.2f}",
+        f"{normalized_score(score.sentence_quality):.2f}",
     ]
 
 
@@ -197,7 +198,7 @@ def score_row(character_name: str, backstory: str, score, writing_score) -> list
         f"{length_score:.2f}",
         f"{normalized_score(score.semantic_similarity):.2f}",
         f"{writing_score.sentence_length:.2f}",
-        f"{normalized_score(score.concision):.2f}",
+        f"{normalized_score(score.sentence_quality):.2f}",
     ]
 
 

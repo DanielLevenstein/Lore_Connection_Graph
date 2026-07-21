@@ -103,9 +103,9 @@ def build_character_rewrite_report(
     existing_text = existing_candidate_text(profile, rewrite_kind)
     original_text = original_candidate_text(profile, rewrite_kind)
     source_context = rewrite_quality_context(graph, profile)
-    required_terms = rewrite_required_terms(graph, profile)
+    required_terms = rewrite_required_terms(graph, profile, rewrite_kind)
     candidates = [ReportCandidate(original_label, original_text, "source")]
-    candidates.extend(model_report_candidates(model_result))
+    candidates.append(ReportCandidate("Local model rewrite", model_story))
     if original_text.strip() != existing_text.strip():
         candidates.append(ReportCandidate(existing_label, existing_text))
     evaluation = evaluate_report_candidates(
@@ -114,7 +114,7 @@ def build_character_rewrite_report(
         source_context=source_context,
         required_terms=required_terms,
     )
-    model_evaluation = next(candidate for candidate in reversed(evaluation.evaluated_candidates) if candidate.label.startswith("Local model rewrite"))
+    model_evaluation = next(candidate for candidate in evaluation.evaluated_candidates if candidate.label == "Local model rewrite")
     source_evaluation = evaluation.evaluated_candidates[0]
     delta = round(model_evaluation.semantic_score.score - source_evaluation.semantic_score.score, 4)
     if sentence_length_chart_path:
@@ -204,17 +204,6 @@ def candidate_rejection_reasons(candidate: str, rewrite_kind: str, semantic_scor
 
 def format_rejection_reasons(reasons: tuple[str, ...]) -> str:
     return "; ".join(reasons)
-
-
-def model_report_candidates(model_result: RewriteResult) -> list[ReportCandidate]:
-    if len(model_result.attempts) >= 2:
-        initial_text = model_result.attempts[0].cleaned_text or model_result.attempts[0].normalized_text
-        retry_text = model_result.attempts[-1].cleaned_text or model_result.attempts[-1].normalized_text
-        return [
-            ReportCandidate("Local model rewrite initial", initial_text),
-            ReportCandidate("Local model rewrite retry", retry_text),
-        ]
-    return [ReportCandidate("Local model rewrite", model_result.text)]
 
 
 def candidate_length_score(candidate: str, rewrite_kind: str) -> float:
@@ -312,16 +301,6 @@ def model_runtime_section(metadata: dict) -> str:
 
 
 def model_candidate_section(model_result: RewriteResult) -> str:
-    if len(model_result.attempts) >= 2:
-        initial_text = model_result.attempts[0].cleaned_text or model_result.attempts[0].normalized_text
-        retry_text = model_result.attempts[-1].cleaned_text or model_result.attempts[-1].normalized_text
-        return (
-            "### Local Model Rewrite\n\n"
-            "#### Initial Generation\n\n"
-            f"{initial_text}\n\n"
-            "#### Retry Generation\n\n"
-            f"{retry_text}"
-        )
     return f"### Local Model Rewrite\n\n{model_result.text}"
 
 
@@ -368,7 +347,7 @@ def evaluation_score_row(candidate: EvaluatedCandidate, rewrite_kind: str) -> li
         f"{candidate.length_score:.2f}",
         f"{normalized_score(candidate.semantic_score.semantic_similarity):.2f}",
         f"{candidate.writing_score.sentence_length:.2f}",
-        f"{normalized_score(candidate.semantic_score.concision):.2f}",
+        f"{normalized_score(candidate.semantic_score.sentence_quality):.2f}",
     ]
 
 

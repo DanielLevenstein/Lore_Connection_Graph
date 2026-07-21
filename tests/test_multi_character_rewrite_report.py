@@ -46,33 +46,6 @@ class CapturingRewriteClient:
         raise AssertionError(f"Unexpected rewrite prompt: {prompt}")
 
 
-class RetrySummaryClient(CapturingRewriteClient):
-    def __init__(self) -> None:
-        super().__init__()
-        self.summary_calls = 0
-
-    def __call__(self, messages):
-        prompt = messages[-1]["content"]
-        self.prompts.append(prompt)
-        if "character summary" in prompt or "character summary paragraph" in prompt:
-            self.summary_calls += 1
-            if self.summary_calls == 1:
-                return (
-                    "Jory Ravenmark is a Human Barbarian haunted by family loss and a leviathan and a vow and "
-                    "a hunt and a storm and a memory and a rage and a duty that all run together without pause."
-                )
-            return (
-                "Jory Ravenmark is a Human Barbarian haunted by family loss at sea. "
-                "She turns watchtower memories into a protective oath while hunting the monstrous leviathan."
-            )
-        if "Rewrite the character backstory" in prompt:
-            return (
-                "Fixture backstory preserves the character's named place and central relationship.\n\n"
-                "It keeps the important drive visible without adding unsupported lore."
-            )
-        raise AssertionError(f"Unexpected rewrite prompt: {prompt}")
-
-
 def test_multi_character_report_compares_three_characters():
     client = CapturingRewriteClient()
 
@@ -129,17 +102,6 @@ def test_multi_character_report_compares_three_characters():
     assert "| Generated summary" not in summary_table
     assert "| Generated backstory" not in backstory_table
     assert len(client.prompts) == 6
-
-
-def test_multi_character_report_displays_only_final_retry_candidate():
-    client = RetrySummaryClient()
-    jory_path = report_script.CHARACTER_SHEETS_DIR / "Jory_Ravenmark.md"
-
-    result = generate_character_outputs(jory_path, client)
-
-    assert client.summary_calls == 2
-    assert "all run together without pause" not in result["summary"]
-    assert "turns watchtower memories into a protective oath" in result["summary"]
 
 
 def test_orin_report_uses_generation_one_backstory_as_model_source():

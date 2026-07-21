@@ -16,7 +16,7 @@ from language_model.character_rewrites import (
 )
 from language_model.rewrite_quality import writing_quality_score
 from language_model.storage import Character, read_character_profile
-from scripts.generate_semantic_improvement_report import summary_length_score
+from scripts.generate_single_character_backstory_rewrite_report import summary_length_score
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -61,8 +61,24 @@ def test_summary_prompt_has_single_candidate_contract():
 
     assert "Write one polished character summary paragraph in 30 to 60 words." in prompt
     assert "Return exactly one summary, not alternatives or drafts." in prompt
-    assert "Use one to three short sentences." in prompt
+    assert "Choose the strongest source-backed details instead of covering every fact." in prompt
+    assert "Mention each motive or loss only once." in prompt
+    assert "If the draft is over 60 words, shorten it before returning." in prompt
+    assert "Split long or comma-heavy sentences when needed." in prompt
+    assert "Use one to three" not in prompt
     assert "Write three" not in prompt
+
+
+def test_summary_required_terms_exclude_secondary_relationship_names():
+    profile, graph = jory_profile_and_graph()
+
+    terms = rewrite_required_terms(graph, profile, "summary")
+
+    assert "Jory Ravenmark" in terms
+    assert "Human" in terms
+    assert "Barbarian" in terms
+    assert "Neal Lovington" not in terms
+    assert "Jory Ravenmark's Parents" not in terms
 
 
 def test_backstory_prompt_has_two_paragraph_contract():
@@ -117,46 +133,60 @@ def test_summary_generation_collapses_multiple_model_alternatives():
     assert "\n\n" not in summary
 
 
-def test_summary_generation_retries_once_and_returns_retry_candidate():
+def test_summary_generation_makes_one_model_call_for_soft_sentence_quality_issue():
     profile, graph = jory_profile_and_graph()
     calls = []
 
-    def retrying_client(messages):
+    def single_call_client(messages):
         calls.append(messages[-1]["content"])
-        if len(calls) == 1:
-            return RUN_ON_JORY_SUMMARY
-        return GOOD_JORY_SUMMARY
+        return RUN_ON_JORY_SUMMARY
 
-    result = graph_generated_summary_result(graph, profile, rewrite_client=retrying_client)
+    result = graph_generated_summary_result(graph, profile, rewrite_client=single_call_client)
 
-    assert result.text == GOOD_JORY_SUMMARY
-    assert len(result.attempts) == 2
+    assert result.text == RUN_ON_JORY_SUMMARY
+    assert len(result.attempts) == 1
+    assert len(calls) == 1
     assert result.attempts[0].normalized_text == RUN_ON_JORY_SUMMARY
     assert "summary sentence too long" in result.attempts[0].validation_issues
-    assert result.attempts[1].validation_issues == ()
-    assert "Previous candidate:" in calls[1]
-    assert "Return only the final rewritten prose." in calls[1]
 
 
-def test_backstory_generation_retries_once_and_returns_retry_candidate():
+def test_summary_generation_makes_one_model_call_for_multiple_alternatives():
+    profile, graph = jory_profile_and_graph()
+    calls = []
+
+    def multi_candidate_client(messages):
+        calls.append(messages[-1]["content"])
+        return (
+            f"{GOOD_JORY_SUMMARY}\n\n"
+            "Jory Ravenmark is another possible summary that should not reach scoring."
+        )
+
+    result = graph_generated_summary_result(graph, profile, rewrite_client=multi_candidate_client)
+
+    assert result.text == GOOD_JORY_SUMMARY
+    assert len(result.attempts) == 1
+    assert len(calls) == 1
+    assert "multiple summary alternatives" in result.attempts[0].validation_issues
+
+
+def test_backstory_generation_makes_one_model_call_for_soft_paragraph_issue():
     profile, graph = jory_profile_and_graph()
     first_attempt = "Jory Ravenmark follows the sea after the leviathan."
     calls = []
 
-    def retrying_client(messages):
+    def single_call_client(messages):
         calls.append(messages[-1]["content"])
         if len(calls) == 1:
             return first_attempt
         return GOOD_JORY_BACKSTORY
 
-    result = graph_generated_backstory_result(graph, profile, rewrite_client=retrying_client)
+    result = graph_generated_backstory_result(graph, profile, rewrite_client=single_call_client)
 
-    assert result.text == GOOD_JORY_BACKSTORY
-    assert len(result.attempts) == 2
+    assert result.text == first_attempt
+    assert len(result.attempts) == 1
+    assert len(calls) == 1
     assert result.attempts[0].normalized_text == first_attempt
     assert "backstory paragraph count" in result.attempts[0].validation_issues
-    assert result.attempts[1].validation_issues == ()
-    assert "Previous candidate:" in calls[1]
 
 
 def test_backstory_generation_strips_diagnostics_and_keeps_two_paragraphs():

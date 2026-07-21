@@ -1,11 +1,11 @@
-import scripts.generate_semantic_improvement_report as report_script
-import scripts.generate_semantic_summary_improvement_report as summary_report_script
+import scripts.generate_single_character_backstory_rewrite_report as report_script
+import scripts.generate_single_character_summary_rewrite_report as summary_report_script
 from character_graph.extraction import extract_character_graph
 from character_graph.ingest import load_backstory
-from language_model.character_rewrites import graph_generated_summary, model_rewrite_quality_issues, rewrite_concision_score
+from language_model.character_rewrites import graph_generated_summary, model_rewrite_quality_issues, rewrite_sentence_quality_score
 from language_model.rewrite_quality import TARGET_SENTENCE_WORD_COUNT, sentence_length_distribution, writing_quality_score
 from language_model.storage import Character, read_character_profile
-from scripts.generate_semantic_improvement_report import (
+from scripts.generate_single_character_backstory_rewrite_report import (
     build_report,
     normalized_score,
     render_sentence_length_chart,
@@ -64,25 +64,6 @@ class RepetitiveRewriteClient(FakeRewriteClient):
             "She follows every storm track and every rumor she can find. "
             "She follows every storm track and every rumor she can find. "
             "She follows every storm track and every rumor she can find."
-        )
-
-
-class RetryRewriteClient(FakeRewriteClient):
-    def __init__(self) -> None:
-        self.calls = 0
-
-    def __call__(self, messages):
-        self.calls += 1
-        if self.calls == 1:
-            return (
-                "Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable mercy "
-                "shown by a monstrous leviathan that has driven her to blend nomadic hunter-memories with a burning "
-                "oath to track and face the beast she seeks to vanquish."
-            )
-        return (
-            "Jory Ravenmark is a Human Barbarian haunted by family loss at sea. "
-            "She turns island watchtower memories into a protective oath, hunting the monstrous leviathan that "
-            "took her father."
         )
 
 
@@ -310,24 +291,9 @@ def test_summary_report_keeps_rejected_generated_text_outside_error_section():
     score_table = report.split("## Scores", 1)[1].split("### Rejection Reasons", 1)[0]
     assert "Rejection Reasons" not in score_table
     assert "repetitive wording" in report
-    assert "- Local model rewrite initial: repeated sentence; repetitive wording; overall score below 70" in report
-    assert "Local model rewrite initial | Rejected |" in report
-    assert "Local model rewrite retry" in report
-
-
-def test_single_character_summary_report_displays_initial_generation_and_retry():
-    client = RetryRewriteClient()
-
-    report = summary_report_script.build_report(rewrite_client=client)
-    local_candidate = report.split("### Local Model Rewrite", 1)[1].split("### Existing Summary", 1)[0]
-
-    assert client.calls == 2
-    assert "#### Initial Generation" in local_candidate
-    assert "#### Retry Generation" in local_candidate
-    assert "beast she seeks to vanquish" in local_candidate
-    assert "hunting the monstrous leviathan that took her father" in local_candidate
-    assert "Local model rewrite initial |" in report
-    assert "Local model rewrite retry" in report
+    assert "- Local model rewrite: repeated sentence; repetitive wording; overall score below 70" in report
+    assert "Local model rewrite | Rejected |" in report
+    assert report.count("Local model rewrite") == 2
 
 
 def test_jory_summary_tuning_metrics_without_generating_report():
@@ -343,7 +309,7 @@ def test_jory_summary_tuning_metrics_without_generating_report():
     assert model_rewrite_quality_issues(rewrite) == ["repeated sentence", "repetitive wording"]
 
 
-def test_rewrite_concision_score_penalizes_run_on_sentences():
+def test_rewrite_sentence_quality_score_penalizes_run_on_sentences():
     concise = (
         "Orin studies at Sunstone Mage College. "
         "His mother's curse drives him to protect a younger relative."
@@ -354,11 +320,11 @@ def test_rewrite_concision_score_penalizes_run_on_sentences():
         "fighting and keep searching for answers without pausing or changing direction."
     )
 
-    assert rewrite_concision_score(concise) == 1.0
-    assert rewrite_concision_score(run_on) < rewrite_concision_score(concise)
+    assert rewrite_sentence_quality_score(concise) == 1.0
+    assert rewrite_sentence_quality_score(run_on) < rewrite_sentence_quality_score(concise)
 
 
-def test_rewrite_concision_score_penalizes_dangling_sentence_fragments():
+def test_rewrite_sentence_quality_score_penalizes_dangling_sentence_fragments():
     clean = (
         "Orin came of age at Sunstone Mage College. "
         "His mother's curse gave him a reason to protect his family."
@@ -369,11 +335,11 @@ def test_rewrite_concision_score_penalizes_dangling_sentence_fragments():
         "The curse gave Orin a reason to."
     )
 
-    assert rewrite_concision_score(malformed) < rewrite_concision_score(clean)
-    assert rewrite_concision_score(malformed) < 0.5
+    assert rewrite_sentence_quality_score(malformed) < rewrite_sentence_quality_score(clean)
+    assert rewrite_sentence_quality_score(malformed) < 0.5
 
 
-def test_rewrite_concision_score_penalizes_comma_heavy_sentences_that_should_split():
+def test_rewrite_sentence_quality_score_penalizes_comma_heavy_sentences_that_should_split():
     split = (
         "Orin Nightbloom was born under the weight of half-orc heritage. "
         "Sunstone Mage College sharpened his talent and deepened his exile. "
@@ -386,5 +352,5 @@ def test_rewrite_concision_score_penalizes_comma_heavy_sentences_that_should_spl
         "He came of age at the prestigious institution, where he excelled in his magic, a beacon in the world."
     )
 
-    assert rewrite_concision_score(split) == 1.0
-    assert rewrite_concision_score(should_split) < 0.8
+    assert rewrite_sentence_quality_score(split) == 1.0
+    assert rewrite_sentence_quality_score(should_split) < 0.8

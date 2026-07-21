@@ -11,7 +11,7 @@ Identify the smallest local model which can be used for the rewrite and use exis
 Current branch has a backstory rewrite function, but it's disabled because of low similarity scores in `semantic_backstory_improvement.md`
 
 ### Testing
-- `generate_semantic_improvement_report.py`
+- `generate_single_character_backstory_rewrite_report.py`
 - `test_character_rewrite_model_lifecycle.py`
 - `test_semantic_improvement_report.py`
 
@@ -37,13 +37,9 @@ Current branch has a backstory rewrite function, but it's disabled because of lo
 - Regenerated `docs/reports/semantic_backstory_improvement.md` with model, existing generated, and original backstory scores.
 - Testing: `.venv/bin/python -m pytest tests/test_semantic_improvement_report.py tests/test_character_rewrite_model_lifecycle.py tests/e2e/test_character_rewrites.py`; `.venv/bin/python -m pytest tests/test_semantic_improvement_report.py tests/test_character_rewrite_model_lifecycle.py tests/test_character_graph.py tests/test_model_downloads.py tests/test_character_generation.py`.
 
-## Completed - Safe Retry Loop Design Cleanup - 2026-07-21 - feature/character_rewrite
-- Cleaned up the safe retry loop design's reporting interface, diagnostics boundary, report behavior, and testing guidance so the document matches the implemented summary and backstory report contracts.
-- Testing: `git diff --check`.
-
 ## Completed - Reporting Interface Separation - 2026-07-21 - feature/character_rewrite
 - Separated report candidate collection from rewrite evaluation data, added rejection reasons to summary and backstory score tables, and regenerated the single-character and multi-character reports.
-- Testing: `.venv/bin/python -m py_compile scripts/generate_semantic_improvement_report.py scripts/generate_semantic_summary_improvement_report.py scripts/generate_multi_character_rewrite_report.py`; `PYTHONPATH=. .venv/bin/python -m pytest tests/test_semantic_improvement_report.py tests/test_multi_character_rewrite_report.py tests/test_model_rewrite_contract.py tests/test_character_rewrite_model_lifecycle.py -q`; `PYTHONPATH=. .venv/bin/python -m pytest tests/test_character_generation.py tests/test_character_graph.py tests/test_character_rewrite_model_lifecycle.py tests/test_combined_character_graph.py tests/test_entity_file_saves.py tests/test_graphviz_config.py tests/test_graphviz_rendering.py tests/test_lore_import.py tests/test_model_rewrite_contract.py tests/test_multi_character_rewrite_report.py tests/test_semantic_improvement_report.py tests/test_session_notes.py -q`.
+- Testing: `.venv/bin/python -m py_compile scripts/generate_single_character_backstory_rewrite_report.py scripts/generate_single_character_summary_rewrite_report.py scripts/generate_multi_character_rewrite_report.py`; `PYTHONPATH=. .venv/bin/python -m pytest tests/test_semantic_improvement_report.py tests/test_multi_character_rewrite_report.py tests/test_model_rewrite_contract.py tests/test_character_rewrite_model_lifecycle.py -q`; `PYTHONPATH=. .venv/bin/python -m pytest tests/test_character_generation.py tests/test_character_graph.py tests/test_character_rewrite_model_lifecycle.py tests/test_combined_character_graph.py tests/test_entity_file_saves.py tests/test_graphviz_config.py tests/test_graphviz_rendering.py tests/test_lore_import.py tests/test_model_rewrite_contract.py tests/test_multi_character_rewrite_report.py tests/test_semantic_improvement_report.py tests/test_session_notes.py -q`.
 
 ## Completed - API Rewrite Contract Tests - 2026-07-21 - feature/character_rewrite
 - Added API-level model-client tests for summary and backstory rewrites, including mode-specific prompt source context, summary candidate collapse, and backstory diagnostic stripping plus two-paragraph trimming.

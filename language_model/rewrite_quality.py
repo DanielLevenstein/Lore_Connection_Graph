@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .character_rewrites import candidate_sentences, rewrite_concision_score, term_tokens
+from .character_rewrites import candidate_sentences, rewrite_sentence_quality_score, term_tokens
 
 
 # Mean sentence length from the initial character-sheet fixture backstories.
@@ -39,7 +39,7 @@ def writing_quality_score(candidate: str) -> WritingQualityScore:
     formatting = formatting_score(candidate)
     avg_sentence_length = average_sentence_length(candidate)
     sentence_length = sentence_length_score(candidate)
-    sentence_quality = rewrite_concision_score(candidate) * 100
+    sentence_quality = rewrite_sentence_quality_score(candidate) * 100
     sentence_word_counts = tuple(len(term_tokens(sentence)) for sentence in candidate_sentences(candidate))
     score = (0.35 * formatting) + (0.25 * sentence_length) + (0.40 * sentence_quality)
     return WritingQualityScore(

@@ -19,7 +19,7 @@ class RewriteQualityScore:
     score: float
     semantic_similarity: float
     concept_coverage: float
-    concision: float
+    sentence_quality: float
 
 
 @dataclass(frozen=True)
@@ -131,14 +131,7 @@ def run_graph_rewrite_result(
         )
         return RewriteResult(text=text, attempts=(attempt,))
     attempts = [rewrite_attempt(response, kind, attempt_number=1)]
-    if rewrite_client and attempts[0].validation_issues:
-        retry_messages = [
-            messages[0],
-            {"role": "user", "content": retry_rewrite_prompt(kind, prompt, attempts[0])},
-        ]
-        attempts.append(rewrite_attempt(rewrite_client(retry_messages), kind, attempt_number=2))
-    final_attempt = best_rewrite_attempt(attempts)
-    return RewriteResult(text=final_attempt.normalized_text, attempts=tuple(attempts))
+    return RewriteResult(text=attempts[0].normalized_text, attempts=tuple(attempts))
 
 
 def rewrite_attempt(response: str, kind: str, attempt_number: int) -> RewriteAttempt:
@@ -159,13 +152,6 @@ def normalize_rewrite_candidate(candidate: str, kind: str) -> str:
     if kind == "backstory":
         return trim_backstory_candidate(candidate)
     return candidate.strip()
-
-
-def best_rewrite_attempt(attempts: list[RewriteAttempt]) -> RewriteAttempt:
-    for attempt in reversed(attempts):
-        if attempt.normalized_text.strip():
-            return attempt
-    return attempts[0]
 
 
 def deterministic_graph_rewrite(kind: str, graph: CharacterGraph, profile: CharacterProfile) -> str:
@@ -264,7 +250,10 @@ def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) 
         instruction = (
             "Write one polished character summary paragraph in 30 to 60 words. "
             "Return exactly one summary, not alternatives or drafts. "
-            "Use one to three short sentences. Split long or comma-heavy sentences. "
+            "Choose the strongest source-backed details instead of covering every fact. "
+            "Mention each motive or loss only once. "
+            "Split long or comma-heavy sentences when needed. "
+            "If the draft is over 60 words, shorten it before returning. "
             "Do not use ellipses or describe graph labels such as traits as labels. "
             "Do not use markdown tags or formatting."
         )
@@ -280,7 +269,7 @@ def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) 
         raise ValueError(f"Unknown rewrite kind: {kind}")
     profile_context = character_profile_context(profile, kind)
     graph_details = graph_segment_context(graph, profile)
-    required_terms = rewrite_required_terms(graph, profile)
+    required_terms = rewrite_required_terms(graph, profile, kind)
     prompt_parts = [
         instruction,
         "Use the graph segments as the rewrite outline. Prefer graph segment wording over unsupported invention.",
@@ -302,44 +291,6 @@ def rewrite_prompt(kind: str, graph: CharacterGraph, profile: CharacterProfile) 
     )
     prompt_parts.append("Return only the rewritten prose. Do not include headings, labels, diagnostics, or the prompt.")
     return "\n\n".join(prompt_parts)
-
-
-def retry_rewrite_prompt(kind: str, original_prompt: str, attempt: RewriteAttempt) -> str:
-    issue_guidance = retry_issue_guidance(attempt.validation_issues)
-    if kind == "summary":
-        repair_instruction = (
-            "Rewrite the previous candidate as exactly one character summary paragraph. "
-            "Use 30 to 60 words and one to three complete sentences. "
-            "Do not provide alternatives, drafts, headings, labels, analysis, or Markdown. "
-            "Preserve only source-backed facts from the original prompt."
-        )
-    elif kind == "backstory":
-        repair_instruction = (
-            "Rewrite the previous candidate as exactly two concise prose paragraphs. "
-            "Preserve source-backed names, places, relationships, and drives. "
-            "Avoid repeated sentences and repeated phrases. "
-            "Do not include headings, labels, analysis, or Markdown fences."
-        )
-    else:
-        raise ValueError(f"Unknown rewrite kind: {kind}")
-    return "\n\n".join(
-        [
-            repair_instruction,
-            issue_guidance,
-            "Previous candidate:",
-            compact_source_text(attempt.normalized_text or attempt.cleaned_text, 900),
-            "Original request:",
-            original_prompt,
-            "Return only the final rewritten prose.",
-        ]
-    )
-
-
-def retry_issue_guidance(issues: tuple[str, ...]) -> str:
-    if not issues:
-        return "Improve the candidate so it follows the requested output shape."
-    issue_text = "; ".join(issues)
-    return f"Repair goals: {issue_text}."
 
 
 def rewrite_contract_issues(cleaned: str, normalized: str, kind: str) -> list[str]:
@@ -800,7 +751,7 @@ def rewrite_quality_context(graph: CharacterGraph, profile: CharacterProfile) ->
     return "\n".join(section.strip() for section in sections if section and section.strip())
 
 
-def rewrite_required_terms(graph: CharacterGraph, profile: CharacterProfile) -> list[str]:
+def rewrite_required_terms(graph: CharacterGraph, profile: CharacterProfile, rewrite_kind: str = "backstory") -> list[str]:
     terms = [
         profile.name,
         profile.race,
@@ -811,8 +762,9 @@ def rewrite_required_terms(graph: CharacterGraph, profile: CharacterProfile) -> 
         *(profile.alliances or []),
         *(profile.enemies or []),
     ]
-    terms.extend(story_place_names(graph))
-    terms.extend(story_relationship_names(graph))
+    if rewrite_kind != "summary":
+        terms.extend(story_place_names(graph))
+        terms.extend(story_relationship_names(graph))
     return unique_values(term for term in terms if term)
 
 
@@ -827,13 +779,13 @@ def semantic_rewrite_score(
     source_vector = embedder.embed(source_context)
     semantic_similarity = max(0.0, cosine_similarity(candidate_vector, source_vector))
     concept_coverage = covered_term_ratio(candidate, required_terms or [])
-    concision = rewrite_concision_score(candidate)
-    score = (0.35 * semantic_similarity) + (0.45 * concept_coverage) + (0.20 * concision)
+    sentence_quality = rewrite_sentence_quality_score(candidate)
+    score = (0.35 * semantic_similarity) + (0.45 * concept_coverage) + (0.20 * sentence_quality)
     return RewriteQualityScore(
         score=round(score, 4),
         semantic_similarity=round(semantic_similarity, 4),
         concept_coverage=round(concept_coverage, 4),
-        concision=round(concision, 4),
+        sentence_quality=round(sentence_quality, 4),
     )
 
 
@@ -901,7 +853,7 @@ def covered_term_ratio(candidate: str, required_terms: list[str]) -> float:
     return covered / len(terms)
 
 
-def rewrite_concision_score(candidate: str) -> float:
+def rewrite_sentence_quality_score(candidate: str) -> float:
     return run_on_sentence_score(candidate)
 
 

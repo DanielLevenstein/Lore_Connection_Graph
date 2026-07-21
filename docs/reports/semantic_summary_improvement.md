@@ -23,11 +23,11 @@
 | GPU layers        | 0                                                    |
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
-| Prompt hash       | a5a405072a612deb                                     |
-| Prompt eval time  | 9867.50 ms                                           |
-| Prompt tokens     | 599                                                  |
-| Completion tokens | 63                                                   |
-| Total tokens      | 662                                                  |
+| Prompt hash       | 10c4d88317bc133a                                     |
+| Prompt eval time  | 11947.50 ms                                          |
+| Prompt tokens     | 468                                                  |
+| Completion tokens | 82                                                   |
+| Total tokens      | 550                                                  |
 
 ## Candidate
 
@@ -41,13 +41,7 @@ Jory Ravenmark directed her grief to become a beacon of light to her community h
 
 ### Local Model Rewrite
 
-#### Initial Generation
-
-Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable mercy shown by a monstrous leviathan that has driven her to blend nomadic hunter-memories with a burning oath to track and face the beast she seeks to vanquish. Her mother died at sea, while her father was consumed by loneliness which drove him to drink heavily; these traumatic losses have fueled her quest for vengeance against an entity she believes is responsible.
-
-#### Retry Generation
-
-Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable mercy shown by a monstrous leviathan that has driven her to blend nomadic hunter-memories with a burning oath to track and face the beast she seeks to vanquish, even in its monstrous form.
+Jory Ravenmark is a Human Barbarian haunted by the loss of her family and inexplicable mercy shown by a monstrous leviathan. These traumatic events drive Jory to blend nomadic hunter memories with a burning oath to track and face the beast that saved them.
 
 ### Existing Summary
 
@@ -55,13 +49,15 @@ Haunted by the loss of her family and the inexplicable mercy shown by a monstrou
 
 ## Scores
 
-| Candidate                   | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality | 
-| --------------------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: | 
-| Source Backstory            | Source   | 54.87   | 31.75                | 90.26      | 72.89                 | 84.26            | 
-| Local model rewrite initial | Rejected | 51.30   | 76.92                | 73.98      | 22.00                 | 30.60            | 
-| Local model rewrite retry   | Rejected | 41.68   | 100.00               | 63.98      | 0.00                  | 0.00             | 
-| Existing Summary            | Rejected | 44.21   | 100.00               | 72.24      | 48.00                 | 62.50            | 
+| Candidate           | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality |
+| ------------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: |
+| Source Backstory    | Source   | 63.44   | 31.75                | 90.26      | 72.89                 | 84.26            |
+| Local model rewrite | Accepted | 87.92   | 100.00               | 65.48      | 92.00                 | 100.00           |
+| Existing Summary    | Rejected | 52.78   | 100.00               | 72.24      | 48.00                 | 62.50            |
 
+### Rejection Reasons
+
+- Existing Summary: summary sentence too long; overall score below 70
 
 ## Sentence Lengths
 
@@ -69,4 +65,4 @@ Haunted by the loss of her family and the inexplicable mercy shown by a monstrou
 
 ## Result
 
-The local model rewrite changes the writing quality score versus the original section by `-0.1319`.
+The local model rewrite changes the writing quality score versus the original section by `0.2448`.

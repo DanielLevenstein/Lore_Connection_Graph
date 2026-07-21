@@ -19,7 +19,7 @@
 | Device            | none                                                 |
 | Timeout seconds   | 180                                                  |
 | Prompt hash       | 9f1d57257b232b81                                     |
-| Prompt eval time  | 11736.22 ms                                          |
+| Prompt eval time  | 11531.56 ms                                          |
 | Prompt tokens     | 665                                                  |
 | Completion tokens | 269                                                  |
 | Total tokens      | 934                                                  |
@@ -32,19 +32,28 @@
 
 ## Generated Summary Scores
 
-| Candidate       | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality | Rejection Reasons                                 |
-| --------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: | ------------------------------------------------- |
-| Orin Nightbloom | Rejected | 46.30   | 100.00               | 49.63      | 16.00                 | 32.14            | summary sentence too long; overall score below 70 |
-| Jory Ravenmark  | Rejected | 41.68   | 100.00               | 63.98      | 0.00                  | 0.00             | summary sentence too long; overall score below 70 |
-| Neal Lovington  | Rejected | 69.52   | 100.00               | 65.03      | 54.00                 | 90.62            | overall score below 70                            |
+| Candidate       | Status   | Overall | Summary Length Score | Similarity | Sentence Length Score | Sentence Quality |
+| --------------- | -------- | ------: | -------------------: | ---------: | --------------------: | ---------------: |
+| Orin Nightbloom | Rejected | 54.18   | 100.00               | 52.43      | 52.00                 | 66.67            |
+| Jory Ravenmark  | Accepted | 87.92   | 100.00               | 65.48      | 92.00                 | 100.00           |
+| Neal Lovington  | Accepted | 71.35   | 100.00               | 45.46      | 58.67                 | 97.22            |
+
+### Rejection Reasons
+
+- Orin Nightbloom: summary sentence too long; overall score below 70
 
 ## Generated Backstory Scores
 
-| Candidate       | Status   | Overall | Length Score | Similarity | Sentence Length Score | Sentence Quality | Rejection Reasons      |
-| --------------- | -------- | ------: | -----------: | ---------: | --------------------: | ---------------: | ---------------------- |
-| Orin Nightbloom | Accepted | 74.24   | 100.00       | 64.73      | 75.20                 | 89.17            |                        |
-| Jory Ravenmark  | Rejected | 68.36   | 100.00       | 69.16      | 86.00                 | 92.22            | overall score below 70 |
-| Neal Lovington  | Rejected | 68.46   | 100.00       | 61.95      | 58.29                 | 90.71            | overall score below 70 |
+| Candidate       | Status   | Overall | Length Score | Similarity | Sentence Length Score | Sentence Quality |
+| --------------- | -------- | ------: | -----------: | ---------: | --------------------: | ---------------: |
+| Orin Nightbloom | Accepted | 74.24   | 100.00       | 64.73      | 75.20                 | 89.17            |
+| Jory Ravenmark  | Rejected | 68.36   | 100.00       | 69.16      | 86.00                 | 92.22            |
+| Neal Lovington  | Rejected | 68.46   | 100.00       | 61.95      | 58.29                 | 90.71            |
+
+### Rejection Reasons
+
+- Jory Ravenmark: overall score below 70
+- Neal Lovington: overall score below 70
 
 ## Character Outputs
 
@@ -54,7 +63,7 @@ Source material: generation 1 auto-generated backstory
 
 #### Generated Summary
 
-Orin Nightbloom is a Half-Orc Bard from Sunstone Mage College who drives to preserve by stopping his younger relative's worst choice and breaking a curse that worsens when ignored through history lessons instilled by his mother as an elven mage.
+Orin Nightbloom is a Half-Orc Bard from Sunstone Mage College who wants to break a curse that worsens when ignored while also preventing his younger relative from repeating their worst choice.
 
 #### Generated Backstory
 
@@ -68,7 +77,7 @@ Source material: current character backstory
 
 #### Generated Summary
 
-Jory Ravenmark is a Human Barbarian haunted by the loss of her family and an inexplicable mercy shown by a monstrous leviathan that has driven her to blend nomadic hunter-memories with a burning oath to track and face the beast she seeks to vanquish, even in its monstrous form.
+Jory Ravenmark is a Human Barbarian haunted by the loss of her family and inexplicable mercy shown by a monstrous leviathan. These traumatic events drive Jory to blend nomadic hunter memories with a burning oath to track and face the beast that saved them.
 
 #### Generated Backstory
 
@@ -82,7 +91,7 @@ Source material: current character backstory
 
 #### Generated Summary
 
-Neal Lovington is an Elf Bard known for entertaining sailors on shore leave at the Lantern House in Ashton village, a welcoming pub with a lively stage and a steady flow of visitors. He has spent several years performing there. Mrs. Nightbloom was uneasy about growing tension within her household but found comfort by visiting Neal at the Lantern House.
+Neal Lovington is an Elf Bard traveling at the Lantern House in Ashton to entertain sailors on shore leave and ease their boredom with lively performances. His goal of entertaining them aligns with his desire to please those he encounters. Mrs.
 
 #### Generated Backstory
 
