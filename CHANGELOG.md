@@ -83,3 +83,7 @@
 - Removed root level nodes on from places view in the knowledge graph
 - Removed all references to the full knowledge graph from code as the title had become misleading
 
+# feature/knowledge_graph2
+## 2026-07-20
+- Remove duplicate Family Tree nodes from the place graph.
+- Move lore_graph_fixture.json to a hidden directory until node deduplication is implemented.

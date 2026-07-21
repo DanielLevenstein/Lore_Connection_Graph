@@ -4,6 +4,21 @@
 
 Node deduplication is a review workflow for cleaning duplicate, noisy, or incorrectly typed knowledge graph nodes without directly editing generated graph JSON. Authored lore remains the source of truth; deduplication decisions are saved as review rules that can be reapplied when graphs are regenerated.
 
+## First Deduplication Fix
+
+The first visible deduplication issue came from markdown-backed graph views rendering both the source document node and the first H1 heading when they had the same display label.
+For example, `Family_Tree.md` produced a source document node named `Family Tree`, and the file content also produced a `# Family Tree` heading node. 
+Showing both nodes in the same graph made the UI look like it had duplicated lore, even though the underlying graph data was preserving two different concepts.
+
+The fix separates data preservation from display deduplication:
+
+- Keep source document and markdown heading nodes in the projected graph data so filters, lore note tables, connection rows, and evidence lookups still have source context.
+- Hide only the duplicate source document node during DOT rendering when it points to a level-one markdown heading with the same normalized label.
+- Keep the lower-level graph path anchored on the heading node, because headings are closer to authored lore structure and are the better visible root for section-based views.
+- Apply the rule in the shared Graphviz rendering path so Places and Session Notes views behave consistently without duplicating view-specific logic.
+
+This design avoids destructive deduplication. The UI no longer shows duplicate root labels, but the review workflow can still inspect both nodes if a future deduplication view needs to explain where the rendered node came from.
+
 ## Views
 
 ### Character Deduplication

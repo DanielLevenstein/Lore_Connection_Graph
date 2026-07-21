@@ -17,17 +17,20 @@ from graphviz_rendering import (
     place_lore_graph,
     lore_information_rows,
     session_note_graph,
-    session_note_lore_graph,
+    markdown_header_lore_graph,
 )
 
 
 def test_graph_tabs_follow_active_main_tab():
     assert graph_tab_names("Characters") == [SINGLE_CHARACTER_TAB, PARTY_VIEW_TAB]
     assert graph_tab_names("Places") == [
+        PARTY_VIEW_TAB,
         PLACES_FILE_VIEW_TAB,
         PLACES_HEADING_VIEW_TAB,
+        DIRECTORY_FILE_VIEW_TAB,
     ]
     assert graph_tab_names("Session Notes") == [
+        PARTY_VIEW_TAB,
         SESSION_FILE_VIEW_TAB,
         DIRECTORY_FILE_VIEW_TAB,
     ]
@@ -270,6 +273,15 @@ def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path)
     assert labels_by_edge[("atlantia", watch_tower_heading_id)] == "Contains"
     assert labels_by_edge[("atlantia", college_heading_id)] == "Contains"
     assert labels_by_edge[(family_heading_id, "mrs_nightbloom")] == "Mentions"
+    dot = combined_relationship_dot(
+        place_graph,
+        main_character_ids=set(place_graph.characters),
+        graphviz_config={"column_layout": "session_note_lore"},
+    )
+    assert '"source_document__atlantia_lore" [' not in dot
+    assert '"family_tree" [' not in dot
+    assert f'"{atlantia_heading_id}" [' in dot
+    assert f'"{family_heading_id}" [' in dot
     table_rows = place_lore_connection_rows(place_graph)
     assert {row["Connection Type"] for row in table_rows} == {"Character"}
     assert {row["Connection"] for row in table_rows} == {
@@ -319,6 +331,18 @@ def test_place_lore_graph_keeps_source_place_and_character_connections(tmp_path)
         college_heading_id,
         "orin_nightbloom",
     }
+    heading_view_without_root = place_lore_graph(
+        graph,
+        heading_id=college_heading_id,
+        hide_source_document_roots=True,
+    )
+    assert "source_document__atlantia_lore" not in heading_view_without_root.characters
+    assert {
+        atlantia_heading_id,
+        "atlantia",
+        college_heading_id,
+        "orin_nightbloom",
+    }.issubset(heading_view_without_root.characters)
 
 
 def test_place_lore_dot_uses_source_heading_place_character_columns():
@@ -674,7 +698,7 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
         ],
     )
 
-    lore_graph = session_note_lore_graph(graph)
+    lore_graph = markdown_header_lore_graph(graph)
     family_heading_id = "source_heading__familytree__line_1__familytree"
     trouble_heading_id = "source_heading__familytree__line_3__ravenmarktrouble"
 
@@ -706,12 +730,14 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
     )
     assert 'subgraph "cluster_column_0_source_documents_groups"' in dot
     assert 'subgraph "cluster_column_4_character_connections"' in dot
-    assert dot.index('"family_tree"') < dot.index('"ravenmark_family"')
+    assert '"family_tree" [' not in dot
+    assert '"side_notes" [' not in dot
+    assert f'"{family_heading_id}" [' in dot
     assert '"jory_ravenmark"' in dot
     assert '"atlantia"' in dot
     assert "mary_ravenmark" not in lore_graph.characters
 
-    file_view_graph = session_note_lore_graph(
+    file_view_graph = markdown_header_lore_graph(
         graph,
         source_file=str(session_path),
         fanout_linked_characters=True,
@@ -723,13 +749,14 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
         (edge.source, edge.target)
         for edge in file_view_graph.edges
     }
-    directory_file_view_graph = session_note_lore_graph(
+    directory_file_view_graph = markdown_header_lore_graph(
         graph,
         source_file=str(session_path),
         fanout_linked_characters=True,
         hide_source_document_roots=True,
     )
     assert "family_tree" not in directory_file_view_graph.characters
+    assert family_heading_id in directory_file_view_graph.characters
     assert "side_notes" not in directory_file_view_graph.characters
     assert "mary_ravenmark" in directory_file_view_graph.characters
     assert all(
@@ -737,7 +764,7 @@ def test_session_note_lore_graph_uses_headings_groups_characters_and_places(tmp_
         for edge in directory_file_view_graph.edges
     )
 
-    heading_view_graph = session_note_lore_graph(graph, heading_id=trouble_heading_id)
+    heading_view_graph = markdown_header_lore_graph(graph, heading_id=trouble_heading_id)
     assert set(heading_view_graph.characters) == {
         "family_tree",
         family_heading_id,
