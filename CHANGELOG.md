@@ -88,7 +88,7 @@
 - Remove duplicate Family Tree nodes from the place graph.
 - Move lore_graph_fixture.json to a hidden directory until node deduplication is implemented.
 
-# feature/character_rewrite
+# tag/v2.0.0
 ## 2026-07-20
 
 ### Local Character Rewrite Evaluation

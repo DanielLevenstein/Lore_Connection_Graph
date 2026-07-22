@@ -98,7 +98,6 @@ from language_model.paths import (
     WORLD_BUILDING_BACKUP_DIR,
 )
 
-ALLOW_LOCAL_REWRITE_MODEL_DOWNLOAD = "LOCAL_CHATBOT_ALLOW_MODEL_DOWNLOAD"
 ENABLE_ATTRIBUTE_GRAPH_OVERRIDE = "LOCAL_CHATBOT_ENABLE_ATTRIBUTE_GRAPH_OVERRIDE"
 DISABLE_LORE_BACKUPS = "LOCAL_CHATBOT_DISABLE_LORE_BACKUPS"
 MAIN_NAVIGATION_TABS = ["Characters", "Places", "Session Notes"]
@@ -260,10 +259,6 @@ def clean_display_name(name: str) -> str:
     return cleaned.rstrip(" -:|")
 
 
-def local_model_downloads_enabled() -> bool:
-    return os.environ.get(ALLOW_LOCAL_REWRITE_MODEL_DOWNLOAD) == "1"
-
-
 def attribute_graph_override_enabled() -> bool:
     return os.environ.get(ENABLE_ATTRIBUTE_GRAPH_OVERRIDE) == "1"
 
@@ -314,13 +309,8 @@ def accept_current_character_text(profile: CharacterProfile) -> CharacterProfile
 
 def graph_generated_summary(character: Character, profile: CharacterProfile) -> str:
     graph = character_graph_or_regenerate(character)
-    rewrite_client = local_rewrite_client_or_none()
-    if rewrite_client:
-        try:
-            return build_graph_generated_summary(graph, profile, rewrite_client=rewrite_client)
-        except LocalRewriteModelError as exc:
-            st.warning(f"Model-backed summary failed; using deterministic graph rewrite. {exc}")
-    return build_graph_generated_summary(graph, profile)
+    rewrite_client = local_rewrite_client()
+    return build_graph_generated_summary(graph, profile, rewrite_client=rewrite_client)
 
 
 def character_graph_or_regenerate(character: Character):
@@ -335,25 +325,22 @@ def character_graph_or_regenerate(character: Character):
 
 def graph_generated_backstory(character: Character, profile: CharacterProfile) -> str:
     graph = character_graph_or_regenerate(character)
-    rewrite_client = local_rewrite_client_or_none()
-    if rewrite_client:
-        try:
-            return build_graph_generated_backstory(graph, profile, rewrite_client=rewrite_client)
-        except LocalRewriteModelError as exc:
-            st.warning(f"Model-backed backstory failed; using deterministic graph rewrite. {exc}")
-    return build_graph_generated_backstory(graph, profile)
+    rewrite_client = local_rewrite_client()
+    return build_graph_generated_backstory(graph, profile, rewrite_client=rewrite_client)
 
 
-def local_rewrite_client_or_none() -> LocalRewriteModelClient | None:
-    config = load_local_config(allow_download=local_model_downloads_enabled())
+def local_rewrite_client() -> LocalRewriteModelClient:
+    config = load_local_config()
     lifecycle = LocalRewriteModelLifecycle(config)
     if not lifecycle.is_runtime_available():
-        st.warning("llama CLI is not installed; using deterministic graph rewrite.")
-        return None
-    if not lifecycle.is_model_available() and not config.allow_download:
-        st.warning("Local rewrite model is not downloaded; using deterministic graph rewrite.")
-        return None
+        raise LocalRewriteModelError(
+            "Model-backed rewriting needs the llama CLI. Install llama.cpp to enable local model rewrites."
+        )
     return LocalRewriteModelClient(config=config, status_callback=local_model_status_callback())
+
+
+def local_rewrite_runtime_available() -> bool:
+    return LocalRewriteModelLifecycle(load_local_config()).is_runtime_available()
 
 
 def local_model_status_callback():
@@ -1873,18 +1860,21 @@ def render_character_editor(character: Character) -> None:
                 args=("Characters",),
             )
             populate_summary = False
-            repopulate_summary = action_cols[1].form_submit_button(
-                "Repopulate Summary",
-                icon=":material/sync:",
-                on_click=request_main_navigation_tab,
-                args=("Characters",),
-            )
-            rewrite_backstory = action_cols[2].form_submit_button(
-                "Rewrite Backstory",
-                icon=":material/edit_note:",
-                on_click=request_main_navigation_tab,
-                args=("Characters",),
-            )
+            repopulate_summary = False
+            rewrite_backstory = False
+            if local_rewrite_runtime_available():
+                repopulate_summary = action_cols[1].form_submit_button(
+                    "Repopulate Summary",
+                    icon=":material/sync:",
+                    on_click=request_main_navigation_tab,
+                    args=("Characters",),
+                )
+                rewrite_backstory = action_cols[2].form_submit_button(
+                    "Rewrite Backstory",
+                    icon=":material/edit_note:",
+                    on_click=request_main_navigation_tab,
+                    args=("Characters",),
+                )
             delete_col = action_cols[3]
             undo_col = action_cols[4]
             delete_requested = delete_col.form_submit_button(

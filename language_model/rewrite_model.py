@@ -28,7 +28,7 @@ DEFAULT_MODEL_URL = (
 )
 DEFAULT_MODEL_CONFIG_PATH = CONFIG_DIR / "model" / "local_language_model.json"
 DEFAULT_MODEL_CACHE_DIR = Path(
-    os.environ.get("LOCAL_CHATBOT_MODEL_CACHE_DIR", ROOT_DIR / "models" / "local_language_model")
+    os.environ.get("LOCAL_CHATBOT_MODEL_CACHE_DIR", ROOT_DIR / "models" / "character_rewrite")
 ).resolve()
 
 StatusCallback = Callable[[str], None]
@@ -58,7 +58,7 @@ class LocalRewriteModelConfig:
     n_gpu_layers: int = 0
     device: str = "none"
     timeout_seconds: int = 180
-    allow_download: bool = False
+    allow_download: bool = True
 
     @property
     def model_path(self) -> Path:
@@ -67,7 +67,7 @@ class LocalRewriteModelConfig:
 
 def load_local_config(
     config_path: Path = DEFAULT_MODEL_CONFIG_PATH,
-    allow_download: bool = False,
+    allow_download: bool = True,
 ) -> LocalRewriteModelConfig:
     if not config_path.exists():
         return LocalRewriteModelConfig(allow_download=allow_download)
@@ -137,12 +137,15 @@ class LocalRewriteModelLifecycle:
         if not self.config.allow_download:
             raise LocalRewriteModelError(
                 f"Local rewrite model artifact is missing: {self.config.model_path}. "
-                "Download the model or enable model downloads before using model-backed rewrites."
+                "Download the model before using model-backed rewrites."
             )
         with model_lock(self.config.model_path):
             if self.is_model_available():
                 return self.config.model_path
-            self._status("Downloading local rewrite model. First run can take several minutes.")
+            self._status(
+                f"Downloading local rewrite model to {self.config.cache_dir}. "
+                "This can be slow, but it only happens once for this local cache and uses the smallest configured rewrite model."
+            )
             download_model(self.config.download_url, self.config.model_path, self._status)
             return self.config.model_path
 

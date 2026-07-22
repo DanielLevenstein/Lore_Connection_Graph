@@ -241,6 +241,9 @@ def test_local_rewrite_model_downloads_when_allowed(tmp_path, monkeypatch):
     result = lifecycle.generate([{"role": "user", "content": "Rewrite."}])
 
     assert result == "Mara keeps the archive safe."
+    assert f"Downloading local rewrite model to {tmp_path}" in events[0]
+    assert "only happens once for this local cache" in events[0]
+    assert "smallest configured rewrite model" in events[0]
     assert "downloaded" in events
 
 
@@ -277,7 +280,7 @@ def test_clean_model_rewrite_strips_llama_chat_wrapper_and_prompt_echo():
         """
 Loading model...
 build      : b9890-74976e1ae
-model      : /Users/example/models/local_language_model/model.gguf
+model      : /Users/example/models/character_rewrite/model.gguf
 available commands:
   /exit or Ctrl+C     stop or exit
 
@@ -484,5 +487,6 @@ def test_default_local_config_uses_fast_probe_model():
 
     assert config.model_id == "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
     assert config.filename == "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+    assert config.cache_dir.name == "character_rewrite"
     assert config.max_tokens <= 640
     assert config.n_ctx <= 8192
