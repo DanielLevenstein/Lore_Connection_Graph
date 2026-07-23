@@ -10,9 +10,9 @@ Build a role-playing character sheet tracker which will pull in information from
 
 ## Features
 
-- Use a local language model to clean up character summaries and backstories
-- Import session notes from external data sources extracting heading and date information
-- Generate a knowledge graph from multiple data import sources and display information to users in clean readable format
+- Use a local language model to clean up character summaries and backstories.
+- Import session notes from external data sources extracting heading and date information.
+- Generate a knowledge graph from multiple data import sources and display information to users in clean readable format.
 
 ### Highlights
 
