@@ -946,20 +946,19 @@ def render_character_creator(key_prefix: str = "new_character", draft_profile: C
             placeholder="she/her",
             key=f"{key_prefix}_pronouns",
         )
-
-        backstory = st.text_area(
-            "Backstory",
-            value=draft_profile.backstory,
-            placeholder="A careful scholar who keeps notes about every strange place they visit...",
-            height=160,
-            key=f"{key_prefix}_backstory",
-        )
         summary = st.text_area(
             "Summary",
             value=draft_profile.summary,
             placeholder="Ms. Glorious specializes in the study of the dark arts.",
             height=96,
             key=f"{key_prefix}_summary",
+        )
+        backstory = st.text_area(
+            "Backstory",
+            value=draft_profile.backstory,
+            placeholder="A careful scholar who keeps notes about every strange place they visit...",
+            height=160,
+            key=f"{key_prefix}_backstory",
         )
         with st.expander("Optional Metadata", expanded=character_optional_metadata_present(draft_profile)):
             detail_cols = st.columns(3)
@@ -1809,24 +1808,6 @@ def render_character_editor(character: Character) -> None:
             race = stat_cols[1].text_input("Race", value=profile.race)
             character_class = stat_cols[2].text_input("Class", value=profile.character_class)
             pronouns = stat_cols[3].text_input("Pronouns", value=profile.pronouns)
-            if has_distinct_original(profile.backstory, profile.original_backstory):
-                backstory_cols = st.columns(2)
-                backstory_cols[0].caption(section_status_label("Character Backstory", profile))
-                backstory = backstory_cols[0].text_area(
-                    "Backstory",
-                    value=profile.backstory,
-                    height=180,
-                )
-                backstory_cols[1].caption("Original Character Backstory")
-                backstory_cols[1].text_area(
-                    "Original Backstory",
-                    value=profile.original_backstory,
-                    height=180,
-                    disabled=True,
-                )
-            else:
-                render_section_status("Character Backstory", profile)
-                backstory = st.text_area("Backstory", value=profile.backstory, height=180)
             if has_distinct_original(profile.summary, profile.original_summary):
                 summary_cols = st.columns(2)
                 summary_cols[0].caption(section_status_label("Character Summary", profile))
@@ -1845,6 +1826,25 @@ def render_character_editor(character: Character) -> None:
             else:
                 render_section_status("Character Summary", profile)
                 summary = st.text_area("Summary", value=profile.summary, height=96)
+            if has_distinct_original(profile.backstory, profile.original_backstory):
+                backstory_cols = st.columns(2)
+                backstory_cols[0].caption(section_status_label("Character Backstory", profile))
+                backstory = backstory_cols[0].text_area(
+                    "Backstory",
+                    value=profile.backstory,
+                    height=180,
+                )
+                backstory_cols[1].caption("Original Character Backstory")
+                backstory_cols[1].text_area(
+                    "Original Backstory",
+                    value=profile.original_backstory,
+                    height=180,
+                    disabled=True,
+                )
+            else:
+                render_section_status("Character Backstory", profile)
+                backstory = st.text_area("Backstory", value=profile.backstory, height=180)
+
             with st.expander("Optional Metadata", expanded=character_optional_metadata_present(profile)):
                 detail_cols = st.columns(3)
                 drives = detail_cols[0].text_area("Drives", value=render_list_field(profile.drives), height=96)
